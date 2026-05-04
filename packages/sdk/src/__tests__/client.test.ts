@@ -1,0 +1,227 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AgentFeedClient, AgentFeedError } from '../client.js';
+import { register, updateProfile } from '../identity.js';
+import { discover } from '../discovery.js';
+import { createRoom, joinRoom, leaveRoom } from '../room.js';
+import { sendMessage, getMessages } from '../messaging.js';
+import { react, getThread } from '../reaction.js';
+import { subscribeRoom, unsubscribeRoom } from '../sse.js';
+import { ErrorCode } from '@lark/shared';
+
+const BASE = 'http://localhost:3000';
+
+function mockFetch(response: unknown, status = 200) {
+  const fn = vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? 'OK' : 'Error',
+    json: () => Promise.resolve(response),
+  });
+  vi.stubGlobal('fetch', fn);
+  return fn;
+}
+
+describe('AgentFeedClient', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('sets Authorization header when token is set', async () => {
+    const fetchFn = mockFetch({ ok: true });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'abc' });
+    await client.get('/test');
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/test`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer abc',
+        }),
+      }),
+    );
+  });
+
+  it('throws AgentFeedError on non-OK response with error body', async () => {
+    mockFetch(
+      { error: { code: 1001, message: 'Agent not found', retryable: false } },
+      404,
+    );
+    const client = new AgentFeedClient({ baseUrl: BASE });
+
+    await expect(client.get('/test')).rejects.toThrow(AgentFeedError);
+    try {
+      await client.get('/test');
+    } catch (e) {
+      expect(e).toBeInstanceOf(AgentFeedError);
+      const err = e as AgentFeedError;
+      expect(err.code).toBe(ErrorCode.AGENT_NOT_FOUND);
+      expect(err.status).toBe(404);
+    }
+  });
+});
+
+describe('Identity', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('register sends POST /agents', async () => {
+    const fetchFn = mockFetch({ id: 'a1', name: 'Bot', token: 'tok123' });
+    const client = new AgentFeedClient({ baseUrl: BASE });
+    const res = await register(client, { name: 'Bot', capabilities: ['code-review'] });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/agents`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(res.id).toBe('a1');
+    expect(res.token).toBe('tok123');
+  });
+
+  it('updateProfile sends PATCH /agents/:id', async () => {
+    const fetchFn = mockFetch({ id: 'a1', name: 'Bot', status: 'online' });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await updateProfile(client, 'a1', { status: 'online' });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/agents/a1`,
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+});
+
+describe('Discovery', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('discover sends GET /agents with query params', async () => {
+    const fetchFn = mockFetch({ agents: [], has_more: false });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await discover(client, { q: 'review', capabilities: 'code-review', status: 'online' });
+
+    const url = fetchFn.mock.calls[0][0] as string;
+    expect(url).toContain('/agents?');
+    expect(url).toContain('q=review');
+    expect(url).toContain('capabilities=code-review');
+    expect(url).toContain('status=online');
+  });
+});
+
+describe('Room', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('createRoom sends POST /rooms', async () => {
+    const fetchFn = mockFetch({ id: 'r1', name: 'test-room' });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    const room = await createRoom(client, { name: 'test-room' });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/rooms`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(room.id).toBe('r1');
+  });
+
+  it('joinRoom sends POST /rooms/:id/join', async () => {
+    const fetchFn = mockFetch({ ok: true });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await joinRoom(client, 'r1');
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/rooms/r1/join`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('leaveRoom sends POST /rooms/:id/leave', async () => {
+    const fetchFn = mockFetch({ ok: true });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await leaveRoom(client, 'r1');
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/rooms/r1/leave`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+});
+
+describe('Messaging', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('sendMessage sends POST /messages', async () => {
+    const fetchFn = mockFetch({ id: 'm1', sequence: 1, created_at: '2026-05-05T00:00:00Z' });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    const res = await sendMessage(client, {
+      room_id: 'r1',
+      content: 'hello',
+      idempotency_key: 'key1',
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/messages`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(res.id).toBe('m1');
+    expect(res.sequence).toBe(1);
+  });
+
+  it('getMessages sends GET /rooms/:id/messages with pagination', async () => {
+    const fetchFn = mockFetch({ messages: [], has_more: false });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await getMessages(client, 'r1', { limit: 10, cursor: 5 });
+
+    const url = fetchFn.mock.calls[0][0] as string;
+    expect(url).toContain('/rooms/r1/messages?');
+    expect(url).toContain('limit=10');
+    expect(url).toContain('cursor=5');
+  });
+});
+
+describe('Reaction + Thread', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('react sends POST /messages/:id/reactions', async () => {
+    const fetchFn = mockFetch({ id: 'rc1', type: 'useful' });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await react(client, 'm1', { type: 'useful' });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/messages/m1/reactions`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('getThread sends GET /messages/:id/thread', async () => {
+    const fetchFn = mockFetch({ messages: [] });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await getThread(client, 'm1');
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/messages/m1/thread`,
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+});
+
+describe('Subscribe', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('subscribeRoom sends POST /rooms/:id/subscribe', async () => {
+    const fetchFn = mockFetch({ ok: true });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await subscribeRoom(client, 'r1');
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/rooms/r1/subscribe`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('unsubscribeRoom sends POST /rooms/:id/unsubscribe', async () => {
+    const fetchFn = mockFetch({ ok: true });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+    await unsubscribeRoom(client, 'r1');
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/rooms/r1/unsubscribe`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+});
