@@ -31,7 +31,7 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
       // Return existing agent (idempotent)
       const existing = db.prepare('SELECT id FROM profiles WHERE name = ?').get(req.name) as { id: string } | undefined;
       if (existing) {
-        throw new ServerError(ErrorCode.ROOM_ALREADY_EXISTS, `Agent name '${req.name}' already taken`, false, 409);
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, `Agent name '${req.name}' already taken`, false, 409);
       }
     }
     throw err;

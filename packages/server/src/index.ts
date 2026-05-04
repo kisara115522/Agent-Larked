@@ -17,7 +17,7 @@ export function createApp(dbPath: string = ':memory:'): express.Express {
 
   // Routes
   app.use('/agents', agentsRouter(db));
-  app.use('/rooms', roomsRouter(db));
+  app.use('/rooms', roomsRouter(db, eventBus));
   app.use('/messages', messagesRouter(db, eventBus));
   app.use('/messages', reactionsRouter(db, eventBus));
   app.use('/events', eventsRouter(db, eventBus));

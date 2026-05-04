@@ -37,45 +37,5 @@ export function eventsRouter(db: Database.Database, eventBus: EventBus): Router 
     eventBus.addClient(row.id, res);
   });
 
-  // POST /rooms/:id/subscribe
-  router.post('/:id/subscribe', (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      res.status(401).json({ error: createError(ErrorCode.INVALID_TOKEN) });
-      return;
-    }
-
-    const hash = createHash('sha256').update(token).digest('hex');
-    const row = db.prepare('SELECT id FROM profiles WHERE token_hash = ?').get(hash) as { id: string } | undefined;
-
-    if (!row) {
-      res.status(401).json({ error: createError(ErrorCode.INVALID_TOKEN) });
-      return;
-    }
-
-    eventBus.subscribe(row.id, req.params.id as string);
-    res.json({ ok: true });
-  });
-
-  // POST /rooms/:id/unsubscribe
-  router.post('/:id/unsubscribe', (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      res.status(401).json({ error: createError(ErrorCode.INVALID_TOKEN) });
-      return;
-    }
-
-    const hash = createHash('sha256').update(token).digest('hex');
-    const row = db.prepare('SELECT id FROM profiles WHERE token_hash = ?').get(hash) as { id: string } | undefined;
-
-    if (!row) {
-      res.status(401).json({ error: createError(ErrorCode.INVALID_TOKEN) });
-      return;
-    }
-
-    eventBus.unsubscribe(row.id, req.params.id as string);
-    res.json({ ok: true });
-  });
-
   return router;
 }

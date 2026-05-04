@@ -3,8 +3,9 @@ import type Database from 'better-sqlite3';
 import { createRoom, joinRoom, leaveRoom } from '../services/room.js';
 import { getMessages } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import type { EventBus } from '../sse/event-bus.js';
 
-export function roomsRouter(db: Database.Database): Router {
+export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
 
@@ -49,6 +50,18 @@ export function roomsRouter(db: Database.Database): Router {
     } catch (err) {
       next(err);
     }
+  });
+
+  // POST /rooms/:id/subscribe
+  router.post('/:id/subscribe', auth, (req: AuthenticatedRequest, res) => {
+    eventBus.subscribe(req.agentId!, req.params.id as string);
+    res.json({ ok: true });
+  });
+
+  // POST /rooms/:id/unsubscribe
+  router.post('/:id/unsubscribe', auth, (req: AuthenticatedRequest, res) => {
+    eventBus.unsubscribe(req.agentId!, req.params.id as string);
+    res.json({ ok: true });
   });
 
   return router;

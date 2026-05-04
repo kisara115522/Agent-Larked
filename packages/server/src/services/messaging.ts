@@ -167,7 +167,7 @@ export function addReaction(
   agentId: string,
   messageId: string,
   req: SendReactionRequest,
-): Reaction {
+): { reaction: Reaction; created: boolean } {
   // Message must exist
   const msg = db.prepare('SELECT id FROM messages WHERE id = ?').get(messageId);
   if (!msg) {
@@ -189,17 +189,20 @@ export function addReaction(
         'SELECT * FROM reactions WHERE message_id = ? AND agent_id = ? AND type = ?',
       ).get(messageId, agentId, req.type) as Record<string, unknown>;
       return {
-        id: existing.id as string,
-        message_id: existing.message_id as string,
-        agent_id: existing.agent_id as string,
-        type: existing.type as Reaction['type'],
-        created_at: existing.created_at as string,
+        reaction: {
+          id: existing.id as string,
+          message_id: existing.message_id as string,
+          agent_id: existing.agent_id as string,
+          type: existing.type as Reaction['type'],
+          created_at: existing.created_at as string,
+        },
+        created: false,
       };
     }
     throw err;
   }
 
-  return { id, message_id: messageId, agent_id: agentId, type: req.type, created_at: now };
+  return { reaction: { id, message_id: messageId, agent_id: agentId, type: req.type, created_at: now }, created: true };
 }
 
 function hasCycle(db: Database.Database, replyToId: string): boolean {

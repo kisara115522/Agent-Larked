@@ -87,7 +87,7 @@ export class AgentFeedSSE {
         if (line.startsWith('event: ')) {
           eventType = line.slice(7).trim();
         } else if (line.startsWith('data: ')) {
-          dataBuffer += line.slice(6);
+          dataBuffer += (dataBuffer ? '\n' : '') + line.slice(6);
         } else if (line === '') {
           // empty line = dispatch event
           if (eventType && dataBuffer) {
