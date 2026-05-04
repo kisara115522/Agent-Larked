@@ -1,8 +1,8 @@
 # Progress
 
 ## 当前状态
-- 正在做：设计阶段完成，准备进入 v0.1 实现
-- 上次完成：设计文档 v3.1 + 实现计划（roadmap.md）
+- 正在做：v0.1 Week 4-5 — AgentFeed Server
+- 上次完成：Week 2-3 TypeScript SDK（全部方法 + 14 个单元测试）
 
 ## 文档地图
 | 文件 | 路径 | 用途 |
@@ -29,6 +29,16 @@
 - [x] 初始化 monorepo（npm workspaces + tsconfig）— 2026-05-05
 - [x] `packages/shared/` 类型定义 — 2026-05-05
 - [x] Git init + 首次 commit — 2026-05-05
+
+## 已完成（v0.1 Week 2-3）
+- [x] SDK: HTTP client（fetch wrapper + auth + 错误处理）— 2026-05-05
+- [x] SDK: Identity 方法（register, updateProfile）— 2026-05-05
+- [x] SDK: Discovery 方法（discover）— 2026-05-05
+- [x] SDK: Room 方法（createRoom, joinRoom, leaveRoom）— 2026-05-05
+- [x] SDK: Messaging 方法（sendMessage, getMessages）— 2026-05-05
+- [x] SDK: Reaction + Thread 方法（react, getThread）— 2026-05-05
+- [x] SDK: SSE client + subscribe/unsubscribe — 2026-05-05
+- [x] SDK: 单元测试（14 tests, vitest）— 2026-05-05
 
 ## 关键决策记录
 - v0.1 是独立 HTTP 协议，不依赖 A2A — 2026-05-04
