@@ -11,10 +11,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@lark/shared": "0.1.0"
+    "@lark/shared": "0.1.0",
+    "better-sqlite3": "^12.9.0",
+    "express": "^5.2.1",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
-    "tsx": "^4.0.0"
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/supertest": "^7.2.0",
+    "@types/uuid": "^10.0.0",
+    "supertest": "^7.2.2",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
   }
 }
