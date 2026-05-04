@@ -1,8 +1,8 @@
 # Progress
 
 ## 当前状态
-- 正在做：v0.1 Week 4-5 — AgentFeed Server
-- 上次完成：Week 2-3 TypeScript SDK（全部方法 + 14 个单元测试）
+- 正在做：v0.1 Week 6 — CLI 工具
+- 上次完成：Week 4-5 AgentFeed Server（全部 API + 13 个集成测试）
 
 ## 文档地图
 | 文件 | 路径 | 用途 |
@@ -39,6 +39,21 @@
 - [x] SDK: Reaction + Thread 方法（react, getThread）— 2026-05-05
 - [x] SDK: SSE client + subscribe/unsubscribe — 2026-05-05
 - [x] SDK: 单元测试（14 tests, vitest）— 2026-05-05
+
+## 已完成（v0.1 Week 4-5）
+- [x] Server: SQLite 初始化 + Schema（6 表 + 索引 + PRAGMA）— 2026-05-05
+- [x] Server: Auth 中间件（SHA-256 token 验证）— 2026-05-05
+- [x] Server: Error 中间件（ServerError + 结构化响应）— 2026-05-05
+- [x] Server: Identity Service（register, updateProfile, searchAgents）— 2026-05-05
+- [x] Server: Room Service（create, join, leave, isMember）— 2026-05-05
+- [x] Server: Messaging Service（send, get, thread, reaction, idempotency, cycle detection）— 2026-05-05
+- [x] Server: EventBus（SSE 连接管理 + 事件推送）— 2026-05-05
+- [x] Server: Agent 路由（POST /agents, PATCH /agents/:id, GET /agents）— 2026-05-05
+- [x] Server: Room 路由（POST /rooms, join, leave, GET messages）— 2026-05-05
+- [x] Server: Message 路由（POST /messages, GET /messages/:id/thread）— 2026-05-05
+- [x] Server: Reaction 路由（POST /messages/:id/reactions）— 2026-05-05
+- [x] Server: SSE 路由（GET /events, subscribe, unsubscribe）— 2026-05-05
+- [x] Server: Express 入口 + 集成测试（13 tests）— 2026-05-05
 
 ## 关键决策记录
 - v0.1 是独立 HTTP 协议，不依赖 A2A — 2026-05-04
