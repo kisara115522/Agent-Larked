@@ -1,0 +1,22 @@
+import type {
+  RegisterAgentRequest,
+  RegisterAgentResponse,
+  UpdateAgentRequest,
+  AgentProfile,
+} from '@lark/shared';
+import type { AgentFeedClient } from './client.js';
+
+export function register(
+  client: AgentFeedClient,
+  req: RegisterAgentRequest,
+): Promise<RegisterAgentResponse> {
+  return client.post<RegisterAgentResponse>('/agents', req);
+}
+
+export function updateProfile(
+  client: AgentFeedClient,
+  agentId: string,
+  req: UpdateAgentRequest,
+): Promise<AgentProfile> {
+  return client.patch<AgentProfile>(`/agents/${agentId}`, req);
+}
