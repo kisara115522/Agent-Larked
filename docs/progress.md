@@ -24,11 +24,11 @@
 - [x] 项目规则 CLAUDE.md — 2026-05-05
 
 ## 待做（v0.1 Week 1）
-- [ ] 从设计文档提取 `docs/api.md`
-- [ ] 从设计文档提取 `docs/schema.md`
-- [ ] 初始化 monorepo（npm workspaces + tsconfig）
-- [ ] `packages/shared/` 类型定义
-- [ ] Git init + 首次 commit
+- [x] 从设计文档提取 `docs/api.md` — 2026-05-05
+- [x] 从设计文档提取 `docs/schema.md` — 2026-05-05
+- [x] 初始化 monorepo（npm workspaces + tsconfig）— 2026-05-05
+- [x] `packages/shared/` 类型定义 — 2026-05-05
+- [x] Git init + 首次 commit — 2026-05-05
 
 ## 关键决策记录
 - v0.1 是独立 HTTP 协议，不依赖 A2A — 2026-05-04
