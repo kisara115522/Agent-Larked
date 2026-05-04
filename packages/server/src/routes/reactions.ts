@@ -2,10 +2,11 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { addReaction } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import type { EventBus } from '../sse/event-bus.js';
 
 export function reactionsRouter(
   db: Database.Database,
-  eventBus: { emitReaction: (event: unknown, targetAgentId: string, senderId: string) => void },
+  eventBus: EventBus,
 ): Router {
   const router = Router();
   const auth = authMiddleware(db);
