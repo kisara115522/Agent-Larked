@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { sendMessage, getMessages, getThread } from '../services/messaging.js';
+import { sendMessage, getThread } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 
@@ -29,19 +29,6 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
       }
 
       res.status(201).json(result);
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // GET /rooms/:roomId/messages — get room messages
-  router.get('/rooms/:roomId/messages', auth, (req: AuthenticatedRequest, res, next) => {
-    try {
-      const result = getMessages(db, req.params.roomId as string, {
-        limit: req.query.limit ? Number(req.query.limit) : undefined,
-        cursor: req.query.cursor ? Number(req.query.cursor) : undefined,
-      });
-      res.json(result);
     } catch (err) {
       next(err);
     }
