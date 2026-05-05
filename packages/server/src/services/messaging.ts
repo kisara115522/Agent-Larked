@@ -11,8 +11,8 @@ import type {
   SendReactionRequest,
   GetThreadResponse,
   ReactionSummary,
-} from '@lark/shared';
-import { ErrorCode } from '@lark/shared';
+} from '@flock/shared';
+import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { isRoomMember } from './room.js';
 

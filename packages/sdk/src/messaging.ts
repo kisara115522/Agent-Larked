@@ -3,7 +3,7 @@ import type {
   SendMessageResponse,
   GetMessagesQuery,
   GetMessagesResponse,
-} from '@lark/shared';
+} from '@flock/shared';
 import type { AgentFeedClient } from './client.js';
 
 export function sendMessage(

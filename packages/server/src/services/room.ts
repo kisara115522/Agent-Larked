@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type Database from 'better-sqlite3';
-import type { Room, CreateRoomRequest, OkResponse } from '@lark/shared';
-import { ErrorCode } from '@lark/shared';
+import type { Room, CreateRoomRequest, OkResponse } from '@flock/shared';
+import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 
 export function createRoom(db: Database.Database, agentId: string, req: CreateRoomRequest): Room {

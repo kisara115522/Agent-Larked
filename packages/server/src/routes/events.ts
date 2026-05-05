@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
-import { ErrorCode, createError } from '@lark/shared';
+import { ErrorCode, createError } from '@flock/shared';
 import type { EventBus } from '../sse/event-bus.js';
 
 export function eventsRouter(db: Database.Database, eventBus: EventBus): Router {

@@ -1,4 +1,4 @@
-import { ErrorCode, type ErrorResponse } from '@lark/shared';
+import { ErrorCode, type ErrorResponse } from '@flock/shared';
 
 export interface ClientOptions {
   baseUrl: string;

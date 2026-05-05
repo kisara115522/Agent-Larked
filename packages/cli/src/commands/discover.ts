@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { AgentFeedClient, discover } from '@lark/sdk';
+import { AgentFeedClient, discover } from '@flock/sdk';
 import { loadServer, loadToken } from '../config.js';
 
 export function discoverCommand(): Command {

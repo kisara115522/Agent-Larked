@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const CONFIG_DIR = join(homedir(), '.lark');
+const CONFIG_DIR = join(homedir(), '.flock');
 const TOKEN_FILE = join(CONFIG_DIR, 'token');
 const SERVER_FILE = join(CONFIG_DIR, 'server');
 
@@ -21,7 +21,7 @@ export function loadToken(): string {
   try {
     return readFileSync(TOKEN_FILE, 'utf-8').trim();
   } catch {
-    throw new Error('No token found. Run `lark register` first.');
+    throw new Error('No token found. Run `flock register` first.');
   }
 }
 

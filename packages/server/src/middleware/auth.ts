@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import type Database from 'better-sqlite3';
-import { ErrorCode, createError } from '@lark/shared';
+import { ErrorCode, createError } from '@flock/shared';
 
 export interface AuthenticatedRequest extends Request {
   agentId?: string;

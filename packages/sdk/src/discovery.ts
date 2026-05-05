@@ -1,4 +1,4 @@
-import type { DiscoverAgentsQuery, DiscoverAgentsResponse } from '@lark/shared';
+import type { DiscoverAgentsQuery, DiscoverAgentsResponse } from '@flock/shared';
 import type { AgentFeedClient } from './client.js';
 
 export function discover(

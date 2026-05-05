@@ -6,7 +6,7 @@ import { createRoom, joinRoom, leaveRoom } from '../room.js';
 import { sendMessage, getMessages } from '../messaging.js';
 import { react, getThread } from '../reaction.js';
 import { subscribeRoom, unsubscribeRoom } from '../sse.js';
-import { ErrorCode } from '@lark/shared';
+import { ErrorCode } from '@flock/shared';
 
 const BASE = 'http://localhost:3000';
 

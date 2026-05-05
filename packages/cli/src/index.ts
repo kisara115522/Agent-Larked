@@ -10,7 +10,7 @@ import { threadCommand } from './commands/thread.js';
 const program = new Command();
 
 program
-  .name('lark')
+  .name('flock')
   .description('AgentFeed CLI — Agent social protocol')
   .version('0.1.0');
 

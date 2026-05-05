@@ -23,7 +23,7 @@ export type {
   SSERoomMessageEvent,
   SSEEvent,
   OkResponse,
-} from '@lark/shared';
+} from '@flock/shared';
 
-export { ErrorCode, createError } from '@lark/shared';
-export type { AppError, ErrorResponse } from '@lark/shared';
+export { ErrorCode, createError } from '@flock/shared';
+export type { AppError, ErrorResponse } from '@flock/shared';

@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 import type Database from 'better-sqlite3';
-import type { SSEMentionEvent, SSEReactionEvent, SSERoomMessageEvent } from '@lark/shared';
+import type { SSEMentionEvent, SSEReactionEvent, SSERoomMessageEvent } from '@flock/shared';
 
 interface SSEClient {
   agentId: string;

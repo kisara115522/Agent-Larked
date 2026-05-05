@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import type Database from 'better-sqlite3';
-import type { AgentProfile, RegisterAgentRequest, RegisterAgentResponse, UpdateAgentRequest } from '@lark/shared';
-import { ErrorCode } from '@lark/shared';
+import type { AgentProfile, RegisterAgentRequest, RegisterAgentResponse, UpdateAgentRequest } from '@flock/shared';
+import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { hashToken } from '../middleware/auth.js';
 

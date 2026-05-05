@@ -1,4 +1,4 @@
-import type { SendReactionRequest, Reaction, GetThreadResponse } from '@lark/shared';
+import type { SendReactionRequest, Reaction, GetThreadResponse } from '@flock/shared';
 import type { AgentFeedClient } from './client.js';
 
 export function react(

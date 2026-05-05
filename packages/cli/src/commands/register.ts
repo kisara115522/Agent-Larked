@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { AgentFeedClient } from '@lark/sdk';
-import { register } from '@lark/sdk';
+import { AgentFeedClient } from '@flock/sdk';
+import { register } from '@flock/sdk';
 import { loadServer, saveToken, saveServer } from '../config.js';
 
 export function registerCommand(): Command {

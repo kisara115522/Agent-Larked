@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { ErrorCode, createError } from '@lark/shared';
+import { ErrorCode, createError } from '@flock/shared';
 
 export class ServerError extends Error {
   constructor(

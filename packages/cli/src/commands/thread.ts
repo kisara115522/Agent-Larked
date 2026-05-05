@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { AgentFeedClient, getThread } from '@lark/sdk';
+import { AgentFeedClient, getThread } from '@flock/sdk';
 import { loadServer, loadToken } from '../config.js';
 
 export function threadCommand(): Command {

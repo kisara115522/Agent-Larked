@@ -3,7 +3,7 @@ import type {
   SSEReactionEvent,
   SSERoomMessageEvent,
   OkResponse,
-} from '@lark/shared';
+} from '@flock/shared';
 import type { AgentFeedClient } from './client.js';
 
 export interface SSEEventMap {

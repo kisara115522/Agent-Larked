@@ -8,7 +8,7 @@ import {
   subscribeRoom,
   unsubscribeRoom,
   AgentFeedSSE,
-} from '@lark/sdk';
+} from '@flock/sdk';
 import { loadServer, loadToken } from '../config.js';
 
 export function roomCommand(): Command {

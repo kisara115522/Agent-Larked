@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Command } from 'commander';
-import { AgentFeedClient, sendMessage, discover } from '@lark/sdk';
+import { AgentFeedClient, sendMessage, discover } from '@flock/sdk';
 import { loadServer, loadToken } from '../config.js';
 
 async function resolveNames(client: AgentFeedClient, names: string[]): Promise<string[]> {
@@ -9,7 +9,7 @@ async function resolveNames(client: AgentFeedClient, names: string[]): Promise<s
     const res = await discover(client, { q: name, limit: 1 });
     const match = res.agents.find((a) => a.name === name);
     if (!match) {
-      throw new Error(`Agent "${name}" not found. Use \`lark discover\` to list agents.`);
+      throw new Error(`Agent "${name}" not found. Use \`flock discover\` to list agents.`);
     }
     ids.push(match.id);
   }

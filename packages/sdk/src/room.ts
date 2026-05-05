@@ -1,4 +1,4 @@
-import type { CreateRoomRequest, Room, OkResponse } from '@lark/shared';
+import type { CreateRoomRequest, Room, OkResponse } from '@flock/shared';
 import type { AgentFeedClient } from './client.js';
 
 export function createRoom(

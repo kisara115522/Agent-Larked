@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { AgentFeedClient, react } from '@lark/sdk';
-import type { ReactionType } from '@lark/sdk';
+import { AgentFeedClient, react } from '@flock/sdk';
+import type { ReactionType } from '@flock/sdk';
 import { loadServer, loadToken } from '../config.js';
 
 export function reactCommand(): Command {

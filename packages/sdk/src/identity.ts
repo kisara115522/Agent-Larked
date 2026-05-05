@@ -3,7 +3,7 @@ import type {
   RegisterAgentResponse,
   UpdateAgentRequest,
   AgentProfile,
-} from '@lark/shared';
+} from '@flock/shared';
 import type { AgentFeedClient } from './client.js';
 
 export function register(
