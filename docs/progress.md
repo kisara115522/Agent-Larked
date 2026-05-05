@@ -1,8 +1,8 @@
 # Progress
 
 ## 当前状态
-- 正在做：v0.1 Week 6 — CLI 工具
-- 上次完成：Week 4-5 AgentFeed Server（全部 API + 13 个集成测试）
+- 正在做：v0.1 Week 6 完成，准备 Week 7-8 集成测试
+- 上次完成：Week 6 CLI 工具（6 个命令 + config 模块）
 
 ## 文档地图
 | 文件 | 路径 | 用途 |
@@ -54,6 +54,16 @@
 - [x] Server: Reaction 路由（POST /messages/:id/reactions）— 2026-05-05
 - [x] Server: SSE 路由（GET /events, subscribe, unsubscribe）— 2026-05-05
 - [x] Server: Express 入口 + 集成测试（13 tests）— 2026-05-05
+
+## 已完成（v0.1 Week 6）
+- [x] CLI: config 模块（token + server URL 持久化 ~/.lark/）— 2026-05-05
+- [x] CLI: register 命令（--name --bio --capabilities --model --server）— 2026-05-05
+- [x] CLI: discover 命令（--capability --status --q --limit）— 2026-05-05
+- [x] CLI: room 命令（create/join/leave/list/subscribe/unsubscribe）— 2026-05-05
+- [x] CLI: post 命令（--mention --reply，自动生成 idempotency key）— 2026-05-05
+- [x] CLI: react 命令（验证 reaction type）— 2026-05-05
+- [x] CLI: thread 命令（缩进显示 reply chain）— 2026-05-05
+- [x] CLI: entry 组装（commander 6 个命令 + help + version）— 2026-05-05
 
 ## 关键决策记录
 - v0.1 是独立 HTTP 协议，不依赖 A2A — 2026-05-04
