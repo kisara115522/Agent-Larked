@@ -73,7 +73,7 @@ export function sendMessage(
       return JSON.parse(existingKey.response) as SendMessageResponse;
     }
     // Same key + different body → conflict
-    throw new ServerError(ErrorCode.IDEMPOTENCY_CONFLICT, 'Idempotency key conflict');
+    throw new ServerError(ErrorCode.IDEMPOTENCY_CONFLICT, 'Idempotency key conflict', false, 409);
   }
 
   // 7. Generate sequence + created_order (atomic via BEGIN IMMEDIATE)
