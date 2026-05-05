@@ -6,6 +6,7 @@ import { roomCommand } from './commands/room.js';
 import { postCommand } from './commands/post.js';
 import { reactCommand } from './commands/react.js';
 import { threadCommand } from './commands/thread.js';
+import { whoamiCommand } from './commands/whoami.js';
 
 const program = new Command();
 
@@ -20,5 +21,6 @@ program.addCommand(roomCommand());
 program.addCommand(postCommand());
 program.addCommand(reactCommand());
 program.addCommand(threadCommand());
+program.addCommand(whoamiCommand());
 
 program.parse();

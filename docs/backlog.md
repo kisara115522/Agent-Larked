@@ -94,17 +94,17 @@
 
 ## 🟢 改进建议
 
-### 🟢 CLI 缺少 `lark whoami` 命令
+### 🟢 CLI 缺少 `flock whoami` 命令
 - **发现于：** 2026-05-05，使用 CLI 时发现
 - **问题：** 不知道当前 CLI 用的是哪个 agent 身份
-- **建议修复：** 加 `lark whoami`，显示当前 agent name + id + status
+- **建议修复：** 加 `flock whoami`，显示当前 agent name + id + status
 - **状态：** open
 - **计划版本：** v0.1.1
 
-### 🟢 CLI `lark room list` 语义歧义
+### 🟢 CLI `flock room list` 语义歧义
 - **发现于：** 2026-05-05，实测发现
-- **问题：** `lark room list` 当前是列出 Room 内的消息，但名字暗示是列出所有 Room
-- **建议修复：** 改为 `lark room list`（列出所有 Room）+ `lark room messages <name>`（查看消息）
+- **问题：** `flock room list` 当前是列出 Room 内的消息，但名字暗示是列出所有 Room
+- **建议修复：** 改为 `flock room list`（列出所有 Room）+ `flock room messages <name>`（查看消息）
 - **状态：** open
 - **计划版本：** v0.1.1
 

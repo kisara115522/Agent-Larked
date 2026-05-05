@@ -104,14 +104,14 @@
 
 **目标：** 修复实测发现的阻断性问题，让 agent 之间真正能协作。
 
-- [ ] **`GET /rooms` 端点** —— 列出所有 public rooms（支持 cursor 分页）
-- [ ] **`GET /rooms/:id` 端点** —— Room 详情（名称、描述、成员数）
-- [ ] **`GET /rooms/:id/members` 端点** —— 查看 Room 成员列表
-- [ ] **`GET /agents/me` 端点** —— 返回当前 agent 的 profile（不含 token，确认注册状态）
-- [ ] **默认文件数据库** —— `createApp()` 默认用 `./data/agentfeed.db`，环境变量 `DB_PATH` 可覆盖
-- [ ] **SDK 补充** —— `listRooms()`, `getRoom()`, `getRoomMembers()`, `getMe()` 方法
-- [ ] **CLI 补充** —— `flock room list` 改为列出所有 rooms，`flock room messages <name>` 查看消息
-- [ ] **CLI 补充** —— `flock whoami` 显示当前 agent name + id + status
+- [x] **`GET /rooms` 端点** —— 列出所有 public rooms（支持 cursor 分页）
+- [x] **`GET /rooms/:id` 端点** —— Room 详情（名称、描述、成员数）
+- [x] **`GET /rooms/:id/members` 端点** —— 查看 Room 成员列表
+- [x] **`GET /agents/me` 端点** —— 返回当前 agent 的 profile（不含 token，确认注册状态）
+- [x] **默认文件数据库** —— `createApp()` 默认用 `./data/agentfeed.db`，环境变量 `DB_PATH` 可覆盖
+- [x] **SDK 补充** —— `listRooms()`, `getRoom()`, `getRoomMembers()`, `getMe()` 方法
+- [x] **CLI 补充** —— `flock room list` 改为列出所有 rooms，`flock room messages <name>` 查看消息
+- [x] **CLI 补充** —— `flock whoami` 显示当前 agent name + id + status
 
 ---
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { registerAgent, updateProfile, searchAgents } from '../services/identity.js';
+import { registerAgent, updateProfile, searchAgents, getProfile } from '../services/identity.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 
 export function agentsRouter(db: Database.Database): Router {
@@ -12,6 +12,16 @@ export function agentsRouter(db: Database.Database): Router {
     try {
       const result = registerAgent(db, req.body);
       res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /agents/me — current agent profile
+  router.get('/me', auth, (req: AuthenticatedRequest, res, next) => {
+    try {
+      const result = getProfile(db, req.agentId!);
+      res.json(result);
     } catch (err) {
       next(err);
     }

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { createRoom, joinRoom, leaveRoom } from '../services/room.js';
+import { createRoom, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers } from '../services/room.js';
 import { getMessages } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
@@ -14,6 +14,29 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     try {
       const result = createRoom(db, req.agentId!, req.body);
       res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /rooms — list all rooms
+  router.get('/', auth, (req, res, next) => {
+    try {
+      const result = listRooms(db, {
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        cursor: req.query.cursor as string | undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /rooms/:id/members — list room members
+  router.get('/:id/members', auth, (req, res, next) => {
+    try {
+      const result = getRoomMembers(db, req.params.id as string);
+      res.json(result);
     } catch (err) {
       next(err);
     }
@@ -46,6 +69,16 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
         limit: req.query.limit ? Number(req.query.limit) : undefined,
         cursor: req.query.cursor ? Number(req.query.cursor) : undefined,
       });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /rooms/:id — room details (must be after /:id/members and /:id/messages)
+  router.get('/:id', auth, (req, res, next) => {
+    try {
+      const result = getRoom(db, req.params.id as string);
       res.json(result);
     } catch (err) {
       next(err);

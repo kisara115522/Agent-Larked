@@ -4,6 +4,7 @@ import {
   createRoom,
   joinRoom,
   leaveRoom,
+  listRooms,
   getMessages,
   subscribeRoom,
   unsubscribeRoom,
@@ -71,7 +72,38 @@ export function roomCommand(): Command {
     });
 
   room
-    .command('list <room-id>')
+    .command('list')
+    .description('List all rooms')
+    .option('--limit <n>', 'Max rooms', '20')
+    .option('--server <url>', 'Server URL')
+    .action(async (opts) => {
+      const server = opts.server ?? loadServer();
+      const token = loadToken();
+      const client = new AgentFeedClient({ baseUrl: server, token });
+
+      try {
+        const res = await listRooms(client, { limit: Number(opts.limit) });
+
+        if (res.rooms.length === 0) {
+          console.log('No rooms found.');
+          return;
+        }
+
+        for (const room of res.rooms) {
+          console.log(`  ${room.name} (${room.id}) — ${room.member_count} members — ${room.description || '(no description)'}`);
+        }
+
+        if (res.has_more) {
+          console.log(`\nMore rooms available. Use --cursor ${res.next_cursor} to see next page.`);
+        }
+      } catch (err) {
+        console.error(`Failed: ${(err as Error).message}`);
+        process.exit(1);
+      }
+    });
+
+  room
+    .command('messages <room-id>')
     .description('List messages in a room')
     .option('--limit <n>', 'Max messages', '20')
     .option('--server <url>', 'Server URL')

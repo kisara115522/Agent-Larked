@@ -277,3 +277,155 @@ describe('Auth', () => {
       .expect(401);
   });
 });
+
+describe('GET /agents/me', () => {
+  it('returns current agent profile', async () => {
+    const reg = await request(app)
+      .post('/agents')
+      .send({ name: 'MeBot', bio: 'I am me', capabilities: ['test'] })
+      .expect(201);
+
+    const res = await request(app)
+      .get('/agents/me')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .expect(200);
+
+    expect(res.body.name).toBe('MeBot');
+    expect(res.body.bio).toBe('I am me');
+    expect(res.body.capabilities).toEqual(['test']);
+    expect(res.body.id).toBe(reg.body.id);
+    // Should NOT include token_hash
+    expect(res.body.token_hash).toBeUndefined();
+  });
+});
+
+describe('GET /rooms', () => {
+  it('lists all rooms', async () => {
+    const reg = await request(app)
+      .post('/agents')
+      .send({ name: 'ListBot' })
+      .expect(201);
+
+    // Create a few rooms
+    await request(app)
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'list-room-1', description: 'First' })
+      .expect(201);
+
+    await request(app)
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'list-room-2', description: 'Second' })
+      .expect(201);
+
+    const res = await request(app)
+      .get('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .expect(200);
+
+    expect(res.body.rooms.length).toBeGreaterThanOrEqual(2);
+    expect(res.body.rooms[0].name).toBeDefined();
+    expect(res.body.rooms[0].member_count).toBeDefined();
+    expect(typeof res.body.rooms[0].member_count).toBe('number');
+  });
+
+  it('supports cursor pagination', async () => {
+    const reg = await request(app)
+      .post('/agents')
+      .send({ name: 'PageBot' })
+      .expect(201);
+
+    const res = await request(app)
+      .get('/rooms?limit=1')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .expect(200);
+
+    expect(res.body.rooms).toHaveLength(1);
+    // has_more depends on total rooms count
+    expect(typeof res.body.has_more).toBe('boolean');
+  });
+});
+
+describe('GET /rooms/:id', () => {
+  it('returns room details with member count', async () => {
+    const reg = await request(app)
+      .post('/agents')
+      .send({ name: 'DetailBot' })
+      .expect(201);
+
+    const room = await request(app)
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'detail-room', description: 'Detail test' })
+      .expect(201);
+
+    const res = await request(app)
+      .get(`/rooms/${room.body.id}`)
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .expect(200);
+
+    expect(res.body.name).toBe('detail-room');
+    expect(res.body.description).toBe('Detail test');
+    expect(res.body.member_count).toBe(1); // creator auto-joins
+  });
+
+  it('returns 404 for non-existent room', async () => {
+    const reg = await request(app)
+      .post('/agents')
+      .send({ name: 'NotFoundBot' })
+      .expect(201);
+
+    await request(app)
+      .get('/rooms/non-existent-id')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .expect(404);
+  });
+});
+
+describe('GET /rooms/:id/members', () => {
+  it('returns room member list', async () => {
+    const reg1 = await request(app)
+      .post('/agents')
+      .send({ name: 'MemberBot1' })
+      .expect(201);
+
+    const reg2 = await request(app)
+      .post('/agents')
+      .send({ name: 'MemberBot2' })
+      .expect(201);
+
+    const room = await request(app)
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg1.body.token}`)
+      .send({ name: 'member-room' })
+      .expect(201);
+
+    // Second agent joins
+    await request(app)
+      .post(`/rooms/${room.body.id}/join`)
+      .set('Authorization', `Bearer ${reg2.body.token}`)
+      .expect(200);
+
+    const res = await request(app)
+      .get(`/rooms/${room.body.id}/members`)
+      .set('Authorization', `Bearer ${reg1.body.token}`)
+      .expect(200);
+
+    expect(res.body.members).toHaveLength(2);
+    expect(res.body.members[0].name).toBeDefined();
+    expect(res.body.members[0].id).toBeDefined();
+  });
+
+  it('returns 404 for non-existent room', async () => {
+    const reg = await request(app)
+      .post('/agents')
+      .send({ name: 'MemberNotFoundBot' })
+      .expect(201);
+
+    await request(app)
+      .get('/rooms/non-existent-id/members')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .expect(404);
+  });
+});

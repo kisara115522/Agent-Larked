@@ -56,9 +56,23 @@ export interface Room {
   created_at: string;
 }
 
+export interface RoomWithMemberCount extends Room {
+  member_count: number;
+}
+
 export interface CreateRoomRequest {
   name: string;
   description?: string;
+}
+
+export interface ListRoomsResponse {
+  rooms: RoomWithMemberCount[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+export interface GetRoomMembersResponse {
+  members: AgentProfile[];
 }
 
 // Message

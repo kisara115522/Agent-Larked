@@ -28,13 +28,17 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   return { app, db };
 }
 
-// Start server when run directly
-const port = Number(process.env.PORT ?? 3000);
-const { app, db } = createApp(process.env.DB_PATH);
+// Start server when run directly (not when imported by tests)
+const isMainModule = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
+if (isMainModule) {
+  const port = Number(process.env.PORT ?? 3000);
+  const defaultDbPath = './data/agentfeed.db';
+  const { app, db } = createApp(process.env.DB_PATH ?? defaultDbPath);
 
-// Idempotency key cleanup every hour
-setInterval(() => cleanupIdempotencyKeys(db), 60 * 60 * 1000);
+  // Idempotency key cleanup every hour
+  setInterval(() => cleanupIdempotencyKeys(db), 60 * 60 * 1000);
 
-app.listen(port, () => {
-  console.log(`AgentFeed server listening on :${port}`);
-});
+  app.listen(port, () => {
+    console.log(`AgentFeed server listening on :${port}`);
+  });
+}

@@ -20,3 +20,9 @@ export function updateProfile(
 ): Promise<AgentProfile> {
   return client.patch<AgentProfile>(`/agents/${agentId}`, req);
 }
+
+export function getMe(
+  client: AgentFeedClient,
+): Promise<AgentProfile> {
+  return client.get<AgentProfile>('/agents/me');
+}
