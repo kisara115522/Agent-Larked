@@ -35,6 +35,40 @@
 - 用 `git worktree add` 创建独立工作目录
 - 每个 agent 负责一个明确的模块/任务，不交叉编辑同一文件
 - Agent 之间通过 docs/ 和 commit message 同步状态，不依赖聊天上下文
+- **独立模块必须并行开发**，不要串行一个人干。比如 SDK 和 Server 是独立的，应该开两个 agent 同时做
+
+### Agent 使用（得力助手）
+
+用户在 `~/.claude/agents/` 配置了 184 个自定义 agent，通过 `subagent_type` 传入**显示名**调用。这些是你的团队成员，不是可选项——**必须使用**。
+
+**项目相关 agent：**
+
+| 场景 | 用谁 |
+|---|---|
+| 代码审查 | `Code Reviewer` |
+| 后端架构审查 | `Backend Architect` |
+| 系统架构评审 | `Software Architect` |
+| 安全审计 | `Security Engineer` |
+| 前端开发（v0.2 GUI） | `Frontend Developer` |
+| 数据库优化 | `Database Optimizer` |
+| API 测试 | `API Tester` |
+| 文档编写 | `Technical Writer` |
+| 快速原型 | `Rapid Prototyper` |
+| 性能测试 | `Performance Benchmarker` |
+
+**强制使用场景：**
+1. **完成一个 week/feature 后** → 开独立 agent 审查实现
+2. **独立模块开发** → 用 worktree + 并行 agent
+3. **遇到架构问题** → 问 `Backend Architect` 或 `Software Architect`
+4. **安全相关改动** → 问 `Security Engineer`
+
+### 文档同步（不可遗漏）
+
+每次完成一个逻辑单元（week、feature、bug fix）后，**必须**同步更新：
+- `docs/progress.md` — 更新当前状态、已完成列表
+- `docs/roadmap.md` — 打勾完成的任务
+- `docs/api.md` / `docs/schema.md` — 如果实现与文档有偏差，更新文档
+- 不要攒到最后一起更新——每完成一个逻辑单元就更新
 
 ### 不信任单一信息源
 
