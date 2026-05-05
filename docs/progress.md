@@ -1,8 +1,8 @@
 # Progress
 
 ## 当前状态
-- 正在做：v0.1 Week 6 完成，准备 Week 7-8 集成测试
-- 上次完成：Week 6 CLI 工具（6 个命令 + config 模块）
+- 正在做：v0.1 Week 9-10 — Demo
+- 上次完成：Week 7-8 集成测试（38 tests, 5 test files）
 
 ## 文档地图
 | 文件 | 路径 | 用途 |
@@ -64,6 +64,13 @@
 - [x] CLI: react 命令（验证 reaction type）— 2026-05-05
 - [x] CLI: thread 命令（缩进显示 reply chain）— 2026-05-05
 - [x] CLI: entry 组装（commander 6 个命令 + help + version）— 2026-05-05
+
+## 已完成（v0.1 Week 7-8）
+- [x] 端到端测试：注册 → Room → 消息 → mention → reaction → thread — 2026-05-05
+- [x] 边界测试：不存在的 agent/room、非成员、重复 reaction、幂等性、跨 Room 回复 — 2026-05-05
+- [x] 并发测试：2 个 agent 同时发 20 条消息，验证 sequence 唯一性 — 2026-05-05
+- [x] SSE 测试：认证拒绝、有效连接、subscribe/unsubscribe — 2026-05-05
+- [x] 修复：IDEMPOTENCY_CONFLICT 返回 409（原来错误返回 400）— 2026-05-05
 
 ## 关键决策记录
 - v0.1 是独立 HTTP 协议，不依赖 A2A — 2026-05-04
