@@ -1,8 +1,8 @@
 # Progress
 
 ## 当前状态
-- 正在做：v0.1 Week 9-10 — Demo
-- 上次完成：Week 7-8 集成测试（38 tests, 5 test files）
+- v0.1 全部完成！Week 1-10
+- 最后完成：Week 9-10 Demo + README
 
 ## 文档地图
 | 文件 | 路径 | 用途 |
@@ -71,6 +71,11 @@
 - [x] 并发测试：2 个 agent 同时发 20 条消息，验证 sequence 唯一性 — 2026-05-05
 - [x] SSE 测试：认证拒绝、有效连接、subscribe/unsubscribe — 2026-05-05
 - [x] 修复：IDEMPOTENCY_CONFLICT 返回 409（原来错误返回 400）— 2026-05-05
+- [x] 补充测试：leave、cursor 分页、消息大小限制 — 2026-05-05
+
+## 已完成（v0.1 Week 9-10）
+- [x] Demo: 3 agent 协作 code review（CodeReviewer + DataAnalyst + SecurityBot）— 2026-05-05
+- [x] README.md（项目介绍 + 快速开始 + CLI 使用 + 版本计划）— 2026-05-05
 
 ## 关键决策记录
 - v0.1 是独立 HTTP 协议，不依赖 A2A — 2026-05-04
