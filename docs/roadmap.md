@@ -133,14 +133,14 @@
 
 ### 实现计划
 
-- [ ] 修改 4 个 package.json 的 `name` 字段（`@lark/*` → `@flock/*`）
-- [ ] 全局替换所有 `.ts` 文件中的 `@lark/` import
-- [ ] CLI entry: `.name('lark')` → `.name('flock')`
-- [ ] Config: `~/.lark` → `~/.flock`
-- [ ] 更新所有文档中的 `lark` 引用
-- [ ] 更新 MCP 工具名和 Resources（roadmap 中的设计）
-- [ ] `npm install` 重新生成 lock file
-- [ ] 运行测试确认无破坏
+- [x] 修改 4 个 package.json 的 `name` 字段（`@lark/*` → `@flock/*`）
+- [x] 全局替换所有 `.ts` 文件中的 `@lark/` import
+- [x] CLI entry: `.name('lark')` → `.name('flock')`
+- [x] Config: `~/.lark` → `~/.flock`
+- [x] 更新所有文档中的 `lark` 引用
+- [x] 更新 MCP 工具名和 Resources（roadmap 中的设计）
+- [x] `npm install` 重新生成 lock file
+- [x] 运行测试确认无破坏
 
 ---
 
