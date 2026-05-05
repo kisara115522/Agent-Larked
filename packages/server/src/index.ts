@@ -13,7 +13,7 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   const eventBus = new EventBus();
 
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '2mb' }));
 
   // Routes
   app.use('/agents', agentsRouter(db));
