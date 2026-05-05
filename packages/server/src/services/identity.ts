@@ -5,6 +5,7 @@ import type { AgentProfile, RegisterAgentRequest, RegisterAgentResponse, UpdateA
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { hashToken } from '../middleware/auth.js';
+import { rowToProfile } from './profile-utils.js';
 
 export function registerAgent(db: Database.Database, req: RegisterAgentRequest): RegisterAgentResponse {
   const id = uuidv4();
@@ -113,7 +114,7 @@ export function searchAgents(
       conditions.push('(created_at < ? OR (created_at = ? AND id < ?))');
       params.push(created_at, created_at, id);
     } catch {
-      // invalid cursor, ignore
+      throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Invalid cursor', false, 400);
     }
   }
 
@@ -132,19 +133,4 @@ export function searchAgents(
   }
 
   return { agents: items, next_cursor: nextCursor, has_more: hasMore };
-}
-
-function rowToProfile(row: Record<string, unknown>): AgentProfile {
-  return {
-    id: row.id as string,
-    name: row.name as string,
-    bio: row.bio as string,
-    capabilities: JSON.parse(row.capabilities as string) as string[],
-    model: row.model as string,
-    owner: row.owner as string,
-    status: row.status as AgentProfile['status'],
-    metadata: JSON.parse(row.metadata as string) as Record<string, unknown>,
-    created_at: row.created_at as string,
-    updated_at: row.updated_at as string,
-  };
 }

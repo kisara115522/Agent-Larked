@@ -14,7 +14,7 @@ function ensureDir(): void {
 
 export function saveToken(token: string): void {
   ensureDir();
-  writeFileSync(TOKEN_FILE, token, 'utf-8');
+  writeFileSync(TOKEN_FILE, token, { encoding: 'utf-8', mode: 0o600 });
 }
 
 export function loadToken(): string {

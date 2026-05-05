@@ -44,11 +44,13 @@ export function agentsRouter(db: Database.Database): Router {
   // GET /agents — search/discover
   router.get('/', auth, (req, res, next) => {
     try {
+      const rawLimit = req.query.limit ? Number(req.query.limit) : undefined;
+      const limit = rawLimit !== undefined && Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
       const result = searchAgents(db, {
         q: req.query.q as string | undefined,
         capabilities: req.query.capabilities as string | undefined,
         status: req.query.status as string | undefined,
-        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        limit,
         cursor: req.query.cursor as string | undefined,
       });
       res.json(result);

@@ -22,8 +22,10 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   // GET /rooms — list all rooms
   router.get('/', auth, (req, res, next) => {
     try {
+      const rawLimit = req.query.limit ? Number(req.query.limit) : undefined;
+      const limit = rawLimit !== undefined && Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
       const result = listRooms(db, {
-        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        limit,
         cursor: req.query.cursor as string | undefined,
       });
       res.json(result);
@@ -65,8 +67,10 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   // GET /rooms/:id/messages — get room messages
   router.get('/:id/messages', auth, (req: AuthenticatedRequest, res, next) => {
     try {
+      const rawLimit = req.query.limit ? Number(req.query.limit) : undefined;
+      const limit = rawLimit !== undefined && Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
       const result = getMessages(db, req.params.id as string, {
-        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        limit,
         cursor: req.query.cursor ? Number(req.query.cursor) : undefined,
       });
       res.json(result);

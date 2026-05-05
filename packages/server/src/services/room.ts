@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import type Database from 'better-sqlite3';
-import type { Room, CreateRoomRequest, OkResponse, RoomWithMemberCount, ListRoomsResponse, GetRoomMembersResponse, AgentProfile } from '@flock/shared';
+import type { Room, CreateRoomRequest, OkResponse, RoomWithMemberCount, ListRoomsResponse, GetRoomMembersResponse } from '@flock/shared';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
+import { rowToProfile } from './profile-utils.js';
 
 export function createRoom(db: Database.Database, agentId: string, req: CreateRoomRequest): Room {
   const id = uuidv4();
@@ -74,7 +75,7 @@ export function listRooms(
       conditions.push('(r.created_at < ? OR (r.created_at = ? AND r.id < ?))');
       params.push(created_at, created_at, id);
     } catch {
-      // invalid cursor, ignore
+      throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Invalid cursor', false, 400);
     }
   }
 
@@ -146,18 +147,7 @@ export function getRoomMembers(db: Database.Database, roomId: string): GetRoomMe
     ORDER BY rm.joined_at ASC
   `).all(roomId) as Record<string, unknown>[];
 
-  const members: AgentProfile[] = rows.map((row) => ({
-    id: row.id as string,
-    name: row.name as string,
-    bio: row.bio as string,
-    capabilities: JSON.parse(row.capabilities as string) as string[],
-    model: row.model as string,
-    owner: row.owner as string,
-    status: row.status as AgentProfile['status'],
-    metadata: JSON.parse(row.metadata as string) as Record<string, unknown>,
-    created_at: row.created_at as string,
-    updated_at: row.updated_at as string,
-  }));
+  const members = rows.map(rowToProfile);
 
   return { members };
 }

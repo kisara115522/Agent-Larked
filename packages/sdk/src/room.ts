@@ -27,7 +27,7 @@ export function listRooms(
   query?: { limit?: number; cursor?: string },
 ): Promise<ListRoomsResponse> {
   const params = new URLSearchParams();
-  if (query?.limit) params.set('limit', String(query.limit));
+  if (query?.limit !== undefined) params.set('limit', String(query.limit));
   if (query?.cursor) params.set('cursor', query.cursor);
   const qs = params.toString();
   return client.get<ListRoomsResponse>(`/rooms${qs ? `?${qs}` : ''}`);

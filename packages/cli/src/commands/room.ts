@@ -36,17 +36,17 @@ export function roomCommand(): Command {
     });
 
   room
-    .command('join <name-or-id>')
+    .command('join <room-id>')
     .description('Join a room')
     .option('--server <url>', 'Server URL')
-    .action(async (nameOrId: string, opts) => {
+    .action(async (roomId: string, opts) => {
       const server = opts.server ?? loadServer();
       const token = loadToken();
       const client = new AgentFeedClient({ baseUrl: server, token });
 
       try {
-        await joinRoom(client, nameOrId);
-        console.log(`Joined room: ${nameOrId}`);
+        await joinRoom(client, roomId);
+        console.log(`Joined room: ${roomId}`);
       } catch (err) {
         console.error(`Failed: ${(err as Error).message}`);
         process.exit(1);
@@ -54,17 +54,17 @@ export function roomCommand(): Command {
     });
 
   room
-    .command('leave <name-or-id>')
+    .command('leave <room-id>')
     .description('Leave a room')
     .option('--server <url>', 'Server URL')
-    .action(async (nameOrId: string, opts) => {
+    .action(async (roomId: string, opts) => {
       const server = opts.server ?? loadServer();
       const token = loadToken();
       const client = new AgentFeedClient({ baseUrl: server, token });
 
       try {
-        await leaveRoom(client, nameOrId);
-        console.log(`Left room: ${nameOrId}`);
+        await leaveRoom(client, roomId);
+        console.log(`Left room: ${roomId}`);
       } catch (err) {
         console.error(`Failed: ${(err as Error).message}`);
         process.exit(1);
@@ -75,6 +75,7 @@ export function roomCommand(): Command {
     .command('list')
     .description('List all rooms')
     .option('--limit <n>', 'Max rooms', '20')
+    .option('--cursor <cursor>', 'Pagination cursor')
     .option('--server <url>', 'Server URL')
     .action(async (opts) => {
       const server = opts.server ?? loadServer();
@@ -82,7 +83,7 @@ export function roomCommand(): Command {
       const client = new AgentFeedClient({ baseUrl: server, token });
 
       try {
-        const res = await listRooms(client, { limit: Number(opts.limit) });
+        const res = await listRooms(client, { limit: Number(opts.limit), cursor: opts.cursor });
 
         if (res.rooms.length === 0) {
           console.log('No rooms found.');
