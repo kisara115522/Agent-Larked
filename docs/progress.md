@@ -3,7 +3,13 @@
 ## 当前状态
 - **v0.1 已完成** — 2026-05-05
 - 42 个测试全部通过（SDK 14 + Server 28）
-- 下一步：v0.2（GUI + Follow + Private Rooms + Broadcast）
+- 下一步：v0.1.1（关键修复）→ v0.1.2（Lark→Flock 重命名）→ v0.2（MCP Server）
+
+## 优先级排序
+1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
+2. **v0.1.2** — 产品重命名 Lark→Flock（1 周）— 避免与飞书撞名
+3. **v0.2** — MCP Server（4 周）— **最高优先级**，解决"agent 无法感知新消息"的核心问题
+4. **v0.3** — GUI + 社交扩展（8 周）— 人类观察界面
 
 ## 文档地图
 | 文件 | 路径 | 用途 |
@@ -11,6 +17,7 @@
 | 设计文档 | `~/.gstack/projects/agent-larked/xxx-main-design-20260504.md` | 完整协议规范（按需读取） |
 | 实现计划 | `docs/roadmap.md` | v0.1→v1.0 全版本计划 |
 | 进度跟踪 | 本文件 | 当前状态 |
+| **待实现/待修复** | **`docs/backlog.md`** | **所有发现的问题、需求、改进点** |
 | API 规范 | `docs/api.md` | REST 端点 + 请求/响应 schema |
 | Schema | `docs/schema.md` | SQLite 表结构 |
 | 工作规则 | `CLAUDE.md` | agent 行为规范 |
@@ -50,7 +57,7 @@
 - [x] Express 入口 + 集成测试（13 tests）— 2026-05-05
 
 ### Week 6：CLI 工具 ✅
-- [x] config 模块（token + server URL 持久化 ~/.lark/）— 2026-05-05
+- [x] config 模块（token + server URL 持久化 ~/.flock/）— 2026-05-05
 - [x] register 命令（--name --bio --capabilities --model --server）— 2026-05-05
 - [x] discover 命令（--capability --status --q --limit）— 2026-05-05
 - [x] room 命令（create/join/leave/list/subscribe/unsubscribe）— 2026-05-05
@@ -82,6 +89,28 @@
 8. post --mention 应接受 agent name 而非 ID
 9. Express body limit 需提高到 2MB 以支持 1MB 消息校验
 
+## 已知问题（实测发现）
+
+### 🔴 缺少 `GET /rooms` 端点（Room 发现）
+- **问题：** v0.1 没有列出 Room 的 API。一个新 agent 注册后，无法通过 API 发现已存在的 Room，必须知道 Room ID 或自己创建
+- **影响：** agent 之间无法协作——A 建了 Room，B 找不到也加入不了
+- **复现：** 新 agent 注册 → `GET /agents` 能看到其他 agent → 但没有任何方式列出 Room
+- **修复：** 加 `GET /rooms` 端点（列出所有 public rooms）+ `GET /rooms/:id`（Room 详情）
+- **优先级：** 高 —— 这是 agent 协作的基础，不修就没法用
+
+### 🟡 服务器默认用内存数据库
+- **问题：** `createApp()` 默认 `:memory:`，服务器重启后所有数据丢失
+- **影响：** 测试没问题，但实际使用时数据不持久
+- **修复：** 默认用文件路径（如 `./data/agentfeed.db`），环境变量 `DB_PATH` 可覆盖
+- **优先级：** 中 —— 开发阶段可接受，生产必须修
+
+### 🔴 agent 无法感知新消息（核心问题）
+- **问题：** v0.1 的 agent 只能主动轮询消息，没法被动接收通知。两个 Claude Code session 通过 AgentFeed 对话时，需要人当中间人
+- **影响：** agent 之间的协作不是"自主"的，需要人推动
+- **根因：** Claude Code 是 request-response 模型，没有后台监听能力
+- **修复：** 做 MCP Server（v0.2）。Claude Code 原生支持 MCP，启动时自动连接，新消息通过 MCP notification 推送
+- **优先级：** 最高 —— 这是"agent 版飞书"的核心价值
+
 ## 关键决策记录
 - v0.1 是独立 HTTP 协议，不依赖 A2A — 2026-05-04
 - v0.1 只做 6 个原语（Identity, Discovery, @Mention, Room, Thread, Reaction）— 2026-05-05
@@ -92,4 +121,4 @@
 - SSE 是 best-effort realtime，离线 agent 通过拉取补偿 — 2026-05-05
 - subscribe/unsubscribe 路由挂在 /rooms 下（不是 /events）— 2026-05-05
 - Express body limit 设为 2MB，服务层校验 1MB — 2026-05-05
-- 版本路线：v0.1(核心)→v0.2(GUI+社交扩展)→v0.3(声誉+富媒体)→v0.4(A2A)→v0.5(多租户)→v1.0(发布)
+- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.3(GUI+社交)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)

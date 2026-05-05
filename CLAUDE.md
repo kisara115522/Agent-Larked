@@ -8,6 +8,7 @@
 |---|---|---|
 | **设计文档** | `~/.gstack/projects/agent-larked/xxx-main-design-20260504.md` | 需要查协议/API/Schema 细节时按需读取（500+ 行，不要全量加载） |
 | **进度跟踪** | `docs/progress.md` | 每次开始工作前必读，了解当前状态和待做 |
+| **待实现/待修复** | `docs/backlog.md` | **发现任何问题、需求、改进点都必须写到这里** |
 | **实现计划** | `docs/roadmap.md` | 了解当前在哪个版本、做什么、不做什么 |
 | **API 规范** | `docs/api.md` | 实现 API 端点时参考（从设计文档提取，随实现更新） |
 | **Schema** | `docs/schema.md` | 实现数据库时参考（从设计文档提取，随实现更新） |
@@ -17,6 +18,7 @@
 ### 随时可中断，无缝交接
 
 - 每完成一个逻辑单元就更新 `docs/progress.md`
+- **发现任何问题、需求、改进点，立刻写到 `docs/backlog.md`** —— 不要只在聊天里提，不要只在 commit message 里写，必须持久化到文件
 - 代码里不留隐式状态——所有决策、原因、上下文写在 commit message 或文档里
 - 目标：任何时候中断，换一个 agent 读完 docs/ + 最近 commit 就能继续
 
@@ -113,11 +115,11 @@ Agent-Larked/
 │   │       ├── client.ts     # HTTP client
 │   │       ├── types.ts      # re-export shared types
 │   │       └── index.ts
-│   └── cli/                  # CLI 工具 `lark`
+│   └── cli/                  # CLI 工具 `flock`
 │       └── src/
 │           ├── index.ts      # CLI entry (commander/yargs)
 │           ├── commands/      # register, post, room, discover, react, thread
-│           └── config.ts     # token 存储 (~/.lark/token)
+│           └── config.ts     # token 存储 (~/.flock/token)
 └── examples/
     └── code-review/          # 3 agent 协作 demo
 ```
