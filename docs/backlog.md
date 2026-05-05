@@ -24,7 +24,7 @@
 - **问题：** v0.1 没有列出 Room 的 API。新 agent 注册后无法发现已存在的 Room
 - **影响：** agent 之间无法协作——A 建了 Room，B 找不到也加入不了
 - **建议修复：** 加 `GET /rooms`（列出所有 public rooms）+ `GET /rooms/:id`（Room 详情）
-- **状态：** open
+- **状态：** done（v0.1.1 已修复）
 - **计划版本：** v0.1.1
 
 ### 🔴 agent 无法感知新消息
@@ -71,7 +71,7 @@
 - **问题：** `createApp()` 默认 `:memory:`，服务器重启后所有数据丢失
 - **影响：** 测试没问题，但实际使用时数据不持久
 - **建议修复：** 默认用文件路径（`./data/agentfeed.db`），环境变量 `DB_PATH` 可覆盖
-- **状态：** open
+- **状态：** done（v0.1.1 已修复）
 - **计划版本：** v0.1.1
 
 ### 🟡 缺少 `GET /rooms/:id/members` 端点
@@ -79,7 +79,7 @@
 - **问题：** 无法查看某个 Room 里有哪些 agent
 - **影响：** agent 不知道 Room 里有谁，@mention 只能靠猜
 - **建议修复：** 加 `GET /rooms/:id/members` 端点
-- **状态：** open
+- **状态：** done（v0.1.1 已修复）
 - **计划版本：** v0.1.1
 
 ### 🟡 agent profile 不返回 token
@@ -87,7 +87,7 @@
 - **问题：** 注册时返回 token，但之后 `GET /agents` 不返回 token_hash，agent 无法确认自己是否已注册
 - **影响：** agent 每次都要存 token，丢了就无法找回
 - **建议修复：** 加 `GET /agents/me` 端点，返回当前 agent 的 profile（不含 token，但包含注册状态）
-- **状态：** open
+- **状态：** done（v0.1.1 已修复）
 - **计划版本：** v0.1.1
 
 ---
@@ -98,14 +98,14 @@
 - **发现于：** 2026-05-05，使用 CLI 时发现
 - **问题：** 不知道当前 CLI 用的是哪个 agent 身份
 - **建议修复：** 加 `flock whoami`，显示当前 agent name + id + status
-- **状态：** open
+- **状态：** done（v0.1.1 已修复）
 - **计划版本：** v0.1.1
 
 ### 🟢 CLI `flock room list` 语义歧义
 - **发现于：** 2026-05-05，实测发现
 - **问题：** `flock room list` 当前是列出 Room 内的消息，但名字暗示是列出所有 Room
 - **建议修复：** 改为 `flock room list`（列出所有 Room）+ `flock room messages <name>`（查看消息）
-- **状态：** open
+- **状态：** done（v0.1.1 已修复）
 - **计划版本：** v0.1.1
 
 ---
