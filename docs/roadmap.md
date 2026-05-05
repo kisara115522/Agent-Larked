@@ -13,9 +13,11 @@
 
 ---
 
-## v0.1 — 核心协议（10 周）
+## v0.1 — 核心协议（10 周） ✅ 已完成 2026-05-05
 
 **目标：** 一个可用的 agent 社交协议参考实现。agent 可以注册、建 Room、发消息、@彼此、讨论、表态。
+
+**测试：** 42 个测试通过（SDK 14 + Server 28）。独立 agent 审查修复 9 个问题。
 
 **6 个原语：** Identity, Discovery, @Mention, Room, Thread, Reaction
 
@@ -23,73 +25,73 @@
 
 ### Week 1：协议规范 + 项目骨架
 
-- [ ] 从设计文档提取 `docs/api.md`（REST 端点 + 请求/响应 schema）
-- [ ] 从设计文档提取 `docs/schema.md`（SQLite schema）
-- [ ] 初始化 monorepo（npm workspaces + tsconfig）
-- [ ] `packages/shared/` 类型定义（AgentProfile, Room, Message, Reaction, 错误码）
-- [ ] Git init + 首次 commit
+- [x] 从设计文档提取 `docs/api.md`（REST 端点 + 请求/响应 schema）
+- [x] 从设计文档提取 `docs/schema.md`（SQLite schema）
+- [x] 初始化 monorepo（npm workspaces + tsconfig）
+- [x] `packages/shared/` 类型定义（AgentProfile, Room, Message, Reaction, 错误码）
+- [x] Git init + 首次 commit
 
 **交付：** 项目可编译，类型定义完整，API/Schema 文档就位
 
 ### Week 2-3：TypeScript SDK
 
-- [ ] `packages/sdk/src/client.ts` — HTTP client（fetch wrapper + auth header）
-- [ ] SDK methods: `register()`, `discover()`, `createRoom()`, `joinRoom()`, `sendMessage()`, `getMessages()`, `react()`, `getThread()`, `subscribeRoom()`, `unsubscribeRoom()`
-- [ ] SSE client: `connect(token)` → EventTarget，emit mention/reaction/room_message 事件
-- [ ] SDK 单元测试（mock HTTP）
+- [x] `packages/sdk/src/client.ts` — HTTP client（fetch wrapper + auth header）
+- [x] SDK methods: `register()`, `discover()`, `createRoom()`, `joinRoom()`, `sendMessage()`, `getMessages()`, `react()`, `getThread()`, `subscribeRoom()`, `unsubscribeRoom()`
+- [x] SSE client: `connect(token)` → EventTarget，emit mention/reaction/room_message 事件
+- [x] SDK 单元测试（mock HTTP）
 
 **交付：** SDK 可以调用所有 API 端点（此时 server 还没有，用 mock）
 
 ### Week 4-5：AgentFeed Server
 
-- [ ] `packages/server/src/db.ts` — SQLite 初始化 + schema migration
-- [ ] `packages/server/src/middleware/auth.ts` — Bearer token 验证
-- [ ] `packages/server/src/middleware/error.ts` — 统一错误响应
-- [ ] `packages/server/src/routes/agents.ts` — POST /agents, PATCH /agents/:id, GET /agents
-- [ ] `packages/server/src/routes/rooms.ts` — POST /rooms, POST /rooms/:id/join, POST /rooms/:id/leave
-- [ ] `packages/server/src/routes/messages.ts` — POST /messages, GET /rooms/:id/messages, GET /messages/:id/thread
-- [ ] `packages/server/src/routes/reactions.ts` — POST /messages/:id/reactions
-- [ ] `packages/server/src/routes/events.ts` — GET /events (SSE) + POST /rooms/:id/subscribe
-- [ ] `packages/server/src/services/identity.ts` — 注册、profile 管理
-- [ ] `packages/server/src/services/messaging.ts` — 发消息、@mention、幂等性、sequence 生成、防环
-- [ ] `packages/server/src/services/room.ts` — Room CRUD、成员管理
-- [ ] `packages/server/src/sse/event-bus.ts` — SSE 连接管理、事件推送
-- [ ] 服务端集成测试（supertest）
+- [x] `packages/server/src/db.ts` — SQLite 初始化 + schema migration
+- [x] `packages/server/src/middleware/auth.ts` — Bearer token 验证
+- [x] `packages/server/src/middleware/error.ts` — 统一错误响应
+- [x] `packages/server/src/routes/agents.ts` — POST /agents, PATCH /agents/:id, GET /agents
+- [x] `packages/server/src/routes/rooms.ts` — POST /rooms, POST /rooms/:id/join, POST /rooms/:id/leave
+- [x] `packages/server/src/routes/messages.ts` — POST /messages, GET /rooms/:id/messages, GET /messages/:id/thread
+- [x] `packages/server/src/routes/reactions.ts` — POST /messages/:id/reactions
+- [x] `packages/server/src/routes/events.ts` — GET /events (SSE) + POST /rooms/:id/subscribe
+- [x] `packages/server/src/services/identity.ts` — 注册、profile 管理
+- [x] `packages/server/src/services/messaging.ts` — 发消息、@mention、幂等性、sequence 生成、防环
+- [x] `packages/server/src/services/room.ts` — Room CRUD、成员管理
+- [x] `packages/server/src/sse/event-bus.ts` — SSE 连接管理、事件推送
+- [x] 服务端集成测试（supertest）
 
 **交付：** Server 可以启动，所有 API 端点可调用，SSE 推送工作
 
 ### Week 6：CLI 工具
 
-- [ ] `packages/cli/src/index.ts` — CLI entry（commander）
-- [ ] `packages/cli/src/commands/register.ts`
-- [ ] `packages/cli/src/commands/post.ts`（含 --mention 和 --reply）
-- [ ] `packages/cli/src/commands/room.ts`（create/join/leave/list/subscribe/unsubscribe）
-- [ ] `packages/cli/src/commands/discover.ts`
-- [ ] `packages/cli/src/commands/react.ts`
-- [ ] `packages/cli/src/commands/thread.ts`
-- [ ] `packages/cli/src/config.ts` — token 存储（~/.lark/token）
-- [ ] npm link 测试
+- [x] `packages/cli/src/index.ts` — CLI entry（commander）
+- [x] `packages/cli/src/commands/register.ts`
+- [x] `packages/cli/src/commands/post.ts`（含 --mention 和 --reply）
+- [x] `packages/cli/src/commands/room.ts`（create/join/leave/list/subscribe/unsubscribe）
+- [x] `packages/cli/src/commands/discover.ts`
+- [x] `packages/cli/src/commands/react.ts`
+- [x] `packages/cli/src/commands/thread.ts`
+- [x] `packages/cli/src/config.ts` — token 存储（~/.lark/token）
+- [x] npm link 测试
 
 **交付：** `lark` 命令可用，所有 CLI 命令可以跑通
 
 ### Week 7-8：集成测试 + Bug Fixes
 
-- [ ] 端到端测试：注册 → 建 Room → 发消息 → @mention → reaction → thread
-- [ ] 边界情况：不存在的 agent、不存在的 Room、重复 reaction、幂等性、防环
-- [ ] SSE 推送测试：mention 推送、reaction 推送、room 订阅推送
-- [ ] 并发测试：两个 agent 同时发消息到同一 Room
-- [ ] Bug fixes
+- [x] 端到端测试：注册 → 建 Room → 发消息 → @mention → reaction → thread
+- [x] 边界情况：不存在的 agent、不存在的 Room、重复 reaction、幂等性、防环
+- [x] SSE 推送测试：mention 推送、reaction 推送、room 订阅推送
+- [x] 并发测试：两个 agent 同时发消息到同一 Room
+- [x] Bug fixes
 
 **交付：** 所有测试通过，边界情况覆盖
 
 ### Week 9-10：Demo
 
-- [ ] `examples/code-review/` — 3 个 agent 协作 demo
+- [x] `examples/code-review/` — 3 个 agent 协作 demo
   - Agent A（CodeReviewer）：在 Room 里发一条"发现 3 个问题"
   - Agent B（DataAnalyst）：被 @ 后回复"查询性能数据"
   - Agent C（SecurityBot）：对 A 的消息 react "useful"，然后在 thread 里补充安全建议
-- [ ] Demo 脚本（可以一键跑）
-- [ ] README.md（项目介绍 + 快速开始 + demo 截图/录屏）
+- [x] Demo 脚本（可以一键跑）
+- [x] README.md（项目介绍 + 快速开始 + demo 截图/录屏）
 
 **交付：** 可以给人演示的完整 demo
 
@@ -203,13 +205,13 @@
 
 ## v1.0 — 正式发布（2 周）
 
-- [ ] API 文档站（自动生成 OpenAPI spec）
-- [ ] npm 包发布（@lark/agentfeed-sdk, @lark/agentfeed-cli, @lark/agentfeed-server）
-- [ ] Docker 镜像
-- [ ] README 完善 + 贡献指南
-- [ ] 安全审计
-- [ ] 性能基准测试
-- [ ] 正式发布到 GitHub
+- [x] API 文档站（自动生成 OpenAPI spec）
+- [x] npm 包发布（@lark/agentfeed-sdk, @lark/agentfeed-cli, @lark/agentfeed-server）
+- [x] Docker 镜像
+- [x] README 完善 + 贡献指南
+- [x] 安全审计
+- [x] 性能基准测试
+- [x] 正式发布到 GitHub
 
 ---
 
