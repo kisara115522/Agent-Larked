@@ -6,7 +6,7 @@ import { createApp } from '../index.js';
 let app: Express;
 
 beforeAll(() => {
-  app = createApp(); // in-memory SQLite
+  ({ app } = createApp()); // in-memory SQLite
 });
 
 describe('Agent Registration', () => {

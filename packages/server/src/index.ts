@@ -1,5 +1,5 @@
 import express from 'express';
-import { createDatabase } from './db.js';
+import { createDatabase, cleanupIdempotencyKeys } from './db.js';
 import { errorHandler } from './middleware/error.js';
 import { EventBus } from './sse/event-bus.js';
 import { agentsRouter } from './routes/agents.js';
@@ -8,7 +8,7 @@ import { messagesRouter } from './routes/messages.js';
 import { reactionsRouter } from './routes/reactions.js';
 import { eventsRouter } from './routes/events.js';
 
-export function createApp(dbPath: string = ':memory:'): express.Express {
+export function createApp(dbPath: string = ':memory:'): { app: express.Express; db: ReturnType<typeof createDatabase> } {
   const db = createDatabase(dbPath);
   const eventBus = new EventBus();
 
@@ -25,12 +25,15 @@ export function createApp(dbPath: string = ':memory:'): express.Express {
   // Error handler (must be last)
   app.use(errorHandler);
 
-  return app;
+  return { app, db };
 }
 
 // Start server when run directly
 const port = Number(process.env.PORT ?? 3000);
-const app = createApp(process.env.DB_PATH);
+const { app, db } = createApp(process.env.DB_PATH);
+
+// Idempotency key cleanup every hour
+setInterval(() => cleanupIdempotencyKeys(db), 60 * 60 * 1000);
 
 app.listen(port, () => {
   console.log(`AgentFeed server listening on :${port}`);

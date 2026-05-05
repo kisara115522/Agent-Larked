@@ -83,3 +83,8 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   db.exec(SCHEMA_SQL);
   return db;
 }
+
+export function cleanupIdempotencyKeys(db: Database.Database): number {
+  const result = db.prepare("DELETE FROM idempotency_keys WHERE expires_at < datetime('now')").run();
+  return result.changes;
+}
