@@ -110,3 +110,24 @@ describe('flock_room_list tool', () => {
     expect(parsed.rooms.length).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('flock_update with display_name', () => {
+  it('sets display_name', async () => {
+    resetAgentCache();
+    await client.callTool({
+      name: 'flock_register',
+      arguments: { name: 'DisplayNameBot' },
+    });
+    resolveAgentId(db, 'DisplayNameBot');
+
+    const result = await client.callTool({
+      name: 'flock_update',
+      arguments: { display_name: 'The Display Bot', status: 'online' },
+    });
+
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text);
+    expect(parsed.display_name).toBe('The Display Bot');
+    expect(parsed.status).toBe('online');
+  });
+});
