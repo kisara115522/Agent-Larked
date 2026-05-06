@@ -1,64 +1,57 @@
+import { EventEmitter } from 'node:events';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { getMessages } from '@flock/server/services/messaging';
-import { isRoomMember } from '@flock/server/services/room';
 
-// Track last-seen sequence per room per agent
+// Global message event bus — shared across all tool registrations
+export const messageBus = new EventEmitter();
+messageBus.setMaxListeners(100);
+
+// Track last-seen sequence per room (global, keyed by room_id)
 const roomSequences = new Map<string, number>();
 
-function getSeqKey(roomId: string, agentId: string): string {
-  return `${roomId}:${agentId}`;
+/** Called by flock_post after sending a message to notify waiters */
+export function emitNewMessage(roomId: string, message: {
+  id: string;
+  from: string;
+  content: string;
+  sequence: number;
+  mentions: string[];
+  reply_to: string | null;
+  created_at: string;
+}): void {
+  // Emit for any active flock_wait (don't update global baseline — let each agent track its own)
+  messageBus.emit('message', { room_id: roomId, ...message });
 }
 
-export function registerSubscribeTools(server: McpServer, db: Database.Database): void {
-  // flock_subscribe: record baseline sequence (no polling)
-  server.registerTool(
-    'flock_subscribe',
-    {
-      description: 'Subscribe to a room. Call flock_wait afterward to block until new messages arrive.',
-      inputSchema: z.object({
-        room_id: z.string().describe('The room ID to subscribe to'),
-      }),
-    },
-    async ({ room_id }) => {
-      const agentId = process.env.AGENT_ID;
-      if (!agentId) {
-        return {
-          content: [{ type: 'text' as const, text: 'Error: AGENT_ID not set. Register first.' }],
-          isError: true,
-        };
-      }
+/** Initialize baseline sequences for rooms an agent has joined (only if not already tracked) */
+function initBaselines(db: Database.Database, agentId: string): void {
+  const rooms = db.prepare(`
+    SELECT room_id FROM room_members WHERE agent_id = ?
+  `).all(agentId) as Array<{ room_id: string }>;
 
-      if (!isRoomMember(db, room_id, agentId)) {
-        return {
-          content: [{ type: 'text' as const, text: 'Error: Not a member of this room. Join first.' }],
-          isError: true,
-        };
-      }
-
-      // Record current latest sequence as baseline
+  for (const { room_id } of rooms) {
+    // Only set baseline for rooms we haven't seen yet
+    if (!roomSequences.has(room_id)) {
       const current = getMessages(db, room_id, { limit: 1 });
-      const lastSeq = current.messages.length > 0 ? current.messages[0].sequence : 0;
-      roomSequences.set(getSeqKey(room_id, agentId), lastSeq);
+      const seq = current.messages.length > 0 ? current.messages[0].sequence : 0;
+      roomSequences.set(room_id, seq);
+    }
+  }
+}
 
-      return {
-        content: [{ type: 'text' as const, text: `Subscribed to room ${room_id}. Use flock_wait to block until new messages arrive.` }],
-      };
-    },
-  );
-
-  // flock_wait: block until new messages arrive in a subscribed room
+export function registerWaitTool(server: McpServer, db: Database.Database): void {
+  // flock_wait: block until new messages arrive in ANY room the agent has joined
   server.registerTool(
     'flock_wait',
     {
-      description: 'Block until new messages arrive in a room. Returns new messages when available. Must call flock_subscribe first.',
+      description: 'Block until new messages arrive in any room you have joined. Returns new messages when available. No parameters needed — monitors all your rooms globally.',
       inputSchema: z.object({
-        room_id: z.string().describe('The room ID to wait on'),
         timeout_seconds: z.number().optional().describe('Max seconds to wait (default 300, max 600)'),
       }),
     },
-    async ({ room_id, timeout_seconds }) => {
+    async ({ timeout_seconds }) => {
       const agentId = process.env.AGENT_ID;
       if (!agentId) {
         return {
@@ -67,69 +60,127 @@ export function registerSubscribeTools(server: McpServer, db: Database.Database)
         };
       }
 
-      const seqKey = getSeqKey(room_id, agentId);
-      const lastSeq = roomSequences.get(seqKey);
-      if (lastSeq === undefined) {
+      // Get list of rooms this agent has joined
+      const joinedRooms = new Set(
+        (db.prepare('SELECT room_id FROM room_members WHERE agent_id = ?').all(agentId) as Array<{ room_id: string }>)
+          .map((r) => r.room_id),
+      );
+
+      if (joinedRooms.size === 0) {
         return {
-          content: [{ type: 'text' as const, text: 'Error: Not subscribed. Call flock_subscribe first.' }],
+          content: [{ type: 'text' as const, text: 'Error: Not a member of any room. Join a room first.' }],
           isError: true,
         };
       }
 
       const timeout = Math.min(Math.max(timeout_seconds ?? 300, 1), 600);
-      const pollIntervalMs = 1500;
-      const maxPolls = Math.ceil((timeout * 1000) / pollIntervalMs);
 
-      for (let i = 0; i < maxPolls; i++) {
-        // Get latest messages (no cursor — cursor is exclusive < cursor, would miss baseline)
-        const result = getMessages(db, room_id, { limit: 50 });
-        const newMessages = result.messages.filter((m) => m.sequence > lastSeq);
+      // First, check for messages newer than our last-known sequence per room
+      const alreadyNew: Array<{
+        room_id: string;
+        id: string;
+        from: string;
+        content: string;
+        sequence: number;
+        mentions: string[];
+        reply_to: string | null;
+        created_at: string;
+      }> = [];
 
-        if (newMessages.length > 0) {
-          // Update baseline to latest
-          const maxSeq = Math.max(...newMessages.map((m) => m.sequence));
-          roomSequences.set(seqKey, maxSeq);
-
-          return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify({
-                messages: newMessages,
-                count: newMessages.length,
-              }),
-            }],
-          };
+      for (const roomId of joinedRooms) {
+        const lastSeq = roomSequences.get(roomId);
+        const result = getMessages(db, roomId, { limit: 50 });
+        for (const msg of result.messages) {
+          // If no baseline set yet, any message is "new"; otherwise check sequence
+          if (lastSeq === undefined || msg.sequence > lastSeq) {
+            alreadyNew.push({ ...msg, room_id: roomId });
+          }
         }
-
-        // Wait before next poll
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       }
 
-      // Timeout
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], count: 0, timed_out: true }) }],
-      };
-    },
-  );
-
-  // flock_unsubscribe: clear tracking
-  server.registerTool(
-    'flock_unsubscribe',
-    {
-      description: 'Unsubscribe from a room to stop waiting for messages.',
-      inputSchema: z.object({
-        room_id: z.string().describe('The room ID to unsubscribe from'),
-      }),
-    },
-    async ({ room_id }) => {
-      const agentId = process.env.AGENT_ID;
-      if (agentId) {
-        roomSequences.delete(getSeqKey(room_id, agentId));
+      if (alreadyNew.length > 0) {
+        // Update baselines to latest seen
+        for (const msg of alreadyNew) {
+          const prev = roomSequences.get(msg.room_id) ?? 0;
+          if (msg.sequence > prev) {
+            roomSequences.set(msg.room_id, msg.sequence);
+          }
+        }
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ messages: alreadyNew, count: alreadyNew.length }) }],
+        };
       }
 
-      return {
-        content: [{ type: 'text' as const, text: `Unsubscribed from room ${room_id}.` }],
-      };
+      // No messages yet — block on EventEmitter + periodic DB fallback
+      return new Promise((resolve) => {
+        let resolved = false;
+
+        const collected: Array<{
+          room_id: string;
+          id: string;
+          from: string;
+          content: string;
+          sequence: number;
+          mentions: string[];
+          reply_to: string | null;
+          created_at: string;
+        }> = [];
+
+        const finish = (msgs: typeof collected) => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
+          // Update baselines
+          for (const msg of msgs) {
+            roomSequences.set(msg.room_id, Math.max(roomSequences.get(msg.room_id) ?? 0, msg.sequence));
+          }
+          resolve({
+            content: [{ type: 'text' as const, text: JSON.stringify({ messages: msgs, count: msgs.length }) }],
+          });
+        };
+
+        const onMessage = (msg: { room_id: string; id: string; from: string; content: string; sequence: number; mentions: string[]; reply_to: string | null; created_at: string }) => {
+          if (joinedRooms.has(msg.room_id)) {
+            collected.push(msg);
+            finish(collected);
+          }
+        };
+
+        // DB fallback: poll every 3s for messages sent via HTTP (cross-process)
+        const dbPoll = setInterval(() => {
+          for (const roomId of joinedRooms) {
+            const lastSeq = roomSequences.get(roomId) ?? 0;
+            const result = getMessages(db, roomId, { limit: 50 });
+            for (const msg of result.messages) {
+              if (msg.sequence > lastSeq) {
+                collected.push({ ...msg, room_id: roomId });
+              }
+            }
+          }
+          if (collected.length > 0) {
+            finish(collected);
+          }
+        }, 3000);
+
+        const cleanup = () => {
+          clearTimeout(timer);
+          clearInterval(dbPoll);
+          messageBus.off('message', onMessage);
+        };
+
+        messageBus.on('message', onMessage);
+
+        // Timeout
+        const timer = setTimeout(() => {
+          cleanup();
+          if (!resolved) {
+            resolved = true;
+            resolve({
+              content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], count: 0, timed_out: true }) }],
+            });
+          }
+        }, timeout * 1000);
+      });
     },
   );
 }
