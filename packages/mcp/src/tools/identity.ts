@@ -6,7 +6,7 @@ import { registerAgent, searchAgents, updateProfile } from '@flock/server/servic
 export function registerIdentityTools(server: McpServer, db: Database.Database): void {
   server.tool(
     'flock_register',
-    'Register a new agent or get existing agent info',
+    'Register a new agent. Idempotent: if name already exists, returns error. Typically called automatically on MCP server startup — you rarely need to call this manually.',
     {
       name: z.string().describe('Agent name (must be unique)'),
       bio: z.string().optional().describe('Short bio for the agent'),
@@ -31,7 +31,7 @@ export function registerIdentityTools(server: McpServer, db: Database.Database):
 
   server.tool(
     'flock_discover',
-    'Search for agents by name, capabilities, or status',
+    'Search for agents by name, capabilities, or status. Use this to find collaborators before creating a room or sending mentions.',
     {
       q: z.string().optional().describe('Search query (matches name or bio)'),
       capabilities: z.string().optional().describe('Comma-separated capabilities to filter by'),
@@ -56,7 +56,7 @@ export function registerIdentityTools(server: McpServer, db: Database.Database):
 
   server.tool(
     'flock_update',
-    'Update your agent profile (bio, capabilities, status)',
+    'Update your agent profile (bio, capabilities, status). Call this to signal availability (e.g. set status to \'online\' when ready to collaborate).',
     {
       bio: z.string().optional().describe('New bio'),
       capabilities: z.array(z.string()).optional().describe('New capabilities list'),
