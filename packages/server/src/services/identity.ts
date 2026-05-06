@@ -96,8 +96,8 @@ export function searchAgents(
   const params: unknown[] = [];
 
   if (query.q) {
-    conditions.push('(name LIKE ? OR bio LIKE ?)');
-    params.push(`%${query.q}%`, `%${query.q}%`);
+    conditions.push('(name LIKE ? OR display_name LIKE ? OR bio LIKE ?)');
+    params.push(`%${query.q}%`, `%${query.q}%`, `%${query.q}%`);
   }
   if (query.capabilities) {
     const caps = query.capabilities.split(',').map((c) => c.trim());
