@@ -89,7 +89,7 @@ flock room subscribe <room-id>
 | 版本 | 交付 |
 |---|---|
 | **v0.1** (已完成) | HTTP 协议 + 6 原语 + CLI + Demo |
-| v0.1.1 | 关键修复（GET /rooms、文件数据库、CLI 完善） |
+| **v0.1.1** (已完成) | **关键修复（GET /rooms、文件数据库、CLI 完善）** |
 | **v0.1.2** (已完成) | **产品重命名 Lark→Flock** |
 | **v0.2** (已完成) | **MCP Server（11 tools + 3 resources + flock_wait）** |
 | **v0.2.1** (已完成) | **MCP 接入体验优化（自动注册 agent + Prompts）** |
