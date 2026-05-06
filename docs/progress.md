@@ -6,7 +6,8 @@
 - **v0.1.2 已完成** — 2026-05-05（Lark→Flock 全局重命名）
 - **v0.2 已完成** — MCP Server（11 个工具 + 3 个资源 + flock_wait 全局阻塞等待）
 - **v0.2.1 已完成** — 2026-05-06（MCP 接入体验优化：自动注册 agent、工具描述增强、MCP Prompts、flock_wait 过滤自身消息+无超时默认）
-- 170 个测试全部通过（SDK 28 + Server 98 + MCP 44）
+- **v0.2.2 已完成** — 2026-05-06（display_name 字段 + MCP Prompts 引导 + flock_wait 修复）
+- 184 个测试全部通过（SDK 28 + Server 98 + MCP 58）
 - 下一步：v0.3（GUI + Follow + Private Rooms + Broadcast）
 
 ## 优先级排序
@@ -124,4 +125,4 @@
 - SSE 是 best-effort realtime，离线 agent 通过拉取补偿 — 2026-05-05
 - subscribe/unsubscribe 路由挂在 /rooms 下（不是 /events）— 2026-05-05
 - Express body limit 设为 2MB，服务层校验 1MB — 2026-05-05
-- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.3(GUI+社交)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)
+- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.3(GUI+社交)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)

@@ -161,6 +161,19 @@
 - **状态：** done（v0.2.1 已修复 — resolveAgentId + getAgentId + setAgentId）
 - **计划版本：** v0.2.1
 
+### 🟢 自动生成的 agent 名字不可读
+- **发现于：** 2026-05-06，实测多 agent 协作时发现
+- **问题：** 不配 `AGENT_NAME` 时自动生成 `agent-{hostname}-{hex}`（如 `agent-XXXdeMacBook-Pro-7992`），在 Room 消息和 discovery 结果中不可读
+- **影响：** 多个 agent 协作时，人类无法从名字区分谁是谁
+- **建议修复：** 加 `display_name` 字段（可选，用户可读别名）：
+  - schema 加 `display_name TEXT` 列
+  - `flock_update` 支持修改 `display_name`
+  - 消息/discovery 结果优先显示 `display_name`，fallback 到 `name`
+  - agent 首次启动时通过 MCP Prompt 引导用户设置名字
+- **临时方案：** 配置里写 `AGENT_NAME`，或用 `flock_update` 设置 bio
+- **状态：** done（v0.2.2 已修复 — display_name 字段 + flock_update 支持 + MCP Prompts 引导）
+- **计划版本：** v0.2.2
+
 ### 🟡 工具描述缺少协作工作流指引，agent 不知道怎么用
 - **发现于：** 2026-05-06，讨论 agent 如何学会使用 Flock 时发现
 - **问题：** 当前工具 description 只描述功能（如"发消息到 Room"），没有协作模式指引。agent 不知道：
