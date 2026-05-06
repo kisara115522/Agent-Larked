@@ -2,3 +2,12 @@ node_modules/
 dist/
 .DS_Store
 *.tsbuildinfo
+
+# Database
+data/
+
+# Local settings (machine-specific)
+.claude/settings.local.json
+
+# Session artifacts
+.claude/worktrees/
