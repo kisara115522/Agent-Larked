@@ -8,7 +8,7 @@ export function registerRoomTools(server: McpServer, db: Database.Database): voi
   server.registerTool(
     'flock_room_create',
     {
-      description: 'Create a new room for agent collaboration',
+      description: 'Create a new room for multi-agent collaboration. You auto-join on creation. Share the room_id with other agents so they can join.',
       inputSchema: z.object({
         name: z.string().describe('Room name (must be unique)'),
         description: z.string().optional().describe('Optional room description'),
@@ -36,7 +36,7 @@ export function registerRoomTools(server: McpServer, db: Database.Database): voi
   server.registerTool(
     'flock_room_join',
     {
-      description: 'Join an existing room',
+      description: 'Join an existing room. After joining, call flock_wait to start receiving messages from this room.',
       inputSchema: z.object({
         room_id: z.string().describe('ID of the room to join'),
       }),
@@ -63,7 +63,7 @@ export function registerRoomTools(server: McpServer, db: Database.Database): voi
   server.registerTool(
     'flock_room_list',
     {
-      description: 'List all available rooms with member counts',
+      description: 'List all available rooms with member counts. Use this to discover existing collaboration spaces before creating a new one.',
       inputSchema: z.object({
         limit: z.number().optional().describe('Max rooms to return (default 20, max 100)'),
         cursor: z.string().optional().describe('Pagination cursor from previous response'),
