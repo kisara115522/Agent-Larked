@@ -31,36 +31,44 @@
 - **发现于：** 2026-05-05，两个 Claude Code session 通过 AgentFeed 对话时发现
 - **问题：** agent 只能主动轮询消息，没法被动接收通知。Claude Code 是 request-response 模型
 - **影响：** agent 之间的协作不是"自主"的，需要人当中间人推消息
-- **建议修复：** 做 MCP Server（v0.2）。MCP notification 推送新消息，Claude Code 自动触发 agent turn
+- **建议修复：** MCP Server + `flock_wait` 阻塞工具
 - **方案对比：**
   - ❌ 外部 daemon + `claude exec`：每次是新 session，无上下文记忆，不可接受
-  - ❌ 轮询：每 30 秒消耗 token，有延迟
-  - ✅ MCP notification：实时推送，agent 保持活跃，有上下文记忆
+  - ❌ 轮询：每 3 秒消耗 token，有延迟
+  - ❌ MCP notification（`sendLoggingMessage`）：日志不触发 agent turn，无效
+  - ✅ `flock_wait` 阻塞工具：标准 MCP 工具调用，阻塞不消耗 token，返回后 Claude Code 自动继续
 - **限制：** 用户关掉 session 就断开；session 可能超时。对目标场景够用
-- **状态：** open
+- **状态：** open（v0.2 已实现 MCP server，但 flock_wait 待实现）
 - **计划版本：** v0.2
 
 ---
 
 ---
 
-### 设计决策：MCP notification（非 daemon、非轮询）
+### 设计决策：flock_wait 阻塞工具（非 daemon、非轮询、非 notification）
 
 **问题：** agent 完成任务后，如何等待其他 agent 的消息？
 
-**决策：** 用 MCP notification，不用外部 daemon，不用轮询。
+**决策：** 用 `flock_wait` 阻塞工具，不用外部 daemon，不用轮询，不用 MCP notification。
 
 **原因：**
-1. **外部 daemon + `claude exec`**：每次是新 session，agent 没有上下文记忆。用户说"帮我 review 代码"，daemon 唤醒的 agent 不知道之前在做什么。不可接受。
-2. **轮询**：每 30 秒消耗 token，30 秒延迟，浪费资源。
-3. **MCP notification**：实时推送，agent 保持活跃 session（有完整上下文），只在收到消息时消耗 token。
+1. **外部 daemon + `claude exec`**：每次是新 session，agent 没有上下文记忆。不可接受。
+2. **轮询（3 秒间隔）**：每 3 秒消耗 token，浪费资源。当前 v0.2 实现用的就是这个，需要替换。
+3. **MCP notification（`sendLoggingMessage`）**：日志消息不触发 Claude Code 的 agent turn，agent 收不到通知。无效。
+4. **`flock_wait` 阻塞工具**：标准 MCP 工具调用。agent 调用 → 阻塞（不消耗 token）→ 有新消息时返回 → Claude Code 自动触发下一个 agent turn。最可靠。
+
+**设计：**
+- `flock_wait()` 无参数，全局等待
+- 捕获 agent 已加入的所有 Room 的新消息
+- 阻塞期间 MCP server 用 in-memory 事件队列（EventEmitter），不用轮询 DB
+- 返回消息内容（from, content, room_id, sequence, mentions）
+- 多条消息同时到来时批量返回
 
 **限制：**
-- 用户关掉 Claude Code session → 断开
+- 用户关掉 Claude Code session → flock_wait 连接断开
 - session 可能超时（Claude Code 的架构限制）
-- MCP notification 只在 session 活跃时有效
 
-**对目标场景够用：** 用户给任务 → agent 执行 → 期间自主和其他 agent 协作 → 完成后等待 → 用户回来查看。
+**对目标场景够用：** 用户给任务 → agent 执行 → 发消息 → flock_wait 等回复 → 收到回复自动处理 → 继续等 → 用户回来看结果。
 
 ---
 
