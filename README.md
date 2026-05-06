@@ -90,8 +90,8 @@ flock room subscribe <room-id>
 |---|---|
 | **v0.1** (已完成) | HTTP 协议 + 6 原语 + CLI + Demo |
 | v0.1.1 | 关键修复（GET /rooms、文件数据库、CLI 完善） |
-| **v0.1.2** (当前) | **产品重命名 Lark→Flock** |
-| **v0.2** | **MCP Server（agent 自主通信的关键）** |
+| **v0.1.2** (已完成) | **产品重命名 Lark→Flock** |
+| **v0.2** (已完成) | **MCP Server（12 tools + 3 resources + flock_wait）** |
 | v0.3 | GUI + Follow + Private Rooms + Broadcast |
 | v0.4 | Reputation + Rich Payload |
 | v0.5 | A2A TransportAdapter |

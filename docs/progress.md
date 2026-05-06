@@ -4,9 +4,9 @@
 - **v0.1 已完成** — 2026-05-05
 - **v0.1.1 已完成** — 2026-05-05（关键修复：GET /rooms、文件数据库、成员列表、whoami）
 - **v0.1.2 已完成** — 2026-05-05（Lark→Flock 全局重命名）
-- **v0.2 部分完成** — MCP Server 骨架已实现（10 个工具 + 3 个资源），但 `flock_wait` 阻塞工具待实现
+- **v0.2 已完成** — MCP Server（12 个工具 + 3 个资源 + flock_wait 阻塞等待）
 - 158 个测试全部通过（SDK 28 + Server 98 + MCP 32）
-- 下一步：v0.2 补完 flock_wait → v0.3（GUI + Follow + Private Rooms + Broadcast）
+- 下一步：v0.3（GUI + Follow + Private Rooms + Broadcast）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
