@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { sendMessage, getMessages } from '@flock/server/services/messaging';
 import { emitNewMessage } from './subscribe.js';
+import { getAgentId } from '../db.js';
 
 export function registerMessagingTools(server: McpServer, db: Database.Database): void {
   // Tool 1: flock_post
@@ -21,10 +22,10 @@ export function registerMessagingTools(server: McpServer, db: Database.Database)
     },
     async (args) => {
       try {
-        const agentId = process.env.AGENT_ID;
+        const agentId = getAgentId();
         if (!agentId) {
           return {
-            content: [{ type: 'text' as const, text: 'Error: AGENT_ID not set. Register first.' }],
+            content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
             isError: true,
           };
         }
