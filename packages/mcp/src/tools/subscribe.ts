@@ -5,6 +5,26 @@ import { z } from 'zod';
 import { getMessages } from '@flock/server/services/messaging';
 import { getAgentId } from '../db.js';
 
+/** Get the agent's own recent status updates from joined rooms for context recovery */
+function getMyStatusUpdates(
+  db: Database.Database,
+  agentId: string,
+  roomIds: Set<string>,
+  limit = 5,
+): Array<{ room_id: string; content: string; created_at: string }> {
+  const results: Array<{ room_id: string; content: string; created_at: string }> = [];
+  for (const roomId of roomIds) {
+    const rows = db.prepare(
+      `SELECT room_id, content, created_at FROM messages
+       WHERE room_id = ? AND from_agent = ? AND content LIKE 'Status:%'
+       ORDER BY sequence DESC LIMIT ?`,
+    ).all(roomId, agentId, limit) as Array<{ room_id: string; content: string; created_at: string }>;
+    results.push(...rows);
+  }
+  results.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return results.slice(0, limit);
+}
+
 // Global message event bus — shared across all tool registrations
 export const messageBus = new EventEmitter();
 messageBus.setMaxListeners(100);
@@ -99,8 +119,13 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
             roomSequences.set(msg.room_id, msg.sequence);
           }
         }
+        const statusUpdates = getMyStatusUpdates(db, agentId, joinedRooms);
+        const response: Record<string, unknown> = { messages: alreadyNew, count: alreadyNew.length };
+        if (statusUpdates.length > 0) {
+          response.my_status_updates = statusUpdates;
+        }
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ messages: alreadyNew, count: alreadyNew.length }) }],
+          content: [{ type: 'text' as const, text: JSON.stringify(response) }],
         };
       }
 
@@ -127,8 +152,13 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           for (const msg of msgs) {
             roomSequences.set(msg.room_id, Math.max(roomSequences.get(msg.room_id) ?? 0, msg.sequence));
           }
+          const statusUpdates = getMyStatusUpdates(db, agentId, joinedRooms);
+          const response: Record<string, unknown> = { messages: msgs, count: msgs.length };
+          if (statusUpdates.length > 0) {
+            response.my_status_updates = statusUpdates;
+          }
           resolve({
-            content: [{ type: 'text' as const, text: JSON.stringify({ messages: msgs, count: msgs.length }) }],
+            content: [{ type: 'text' as const, text: JSON.stringify(response) }],
           });
         };
 

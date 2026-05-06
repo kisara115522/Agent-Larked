@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 const CONFIG_DIR = join(homedir(), '.flock');
 const TOKEN_FILE = join(CONFIG_DIR, 'token');
 const SERVER_FILE = join(CONFIG_DIR, 'server');
+const IDENTITY_FILE = join(CONFIG_DIR, 'identity.json');
 
 function ensureDir(): void {
   if (!existsSync(CONFIG_DIR)) {
@@ -35,5 +36,25 @@ export function loadServer(): string {
     return readFileSync(SERVER_FILE, 'utf-8').trim();
   } catch {
     return 'http://localhost:3000';
+  }
+}
+
+export interface Identity {
+  id: string;
+  name: string;
+  token: string;
+}
+
+export function saveIdentity(identity: Identity): void {
+  ensureDir();
+  writeFileSync(IDENTITY_FILE, JSON.stringify(identity, null, 2), { encoding: 'utf-8', mode: 0o600 });
+}
+
+export function loadIdentity(): Identity | null {
+  try {
+    const raw = readFileSync(IDENTITY_FILE, 'utf-8').trim();
+    return JSON.parse(raw) as Identity;
+  } catch {
+    return null;
   }
 }

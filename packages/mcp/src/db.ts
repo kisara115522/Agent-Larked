@@ -2,7 +2,39 @@ import { createDatabase, cleanupIdempotencyKeys } from '@flock/server/db';
 import { registerAgent } from '@flock/server/services/identity';
 import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import type Database from 'better-sqlite3';
+
+interface Identity {
+  id: string;
+  name: string;
+  token: string;
+}
+
+function getIdentityPath(): string {
+  const dir = process.env.FLOCK_HOME || join(homedir(), '.flock');
+  return join(dir, 'identity.json');
+}
+
+function loadIdentityFile(): Identity | null {
+  try {
+    const raw = readFileSync(getIdentityPath(), 'utf-8').trim();
+    return JSON.parse(raw) as Identity;
+  } catch {
+    return null;
+  }
+}
+
+function saveIdentityFile(identity: Identity): void {
+  const filePath = getIdentityPath();
+  const dir = filePath.substring(0, filePath.lastIndexOf('/'));
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(filePath, JSON.stringify(identity, null, 2), { encoding: 'utf-8', mode: 0o600 });
+}
 
 let db: Database.Database | null = null;
 
@@ -35,28 +67,47 @@ function generateAgentName(): string {
 /**
  * Resolve agent ID by name. Looks up existing agent in DB, auto-registers if not found.
  * Caches the result for the lifetime of this process.
+ *
+ * Priority: cache → identity file → DB lookup by name → auto-register
  */
 export function resolveAgentId(database: Database.Database, name?: string): { id: string; name: string } {
   if (cachedAgentId && cachedAgentName) {
     return { id: cachedAgentId, name: cachedAgentName };
   }
 
-  const agentName = name || process.env.AGENT_NAME || generateAgentName();
-
-  // Try to find existing agent by name
-  const existing = database.prepare('SELECT id FROM profiles WHERE name = ?').get(agentName) as { id: string } | undefined;
-  if (existing) {
-    cachedAgentId = existing.id;
-    cachedAgentName = agentName;
-    process.env.AGENT_ID = existing.id;
-    return { id: existing.id, name: agentName };
+  // 1. Check identity file (~/.flock/identity.json)
+  const saved = loadIdentityFile();
+  if (saved) {
+    // Verify the agent still exists in DB
+    const existing = database.prepare('SELECT id FROM profiles WHERE id = ?').get(saved.id) as { id: string } | undefined;
+    if (existing) {
+      cachedAgentId = saved.id;
+      cachedAgentName = saved.name;
+      process.env.AGENT_ID = saved.id;
+      return { id: saved.id, name: saved.name };
+    }
+    // Identity file exists but agent was deleted from DB — fall through to re-register
   }
 
-  // Auto-register new agent
+  // 2. Lookup by name in DB
+  const agentName = name || process.env.AGENT_NAME || generateAgentName();
+  const existingByName = database.prepare('SELECT id FROM profiles WHERE name = ?').get(agentName) as { id: string } | undefined;
+  if (existingByName) {
+    cachedAgentId = existingByName.id;
+    cachedAgentName = agentName;
+    process.env.AGENT_ID = existingByName.id;
+    // Persist to identity file for future sessions
+    saveIdentityFile({ id: existingByName.id, name: agentName, token: '' });
+    return { id: existingByName.id, name: agentName };
+  }
+
+  // 3. Auto-register new agent
   const result = registerAgent(database, { name: agentName });
   cachedAgentId = result.id;
   cachedAgentName = agentName;
   process.env.AGENT_ID = result.id;
+  // Persist to identity file
+  saveIdentityFile({ id: result.id, name: agentName, token: result.token });
   return { id: result.id, name: agentName };
 }
 

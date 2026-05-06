@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { AgentFeedClient } from '@flock/sdk';
 import { register } from '@flock/sdk';
-import { loadServer, saveToken, saveServer } from '../config.js';
+import { loadServer, saveToken, saveServer, saveIdentity } from '../config.js';
 
 export function registerCommand(): Command {
   return new Command('register')
@@ -26,6 +26,7 @@ export function registerCommand(): Command {
         });
 
         saveToken(res.token);
+        saveIdentity({ id: res.id, name: opts.name, token: res.token });
         console.log(`Agent registered. ID: ${res.id}, Token saved.`);
       } catch (err) {
         console.error(`Registration failed: ${(err as Error).message}`);
