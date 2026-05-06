@@ -7,6 +7,7 @@ import { registerIdentityTools } from '../tools/identity.js';
 import { registerRoomTools } from '../tools/room.js';
 import { registerMessagingTools } from '../tools/messaging.js';
 import { registerResources } from '../resources.js';
+import { resetAgentCache, resolveAgentId } from '../db.js';
 import type Database from 'better-sqlite3';
 
 let db: Database.Database;
@@ -29,12 +30,12 @@ beforeAll(async () => {
   ]);
 
   // Setup: register agent, create room, send message
-  const regResult = await client.callTool({
+  resetAgentCache();
+  await client.callTool({
     name: 'flock_register',
     arguments: { name: 'ResourceBot' },
   });
-  const agentId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id;
-  process.env.AGENT_ID = agentId;
+  resolveAgentId(db, 'ResourceBot');
 
   const roomResult = await client.callTool({
     name: 'flock_room_create',

@@ -5,6 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createDatabase } from '@flock/server/db';
 import { registerIdentityTools } from '../tools/identity.js';
 import { registerRoomTools } from '../tools/room.js';
+import { resetAgentCache, resolveAgentId } from '../db.js';
 import type Database from 'better-sqlite3';
 
 let db: Database.Database;
@@ -75,18 +76,13 @@ describe('flock_discover tool', () => {
 });
 
 describe('flock_room_create tool', () => {
-  it('creates a room when AGENT_ID is set', async () => {
-    // Get the agent ID from registration
-    const regResult = await client.callTool({
+  it('creates a room when agent is registered', async () => {
+    resetAgentCache();
+    await client.callTool({
       name: 'flock_register',
       arguments: { name: 'RoomCreatorBot' },
     });
-    const regText = (regResult.content as Array<{ type: string; text: string }>)[0].text;
-    const { id: agentId, token } = JSON.parse(regText);
-
-    // Set AGENT_ID env for room tools
-    const originalAgentId = process.env.AGENT_ID;
-    process.env.AGENT_ID = agentId;
+    resolveAgentId(db, 'RoomCreatorBot');
 
     const result = await client.callTool({
       name: 'flock_room_create',
@@ -97,13 +93,6 @@ describe('flock_room_create tool', () => {
     const parsed = JSON.parse(text);
     expect(parsed.name).toBe('mcp-test-room');
     expect(parsed.id).toBeDefined();
-
-    // Restore env
-    if (originalAgentId !== undefined) {
-      process.env.AGENT_ID = originalAgentId;
-    } else {
-      delete process.env.AGENT_ID;
-    }
   });
 });
 

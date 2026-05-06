@@ -8,6 +8,7 @@ import { registerRoomTools } from '../tools/room.js';
 import { registerMessagingTools } from '../tools/messaging.js';
 import { registerReactionTools } from '../tools/reactions.js';
 import { registerWaitTool } from '../tools/subscribe.js';
+import { resetAgentCache, resolveAgentId } from '../db.js';
 import type Database from 'better-sqlite3';
 
 let db: Database.Database;
@@ -32,6 +33,7 @@ beforeAll(async () => {
   ]);
 
   // Register an agent and create a room for tests
+  resetAgentCache();
   const regResult = await client.callTool({
     name: 'flock_register',
     arguments: { name: 'Week2Bot', capabilities: ['testing'] },
@@ -39,7 +41,7 @@ beforeAll(async () => {
   const regText = (regResult.content as Array<{ type: string; text: string }>)[0].text;
   const reg = JSON.parse(regText);
   agentId = reg.id;
-  process.env.AGENT_ID = agentId;
+  resolveAgentId(db, 'Week2Bot');
 
   const roomResult = await client.callTool({
     name: 'flock_room_create',
@@ -77,9 +79,13 @@ describe('flock_post tool', () => {
     const mentionedId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id;
 
     // Join the mentioned agent to the room
-    process.env.AGENT_ID = mentionedId;
+    resetAgentCache();
+    resolveAgentId(db, 'MentionBot');
     await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
-    process.env.AGENT_ID = agentId;
+
+    // Switch back to original agent
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
 
     const result = await client.callTool({
       name: 'flock_post',
@@ -92,8 +98,8 @@ describe('flock_post tool', () => {
     expect(parsed.sequence).toBe(2);
   });
 
-  it('fails without AGENT_ID', async () => {
-    const savedId = process.env.AGENT_ID;
+  it('fails when agent cache is empty', async () => {
+    resetAgentCache();
     delete process.env.AGENT_ID;
 
     const result = await client.callTool({
@@ -102,7 +108,9 @@ describe('flock_post tool', () => {
     });
 
     expect(result.isError).toBe(true);
-    process.env.AGENT_ID = savedId;
+
+    // Restore
+    resolveAgentId(db, 'Week2Bot');
   });
 });
 
@@ -174,16 +182,18 @@ describe('flock_thread tool', () => {
 describe('flock_wait', () => {
   it('returns existing new messages immediately (DB check)', async () => {
     // Send a message first (creates new sequence above baseline)
-    const regResult = await client.callTool({
+    await client.callTool({
       name: 'flock_register',
       arguments: { name: 'WaitBot' },
     });
-    const waitBotId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id;
-    const savedId = process.env.AGENT_ID;
-    process.env.AGENT_ID = waitBotId;
+    resetAgentCache();
+    resolveAgentId(db, 'WaitBot');
     await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
     await client.callTool({ name: 'flock_post', arguments: { room_id: roomId, content: 'Pre-existing message for wait' } });
-    process.env.AGENT_ID = savedId;
+
+    // Switch back to original agent
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
 
     // flock_wait should find it via DB check (no blocking needed)
     const waitResult = await client.callTool({
@@ -206,16 +216,18 @@ describe('flock_wait', () => {
     // Wait a moment, then send a message from another agent
     await new Promise((r) => setTimeout(r, 500));
 
-    const regResult = await client.callTool({
+    await client.callTool({
       name: 'flock_register',
       arguments: { name: 'WaitBot2' },
     });
-    const botId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id;
-    const savedId = process.env.AGENT_ID;
-    process.env.AGENT_ID = botId;
+    resetAgentCache();
+    resolveAgentId(db, 'WaitBot2');
     await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
     await client.callTool({ name: 'flock_post', arguments: { room_id: roomId, content: 'Trigger message for wait' } });
-    process.env.AGENT_ID = savedId;
+
+    // Switch back to original agent
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
 
     // flock_wait should resolve with the new message
     const waitResult = await waitPromise;
