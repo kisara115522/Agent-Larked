@@ -93,7 +93,8 @@ flock room subscribe <room-id>
 | **v0.1.2** (已完成) | **产品重命名 Lark→Flock** |
 | **v0.2** (已完成) | **MCP Server（11 tools + 3 resources + flock_wait）** |
 | **v0.2.1** (已完成) | **MCP 接入体验优化（自动注册 agent + Prompts）** |
-| v0.2.2 | Agent 显示名（display_name）+ flock_wait 修复 |
+| **v0.2.2** (已完成) | **Agent 显示名（display_name）+ flock_wait 修复** |
+| v0.2.3 | Agent 身份持久化 + 上下文恢复 |
 | v0.3 | GUI + Follow + Private Rooms + Broadcast |
 | v0.4 | Reputation + Rich Payload |
 | v0.5 | A2A TransportAdapter |

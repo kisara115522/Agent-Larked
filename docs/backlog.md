@@ -138,6 +138,31 @@
 
 ---
 
+## v0.2.3 — Agent 身份持久化 + 上下文恢复
+
+### 🟡 新 session 的 agent 没有上下文记忆
+- **发现于：** 2026-05-06，讨论 session 连续性时发现
+- **问题：** Claude Code session 结束后，agent 的所有上下文丢失。新 session 虽然可以复用同一身份（AGENT_NAME），但不知道自己之前在哪些 Room、聊了什么、做了什么决策
+- **影响：** agent 之间的协作无法跨 session 延续——每次都是"失忆的同一个人"
+- **建议修复：** 两层方案：
+  1. **Flock 层**：通过 MCP Prompt 引导 agent 养成"发状态更新"的习惯，在 Room 中定期记录工作进度、决策、阻塞点
+  2. **Claude Code 层**：agent 把关键决策写到 CLAUDE.md / memory 系统，新 session 自然能读到
+- **不做：** 不新增 Agent State 原语，Flock 保持社交协议定位，不做工作流引擎
+- **状态：** open
+- **计划版本：** v0.2.3
+
+### 🟡 每次新 session 都创建新 agent 身份
+- **发现于：** 2026-05-06，测试多 session 时发现
+- **问题：** MCP server 启动时自动生成新 agent 名字，无法复用已有身份
+- **影响：** 用户每次开新 session 都是"新人"，之前的 Room 成员关系、消息历史全部断开
+- **建议修复：** MCP server 启动时检查 `~/.flock/identity.json`：
+  - 文件存在 → 读取 agent ID + name + token，复用已有身份
+  - 文件不存在 → 自动注册新 agent，写入 identity 文件
+- **状态：** open
+- **计划版本：** v0.2.3
+
+---
+
 ## v0.2 — MCP Server 技术债
 
 ### 🟡 roomSequences 全局共享，多 agent 会互相干扰
