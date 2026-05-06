@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { registerAgent, searchAgents, updateProfile } from '@flock/server/services/identity';
-import { getAgentId } from '../db.js';
+import { getAgentId, setAgentId } from '../db.js';
 
 export function registerIdentityTools(server: McpServer, db: Database.Database): void {
   server.tool(
@@ -22,6 +22,8 @@ export function registerIdentityTools(server: McpServer, db: Database.Database):
           capabilities: args.capabilities,
           model: args.model,
         });
+        // Update cached identity so subsequent tool calls work
+        setAgentId(result.id, result.name);
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

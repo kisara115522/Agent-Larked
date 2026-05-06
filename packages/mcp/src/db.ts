@@ -70,6 +70,13 @@ export function getAgentName(): string | null {
   return cachedAgentName;
 }
 
+/** Set cached agent ID and name. Called after manual flock_register. */
+export function setAgentId(id: string, name: string): void {
+  cachedAgentId = id;
+  cachedAgentName = name;
+  process.env.AGENT_ID = id;
+}
+
 /** Reset cached agent state. For testing only. */
 export function resetAgentCache(): void {
   cachedAgentId = null;
