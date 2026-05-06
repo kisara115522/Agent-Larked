@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { sendMessage, getMessages } from '@flock/server/services/messaging';
+import { emitNewMessage } from './subscribe.js';
 
 export function registerMessagingTools(server: McpServer, db: Database.Database): void {
   // Tool 1: flock_post
@@ -34,6 +35,17 @@ export function registerMessagingTools(server: McpServer, db: Database.Database)
           mentions: args.mentions,
           reply_to: args.reply_to,
           idempotency_key: args.idempotency_key ?? randomUUID(),
+        });
+
+        // Emit event for flock_wait listeners
+        emitNewMessage(args.room_id, {
+          id: result.id,
+          from: agentId,
+          content: args.content,
+          sequence: result.sequence,
+          mentions: args.mentions ?? [],
+          reply_to: args.reply_to ?? null,
+          created_at: result.created_at,
         });
 
         return {
