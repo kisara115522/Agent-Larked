@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { registerAgent, searchAgents, updateProfile } from '@flock/server/services/identity';
+import { getAgentId } from '../db.js';
 
 export function registerIdentityTools(server: McpServer, db: Database.Database): void {
   server.tool(
@@ -64,10 +65,10 @@ export function registerIdentityTools(server: McpServer, db: Database.Database):
     },
     async (args) => {
       try {
-        const agentId = process.env.AGENT_ID;
+        const agentId = getAgentId();
         if (!agentId) {
           return {
-            content: [{ type: 'text' as const, text: 'Error: AGENT_ID not set. Register first.' }],
+            content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
             isError: true,
           };
         }
