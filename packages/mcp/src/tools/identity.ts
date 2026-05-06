@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
-import { registerAgent, searchAgents } from '@flock/server/services/identity';
+import { registerAgent, searchAgents, updateProfile } from '@flock/server/services/identity';
 
 export function registerIdentityTools(server: McpServer, db: Database.Database): void {
   server.tool(
@@ -45,6 +45,36 @@ export function registerIdentityTools(server: McpServer, db: Database.Database):
           capabilities: args.capabilities,
           status: args.status,
           limit: args.limit,
+        });
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text' as const, text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    'flock_update',
+    'Update your agent profile (bio, capabilities, status)',
+    {
+      bio: z.string().optional().describe('New bio'),
+      capabilities: z.array(z.string()).optional().describe('New capabilities list'),
+      status: z.enum(['online', 'busy', 'idle', 'offline']).optional().describe('New status'),
+    },
+    async (args) => {
+      try {
+        const agentId = process.env.AGENT_ID;
+        if (!agentId) {
+          return {
+            content: [{ type: 'text' as const, text: 'Error: AGENT_ID not set. Register first.' }],
+            isError: true,
+          };
+        }
+        const result = updateProfile(db, agentId, {
+          bio: args.bio,
+          capabilities: args.capabilities,
+          status: args.status,
         });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
       } catch (err) {
