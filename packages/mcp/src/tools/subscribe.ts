@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { getMessages } from '@flock/server/services/messaging';
+import { getAgentId } from '../db.js';
 
 // Global message event bus — shared across all tool registrations
 export const messageBus = new EventEmitter();
@@ -36,10 +37,10 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
       }),
     },
     async ({ timeout_seconds }) => {
-      const agentId = process.env.AGENT_ID;
+      const agentId = getAgentId();
       if (!agentId) {
         return {
-          content: [{ type: 'text' as const, text: 'Error: AGENT_ID not set. Register first.' }],
+          content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
           isError: true,
         };
       }
