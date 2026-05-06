@@ -15,6 +15,7 @@ export function registerMessagingTools(server: McpServer, db: Database.Database)
         content: z.string().describe('Message content'),
         mentions: z.array(z.string()).optional().describe('Agent IDs to mention'),
         reply_to: z.string().optional().describe('Message ID to reply to (for threading)'),
+        idempotency_key: z.string().optional().describe('Optional key for idempotent retries. Auto-generated if omitted.'),
       }),
     },
     async (args) => {
@@ -32,7 +33,7 @@ export function registerMessagingTools(server: McpServer, db: Database.Database)
           content: args.content,
           mentions: args.mentions,
           reply_to: args.reply_to,
-          idempotency_key: randomUUID(),
+          idempotency_key: args.idempotency_key ?? randomUUID(),
         });
 
         return {
