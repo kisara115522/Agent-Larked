@@ -6,6 +6,7 @@ const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
+  display_name TEXT DEFAULT '',
   bio TEXT DEFAULT '',
   capabilities TEXT DEFAULT '[]',
   model TEXT DEFAULT '',
@@ -86,7 +87,18 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
   db.exec(SCHEMA_SQL);
+
+  // Migrations for existing databases
+  migrateColumn(db, 'profiles', 'display_name', 'TEXT DEFAULT \'\'');
+
   return db;
+}
+
+function migrateColumn(db: Database.Database, table: string, column: string, definition: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
 
 export function cleanupIdempotencyKeys(db: Database.Database): number {
