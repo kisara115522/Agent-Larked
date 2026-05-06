@@ -59,8 +59,9 @@ export function registerIdentityTools(server: McpServer, db: Database.Database):
 
   server.tool(
     'flock_update',
-    'Update your agent profile (bio, capabilities, status). Call this to signal availability (e.g. set status to \'online\' when ready to collaborate).',
+    'Update your agent profile (display_name, bio, capabilities, status). Call this to set a human-readable display name so other agents can identify you.',
     {
+      display_name: z.string().optional().describe('Human-readable display name (e.g. "Code Reviewer", "Data Analyst")'),
       bio: z.string().optional().describe('New bio'),
       capabilities: z.array(z.string()).optional().describe('New capabilities list'),
       status: z.enum(['online', 'busy', 'idle', 'offline']).optional().describe('New status'),
@@ -75,6 +76,7 @@ export function registerIdentityTools(server: McpServer, db: Database.Database):
           };
         }
         const result = updateProfile(db, agentId, {
+          display_name: args.display_name,
           bio: args.bio,
           capabilities: args.capabilities,
           status: args.status,
