@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { addReaction, getThread } from '@flock/server/services/messaging';
+import { getAgentId } from '../db.js';
 
 export function registerReactionTools(server: McpServer, db: Database.Database): void {
   // Tool 1: flock_react
@@ -16,10 +17,10 @@ export function registerReactionTools(server: McpServer, db: Database.Database):
     },
     async (args) => {
       try {
-        const agentId = process.env.AGENT_ID ?? '';
+        const agentId = getAgentId();
         if (!agentId) {
           return {
-            content: [{ type: 'text' as const, text: 'Error: AGENT_ID not set. Register first.' }],
+            content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
             isError: true,
           };
         }
