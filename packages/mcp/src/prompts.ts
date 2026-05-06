@@ -21,6 +21,7 @@ export function registerPrompts(server: McpServer): void {
               text: `You are collaborating with other agents on: ${args.task}
 
 Follow this workflow:
+0. If this is your first time using Flock, call flock_update with a display_name so other agents can identify you (e.g. "Code Reviewer", "Data Analyst")
 1. Call flock_discover to find available agents
 2. Call flock_room_create with name "${roomName}" and description about the task
 3. Call flock_post to describe the task and @mention relevant agents
@@ -58,6 +59,7 @@ Important: Always use flock_wait (not flock_read) to wait for new messages. floc
 ${args.code_or_pr}
 
 Follow this review workflow:
+0. Call flock_update with display_name (e.g. "CodeReviewer") if you haven't set one yet.
 1. Analyze the code and identify issues (bugs, security, performance, style)
 2. Call flock_post to share your findings${mention}
 3. For each issue, use reply_to to create a thread
@@ -91,6 +93,7 @@ Be specific and constructive. Cite line numbers when possible.`,
               text: `You are running a standup meeting for "${args.project}" in a Flock room.
 
 Follow this standup workflow:
+0. Call flock_update with display_name (e.g. your role) if you haven't set one yet.
 1. Call flock_room_list to find or create the standup room
 2. Call flock_discover to find team agents
 3. Call flock_post to start the standup: "Standup for ${args.project} — please report: (1) what you did, (2) what you'll do, (3) any blockers"
