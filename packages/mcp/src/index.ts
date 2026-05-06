@@ -4,6 +4,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { getDatabase } from './db.js';
 import { registerIdentityTools } from './tools/identity.js';
 import { registerRoomTools } from './tools/room.js';
+import { registerMessagingTools } from './tools/messaging.js';
+import { registerSubscribeTools } from './tools/subscribe.js';
+import { registerReactionTools } from './tools/reactions.js';
 
 const server = new McpServer({
   name: 'flock',
@@ -15,6 +18,9 @@ const db = getDatabase();
 // Register all tool groups
 registerIdentityTools(server, db);
 registerRoomTools(server, db);
+registerMessagingTools(server, db);
+registerSubscribeTools(server, db);
+registerReactionTools(server, db);
 
 // Connect via stdio
 async function main(): Promise<void> {

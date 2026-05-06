@@ -1,0 +1,194 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createDatabase } from '@flock/server/db';
+import { registerIdentityTools } from '../tools/identity.js';
+import { registerRoomTools } from '../tools/room.js';
+import { registerMessagingTools } from '../tools/messaging.js';
+import { registerReactionTools } from '../tools/reactions.js';
+import { registerSubscribeTools } from '../tools/subscribe.js';
+import type Database from 'better-sqlite3';
+
+let db: Database.Database;
+let client: Client;
+let agentId: string;
+let roomId: string;
+
+beforeAll(async () => {
+  db = createDatabase(':memory:');
+  const server = new McpServer({ name: 'test-flock-week2', version: '0.1.0' });
+  registerIdentityTools(server, db);
+  registerRoomTools(server, db);
+  registerMessagingTools(server, db);
+  registerReactionTools(server, db);
+  registerSubscribeTools(server, db);
+
+  client = new Client({ name: 'test-client', version: '0.1.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
+
+  // Register an agent and create a room for tests
+  const regResult = await client.callTool({
+    name: 'flock_register',
+    arguments: { name: 'Week2Bot', capabilities: ['testing'] },
+  });
+  const regText = (regResult.content as Array<{ type: string; text: string }>)[0].text;
+  const reg = JSON.parse(regText);
+  agentId = reg.id;
+  process.env.AGENT_ID = agentId;
+
+  const roomResult = await client.callTool({
+    name: 'flock_room_create',
+    arguments: { name: 'week2-test-room', description: 'Week 2 testing' },
+  });
+  const roomText = (roomResult.content as Array<{ type: string; text: string }>)[0].text;
+  roomId = JSON.parse(roomText).id;
+});
+
+afterAll(async () => {
+  await client.close();
+  db.close();
+});
+
+describe('flock_post tool', () => {
+  it('sends a message to a room', async () => {
+    const result = await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'Hello from MCP!' },
+    });
+
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text);
+    expect(parsed.id).toBeDefined();
+    expect(parsed.sequence).toBe(1);
+    expect(parsed.created_at).toBeDefined();
+  });
+
+  it('sends a message with mentions', async () => {
+    // Register another agent to mention
+    const regResult = await client.callTool({
+      name: 'flock_register',
+      arguments: { name: 'MentionBot' },
+    });
+    const mentionedId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id;
+
+    // Join the mentioned agent to the room
+    process.env.AGENT_ID = mentionedId;
+    await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
+    process.env.AGENT_ID = agentId;
+
+    const result = await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'Hey @MentionBot!', mentions: [mentionedId] },
+    });
+
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text);
+    expect(parsed.id).toBeDefined();
+    expect(parsed.sequence).toBe(2);
+  });
+
+  it('fails without AGENT_ID', async () => {
+    const savedId = process.env.AGENT_ID;
+    delete process.env.AGENT_ID;
+
+    const result = await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'Should fail' },
+    });
+
+    expect(result.isError).toBe(true);
+    process.env.AGENT_ID = savedId;
+  });
+});
+
+describe('flock_read tool', () => {
+  it('reads messages from a room', async () => {
+    const result = await client.callTool({
+      name: 'flock_read',
+      arguments: { room_id: roomId, limit: 10 },
+    });
+
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text);
+    expect(parsed.messages).toBeDefined();
+    expect(parsed.messages.length).toBeGreaterThanOrEqual(2);
+    expect(parsed.messages[0].content).toBeDefined();
+  });
+});
+
+describe('flock_react tool', () => {
+  it('reacts to a message', async () => {
+    // Get a message to react to
+    const readResult = await client.callTool({
+      name: 'flock_read',
+      arguments: { room_id: roomId, limit: 1 },
+    });
+    const messages = JSON.parse((readResult.content as Array<{ type: string; text: string }>)[0].text).messages;
+    const msgId = messages[0].id;
+
+    const result = await client.callTool({
+      name: 'flock_react',
+      arguments: { message_id: msgId, type: 'useful' },
+    });
+
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text);
+    expect(parsed.reaction).toBeDefined();
+    expect(parsed.reaction.type).toBe('useful');
+  });
+});
+
+describe('flock_thread tool', () => {
+  it('returns thread for a message', async () => {
+    // Send a reply first
+    const readResult = await client.callTool({
+      name: 'flock_read',
+      arguments: { room_id: roomId, limit: 1 },
+    });
+    const messages = JSON.parse((readResult.content as Array<{ type: string; text: string }>)[0].text).messages;
+    const parentId = messages[messages.length - 1].id;
+
+    await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'This is a reply', reply_to: parentId },
+    });
+
+    const result = await client.callTool({
+      name: 'flock_thread',
+      arguments: { message_id: parentId },
+    });
+
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text);
+    // flock_thread returns the messages array directly
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('flock_subscribe tool', () => {
+  it('subscribes to a room', async () => {
+    const result = await client.callTool({
+      name: 'flock_subscribe',
+      arguments: { room_id: roomId },
+    });
+
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain('Subscribed');
+  });
+
+  it('unsubscribes from a room', async () => {
+    const result = await client.callTool({
+      name: 'flock_unsubscribe',
+      arguments: { room_id: roomId },
+    });
+
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain('Unsubscribed');
+  });
+});
