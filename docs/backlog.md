@@ -38,7 +38,7 @@
   - ❌ MCP notification（`sendLoggingMessage`）：日志不触发 agent turn，无效
   - ✅ `flock_wait` 阻塞工具：标准 MCP 工具调用，阻塞不消耗 token，返回后 Claude Code 自动继续
 - **限制：** 用户关掉 session 就断开；session 可能超时。对目标场景够用
-- **状态：** open（v0.2 已实现 MCP server，但 flock_wait 待实现）
+- **状态：** done（v0.2 已实现 MCP server + flock_wait 阻塞等待）
 - **计划版本：** v0.2
 
 ---
@@ -133,5 +133,17 @@
   - 所有文档（README, CLAUDE.md, roadmap, progress, api, schema）
   - 所有代码文件（imports, CLI name, error messages）
 - **建议修复：** 作为 v0.1.2 独立版本，全局替换
-- **状态：** open
+- **状态：** done（v0.1.2 已完成）
 - **计划版本：** v0.1.2
+
+---
+
+## v0.2 — MCP Server 技术债
+
+### 🟡 roomSequences 全局共享，多 agent 会互相干扰
+- **发现于：** 2026-05-05，代码审查发现
+- **问题：** `roomSequences` 是模块级 Map，所有 flock_wait 调用共享。stdio 模式下每个 agent 独立进程不触发，但共享进程模式（如 HTTP MCP）会导致 baseline 互相覆盖
+- **影响：** 当前不影响。未来如果 MCP server 改为多 agent 共享进程，会导致消息丢失
+- **建议修复：** 改为 per-agent 追踪：`Map<agentId, Map<roomId, sequence>>`
+- **状态：** open
+- **计划版本：** v0.3 之前

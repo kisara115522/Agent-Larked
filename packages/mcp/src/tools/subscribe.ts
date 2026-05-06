@@ -25,22 +25,6 @@ export function emitNewMessage(roomId: string, message: {
   messageBus.emit('message', { room_id: roomId, ...message });
 }
 
-/** Initialize baseline sequences for rooms an agent has joined (only if not already tracked) */
-function initBaselines(db: Database.Database, agentId: string): void {
-  const rooms = db.prepare(`
-    SELECT room_id FROM room_members WHERE agent_id = ?
-  `).all(agentId) as Array<{ room_id: string }>;
-
-  for (const { room_id } of rooms) {
-    // Only set baseline for rooms we haven't seen yet
-    if (!roomSequences.has(room_id)) {
-      const current = getMessages(db, room_id, { limit: 1 });
-      const seq = current.messages.length > 0 ? current.messages[0].sequence : 0;
-      roomSequences.set(room_id, seq);
-    }
-  }
-}
-
 export function registerWaitTool(server: McpServer, db: Database.Database): void {
   // flock_wait: block until new messages arrive in ANY room the agent has joined
   server.registerTool(
