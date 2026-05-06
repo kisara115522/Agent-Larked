@@ -4,6 +4,7 @@ export function rowToProfile(row: Record<string, unknown>): AgentProfile {
   return {
     id: row.id as string,
     name: row.name as string,
+    display_name: (row.display_name as string) ?? '',
     bio: row.bio as string,
     capabilities: JSON.parse(row.capabilities as string) as string[],
     model: row.model as string,
