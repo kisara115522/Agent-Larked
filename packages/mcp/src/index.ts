@@ -5,7 +5,7 @@ import { getDatabase } from './db.js';
 import { registerIdentityTools } from './tools/identity.js';
 import { registerRoomTools } from './tools/room.js';
 import { registerMessagingTools } from './tools/messaging.js';
-import { registerSubscribeTools } from './tools/subscribe.js';
+import { registerWaitTool } from './tools/subscribe.js';
 import { registerReactionTools } from './tools/reactions.js';
 import { registerResources } from './resources.js';
 
@@ -20,7 +20,7 @@ const db = getDatabase();
 registerIdentityTools(server, db);
 registerRoomTools(server, db);
 registerMessagingTools(server, db);
-registerSubscribeTools(server, db);
+registerWaitTool(server, db);
 registerReactionTools(server, db);
 
 // Register MCP resources

@@ -7,7 +7,7 @@ import { registerIdentityTools } from '../tools/identity.js';
 import { registerRoomTools } from '../tools/room.js';
 import { registerMessagingTools } from '../tools/messaging.js';
 import { registerReactionTools } from '../tools/reactions.js';
-import { registerSubscribeTools } from '../tools/subscribe.js';
+import { registerWaitTool } from '../tools/subscribe.js';
 import type Database from 'better-sqlite3';
 
 let db: Database.Database;
@@ -22,7 +22,7 @@ beforeAll(async () => {
   registerRoomTools(server, db);
   registerMessagingTools(server, db);
   registerReactionTools(server, db);
-  registerSubscribeTools(server, db);
+  registerWaitTool(server, db);
 
   client = new Client({ name: 'test-client', version: '0.1.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -171,16 +171,9 @@ describe('flock_thread tool', () => {
   });
 });
 
-describe('flock_subscribe + flock_wait', () => {
-  it('subscribes and waits for new messages', async () => {
-    // Subscribe (sets baseline)
-    const subResult = await client.callTool({
-      name: 'flock_subscribe',
-      arguments: { room_id: roomId },
-    });
-    expect((subResult.content as Array<{ type: string; text: string }>)[0].text).toContain('Subscribed');
-
-    // Send a new message (from another agent to avoid self-exclusion issues)
+describe('flock_wait', () => {
+  it('returns existing new messages immediately (DB check)', async () => {
+    // Send a message first (creates new sequence above baseline)
     const regResult = await client.callTool({
       name: 'flock_register',
       arguments: { name: 'WaitBot' },
@@ -189,26 +182,46 @@ describe('flock_subscribe + flock_wait', () => {
     const savedId = process.env.AGENT_ID;
     process.env.AGENT_ID = waitBotId;
     await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
-    await client.callTool({ name: 'flock_post', arguments: { room_id: roomId, content: 'Message for wait test' } });
+    await client.callTool({ name: 'flock_post', arguments: { room_id: roomId, content: 'Pre-existing message for wait' } });
     process.env.AGENT_ID = savedId;
 
-    // Wait should return the new message quickly
+    // flock_wait should find it via DB check (no blocking needed)
     const waitResult = await client.callTool({
       name: 'flock_wait',
-      arguments: { room_id: roomId, timeout_seconds: 5 },
+      arguments: { timeout_seconds: 3 },
     });
 
     const text = (waitResult.content as Array<{ type: string; text: string }>)[0].text;
     const parsed = JSON.parse(text);
     expect(parsed.messages.length).toBeGreaterThanOrEqual(1);
-    expect(parsed.messages.some((m: { content: string }) => m.content === 'Message for wait test')).toBe(true);
   });
 
-  it('unsubscribes from a room', async () => {
-    const result = await client.callTool({
-      name: 'flock_unsubscribe',
-      arguments: { room_id: roomId },
+  it('blocks and returns when new message arrives via flock_post', async () => {
+    // Start flock_wait in background (will block since no new messages yet)
+    const waitPromise = client.callTool({
+      name: 'flock_wait',
+      arguments: { timeout_seconds: 10 },
     });
-    expect((result.content as Array<{ type: string; text: string }>)[0].text).toContain('Unsubscribed');
+
+    // Wait a moment, then send a message from another agent
+    await new Promise((r) => setTimeout(r, 500));
+
+    const regResult = await client.callTool({
+      name: 'flock_register',
+      arguments: { name: 'WaitBot2' },
+    });
+    const botId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id;
+    const savedId = process.env.AGENT_ID;
+    process.env.AGENT_ID = botId;
+    await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
+    await client.callTool({ name: 'flock_post', arguments: { room_id: roomId, content: 'Trigger message for wait' } });
+    process.env.AGENT_ID = savedId;
+
+    // flock_wait should resolve with the new message
+    const waitResult = await waitPromise;
+    const text = (waitResult.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text);
+    expect(parsed.messages.length).toBeGreaterThanOrEqual(1);
+    expect(parsed.messages.some((m: { content: string }) => m.content === 'Trigger message for wait')).toBe(true);
   });
 });
