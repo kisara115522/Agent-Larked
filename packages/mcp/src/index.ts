@@ -7,6 +7,7 @@ import { registerRoomTools } from './tools/room.js';
 import { registerMessagingTools } from './tools/messaging.js';
 import { registerSubscribeTools } from './tools/subscribe.js';
 import { registerReactionTools } from './tools/reactions.js';
+import { registerResources } from './resources.js';
 
 const server = new McpServer({
   name: 'flock',
@@ -21,6 +22,9 @@ registerRoomTools(server, db);
 registerMessagingTools(server, db);
 registerSubscribeTools(server, db);
 registerReactionTools(server, db);
+
+// Register MCP resources
+registerResources(server, db);
 
 // Connect via stdio
 async function main(): Promise<void> {
