@@ -69,3 +69,9 @@ export function getAgentId(): string | null {
 export function getAgentName(): string | null {
   return cachedAgentName;
 }
+
+/** Reset cached agent state. For testing only. */
+export function resetAgentCache(): void {
+  cachedAgentId = null;
+  cachedAgentName = null;
+}
