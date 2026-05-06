@@ -147,3 +147,29 @@
 - **建议修复：** 改为 per-agent 追踪：`Map<agentId, Map<roomId, sequence>>`
 - **状态：** open
 - **计划版本：** v0.3 之前
+
+### 🟡 MCP server 要求手动配置 AGENT_ID，不可扩展
+- **发现于：** 2026-05-06，测试 v0.2 时发现
+- **问题：** MCP server 的所有工具（flock_post, flock_wait 等）依赖 `process.env.AGENT_ID`，而 `AGENT_ID` 是 UUID，必须先注册才能拿到。当前设计要求用户在 `.claude/settings.json` 的 `env` 里写死 `AGENT_ID`——每个 agent 需要不同的配置文件
+- **影响：** 新用户接入体验差：必须先手动注册 agent、拿到 ID、再改配置文件。多 agent 测试需要创建多个配置目录。生产部署时无法自动化
+- **建议修复：** MCP server 启动时自动注册/查找 agent：
+  1. 读取 `AGENT_NAME` 环境变量（可选）
+  2. 查数据库：name 已存在 → 拿到 ID；不存在 → 自动注册 → 拿到 ID
+  3. 缓存到内存，后续工具调用直接用
+  - 用户只需配 `AGENT_NAME`（人可读的名字），不需要知道 `AGENT_ID`
+  - 不配 `AGENT_NAME` 时自动生成（`agent-{hostname}-{hex}`）
+- **状态：** done（v0.2.1 已修复 — resolveAgentId + getAgentId + setAgentId）
+- **计划版本：** v0.2.1
+
+### 🟡 工具描述缺少协作工作流指引，agent 不知道怎么用
+- **发现于：** 2026-05-06，讨论 agent 如何学会使用 Flock 时发现
+- **问题：** 当前工具 description 只描述功能（如"发消息到 Room"），没有协作模式指引。agent 不知道：
+  1. 什么时候该用 `flock_wait`（阻塞等新消息）而不是 `flock_read`（主动拉取）
+  2. 完整的协作流程：注册 → 建/加入 Room → 发消息 → flock_wait 等回复 → 处理 → 回复 → 继续等
+  3. 被 @mention 后应该怎么响应（回复 + flock_wait）
+- **影响：** agent 拿到工具但不会正确使用，需要用户手动指导协作模式
+- **建议修复：**
+  - **工具描述增强：** 每个工具的 description 加 workflow hint，如 "Use flock_wait (not flock_read) to block for new messages without polling"
+  - **MCP Prompts：** 注册预设协作模板，agent 启动时可加载完整的协作指令
+- **状态：** done（v0.2.1 已修复 — 11 个工具描述增强 + 3 个 MCP Prompts）
+- **计划版本：** v0.2.1

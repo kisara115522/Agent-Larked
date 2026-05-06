@@ -31,9 +31,9 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
   server.registerTool(
     'flock_wait',
     {
-      description: 'Block until new messages arrive in ANY room you have joined. Returns new messages when available. Use this (not flock_read) to wait for replies after posting. Called after flock_post to wait for responses — blocks without consuming tokens until messages arrive.',
+      description: 'Block until new messages from OTHER agents arrive in any room you have joined. Returns only messages not sent by you. Use this (not flock_read) to wait for replies after posting. Blocks without consuming tokens. Call flock_post first, then flock_wait to receive responses.',
       inputSchema: z.object({
-        timeout_seconds: z.number().optional().describe('Max seconds to wait (default 300, max 600)'),
+        timeout_seconds: z.number().optional().describe('Max seconds to wait (default: no timeout, waits forever. Max 3600)'),
       }),
     },
     async ({ timeout_seconds }) => {
@@ -58,7 +58,8 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         };
       }
 
-      const timeout = Math.min(Math.max(timeout_seconds ?? 300, 1), 600);
+      // timeout: 0 or undefined = wait forever (no timeout)
+      const timeout = timeout_seconds && timeout_seconds > 0 ? Math.min(timeout_seconds, 3600) : 0;
 
       // First, check for messages newer than our last-known sequence per room
       const alreadyNew: Array<{
@@ -75,12 +76,19 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
       for (const roomId of joinedRooms) {
         const lastSeq = roomSequences.get(roomId);
         const result = getMessages(db, roomId, { limit: 50 });
+        let maxSeq = lastSeq ?? 0;
         for (const msg of result.messages) {
-          // If no baseline set yet, any message is "new"; otherwise check sequence
+          if (msg.sequence > maxSeq) maxSeq = msg.sequence;
+          // Skip own messages — flock_wait is for receiving others' messages
+          if (msg.from === agentId) continue;
+          // First call (no baseline): return others' messages and set baseline
+          // Subsequent calls: only return messages above baseline
           if (lastSeq === undefined || msg.sequence > lastSeq) {
             alreadyNew.push({ ...msg, room_id: roomId });
           }
         }
+        // Initialize / update baseline
+        roomSequences.set(roomId, maxSeq);
       }
 
       if (alreadyNew.length > 0) {
@@ -125,6 +133,8 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         };
 
         const onMessage = (msg: { room_id: string; id: string; from: string; content: string; sequence: number; mentions: string[]; reply_to: string | null; created_at: string }) => {
+          // Skip own messages
+          if (msg.from === agentId) return;
           if (joinedRooms.has(msg.room_id)) {
             collected.push(msg);
             finish(collected);
@@ -137,7 +147,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
             const lastSeq = roomSequences.get(roomId) ?? 0;
             const result = getMessages(db, roomId, { limit: 50 });
             for (const msg of result.messages) {
-              if (msg.sequence > lastSeq) {
+              if (msg.sequence > lastSeq && msg.from !== agentId) {
                 collected.push({ ...msg, room_id: roomId });
               }
             }
@@ -148,14 +158,14 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         }, 3000);
 
         const cleanup = () => {
-          clearTimeout(timer);
+          if (timer) clearTimeout(timer);
           clearInterval(dbPoll);
           messageBus.off('message', onMessage);
         };
 
         messageBus.on('message', onMessage);
 
-        // Timeout
+        // Timeout (0 = wait forever, use a very long timer to keep type simple)
         const timer = setTimeout(() => {
           cleanup();
           if (!resolved) {
@@ -164,7 +174,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
               content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], count: 0, timed_out: true }) }],
             });
           }
-        }, timeout * 1000);
+        }, timeout > 0 ? timeout * 1000 : 24 * 60 * 60 * 1000);
       });
     },
   );
