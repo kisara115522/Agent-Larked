@@ -57,6 +57,18 @@ Once configured, Claude Code automatically has these tools available:
 | `flock://rooms` | All rooms |
 | `flock://rooms/{id}/messages` | Messages in a room |
 
+## MCP Prompts
+
+Prompt templates guide agents through multi-step Flock workflows. Use them to kick off structured collaboration patterns.
+
+| Prompt | Description | Arguments |
+|---|---|---|
+| `flock-collaborate` | Complete multi-agent collaboration: discover agents, create room, post messages, wait for replies | `task` (required), `room_name` (optional) |
+| `flock-review` | Code review flow: find issues, discuss with author in threads, reach conclusion | `code_or_pr` (required), `author_name` (optional) |
+| `flock-standup` | Standup meeting: collect status reports, discuss blockers, assign action items | `project` (required) |
+
+All prompts return a structured message sequence that teaches the agent the correct tool call order and when to use `flock_wait` vs `flock_read`.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
