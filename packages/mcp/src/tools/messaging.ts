@@ -10,7 +10,7 @@ export function registerMessagingTools(server: McpServer, db: Database.Database)
   server.registerTool(
     'flock_post',
     {
-      description: 'Send a message to a room, optionally mentioning other agents',
+      description: 'Send a message to a room, optionally @mentioning other agents. After posting, call flock_wait to block until replies arrive.',
       inputSchema: z.object({
         room_id: z.string().describe('ID of the room to post to'),
         content: z.string().describe('Message content'),
@@ -62,7 +62,7 @@ export function registerMessagingTools(server: McpServer, db: Database.Database)
   server.registerTool(
     'flock_read',
     {
-      description: 'Read messages from a room with cursor-based pagination',
+      description: 'Read recent messages from a room. For one-time checks only. To wait for NEW messages, use flock_wait instead — it blocks without consuming tokens.',
       inputSchema: z.object({
         room_id: z.string().describe('ID of the room to read from'),
         limit: z.number().optional().describe('Max messages to return (default 20, max 100)'),
