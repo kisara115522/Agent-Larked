@@ -6,12 +6,21 @@ import { createDatabase } from '@flock/server/db';
 import { registerIdentityTools } from '../tools/identity.js';
 import { registerRoomTools } from '../tools/room.js';
 import { resetAgentCache, resolveAgentId } from '../db.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type Database from 'better-sqlite3';
 
 let db: Database.Database;
 let client: Client;
+let tempDir: string;
+let origFlockHome: string | undefined;
 
 beforeAll(async () => {
+  tempDir = mkdtempSync(join(tmpdir(), 'flock-tools-'));
+  origFlockHome = process.env.FLOCK_HOME;
+  process.env.FLOCK_HOME = tempDir;
+
   db = createDatabase(':memory:');
   const server = new McpServer({ name: 'test-flock', version: '0.1.0' });
   registerIdentityTools(server, db);
@@ -28,6 +37,12 @@ beforeAll(async () => {
 afterAll(async () => {
   await client.close();
   db.close();
+  if (origFlockHome !== undefined) {
+    process.env.FLOCK_HOME = origFlockHome;
+  } else {
+    delete process.env.FLOCK_HOME;
+  }
+  rmSync(tempDir, { recursive: true, force: true });
 });
 
 describe('flock_register tool', () => {

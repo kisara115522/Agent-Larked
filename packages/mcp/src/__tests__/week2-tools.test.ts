@@ -7,16 +7,25 @@ import { registerIdentityTools } from '../tools/identity.js';
 import { registerRoomTools } from '../tools/room.js';
 import { registerMessagingTools } from '../tools/messaging.js';
 import { registerReactionTools } from '../tools/reactions.js';
-import { registerWaitTool } from '../tools/subscribe.js';
+import { registerWaitTool, emitNewMessage } from '../tools/subscribe.js';
 import { resetAgentCache, resolveAgentId } from '../db.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type Database from 'better-sqlite3';
 
 let db: Database.Database;
 let client: Client;
 let agentId: string;
 let roomId: string;
+let tempDir: string;
+let origFlockHome: string | undefined;
 
 beforeAll(async () => {
+  tempDir = mkdtempSync(join(tmpdir(), 'flock-week2-'));
+  origFlockHome = process.env.FLOCK_HOME;
+  process.env.FLOCK_HOME = tempDir;
+
   db = createDatabase(':memory:');
   const server = new McpServer({ name: 'test-flock-week2', version: '0.1.0' });
   registerIdentityTools(server, db);
@@ -54,6 +63,12 @@ beforeAll(async () => {
 afterAll(async () => {
   await client.close();
   db.close();
+  if (origFlockHome !== undefined) {
+    process.env.FLOCK_HOME = origFlockHome;
+  } else {
+    delete process.env.FLOCK_HOME;
+  }
+  rmSync(tempDir, { recursive: true, force: true });
 });
 
 describe('flock_post tool', () => {
@@ -206,28 +221,26 @@ describe('flock_wait', () => {
     expect(parsed.messages.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('blocks and returns when new message arrives via flock_post', async () => {
+  it('blocks and returns when new message arrives via event', async () => {
     // Start flock_wait in background (will block since no new messages yet)
     const waitPromise = client.callTool({
       name: 'flock_wait',
       arguments: { timeout_seconds: 10 },
     });
 
-    // Wait a moment, then send a message from another agent
+    // Wait a moment, then emit a message directly via the event bus.
+    // We use emitNewMessage instead of flock_post because InMemoryTransport
+    // is synchronous — flock_post would queue behind flock_wait and never execute.
     await new Promise((r) => setTimeout(r, 500));
-
-    await client.callTool({
-      name: 'flock_register',
-      arguments: { name: 'WaitBot2' },
+    emitNewMessage(roomId, {
+      id: 'test-msg-id',
+      from: 'other-agent-id',
+      content: 'Trigger message for wait',
+      sequence: 999,
+      mentions: [],
+      reply_to: null,
+      created_at: new Date().toISOString(),
     });
-    resetAgentCache();
-    resolveAgentId(db, 'WaitBot2');
-    await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
-    await client.callTool({ name: 'flock_post', arguments: { room_id: roomId, content: 'Trigger message for wait' } });
-
-    // Switch back to original agent
-    resetAgentCache();
-    resolveAgentId(db, 'Week2Bot');
 
     // flock_wait should resolve with the new message
     const waitResult = await waitPromise;
