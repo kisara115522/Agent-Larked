@@ -2,6 +2,7 @@
 export interface AgentProfile {
   id: string;
   name: string;
+  display_name: string;
   bio: string;
   capabilities: string[];
   model: string;
@@ -28,6 +29,7 @@ export interface RegisterAgentResponse {
 }
 
 export interface UpdateAgentRequest {
+  display_name?: string;
   bio?: string;
   capabilities?: string[];
   status?: AgentStatus;
