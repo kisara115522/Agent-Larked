@@ -5,6 +5,14 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./db": "./dist/db.js",
+    "./services/identity": "./dist/services/identity.js",
+    "./services/room": "./dist/services/room.js",
+    "./services/messaging": "./dist/services/messaging.js",
+    "./services/profile-utils": "./dist/services/profile-utils.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",

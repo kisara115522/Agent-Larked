@@ -6,7 +6,8 @@
     "packages/shared",
     "packages/server",
     "packages/sdk",
-    "packages/cli"
+    "packages/cli",
+    "packages/mcp"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
