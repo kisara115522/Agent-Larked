@@ -30,7 +30,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
   server.registerTool(
     'flock_wait',
     {
-      description: 'Block until new messages arrive in any room you have joined. Returns new messages when available. No parameters needed — monitors all your rooms globally.',
+      description: 'Block until new messages arrive in ANY room you have joined. Returns new messages when available. Use this (not flock_read) to wait for replies after posting. Called after flock_post to wait for responses — blocks without consuming tokens until messages arrive.',
       inputSchema: z.object({
         timeout_seconds: z.number().optional().describe('Max seconds to wait (default 300, max 600)'),
       }),
