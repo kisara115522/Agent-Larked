@@ -51,6 +51,10 @@ export function updateProfile(db: Database.Database, agentId: string, req: Updat
   const updates: string[] = [];
   const values: unknown[] = [];
 
+  if (req.display_name !== undefined) {
+    updates.push('display_name = ?');
+    values.push(req.display_name);
+  }
   if (req.bio !== undefined) {
     updates.push('bio = ?');
     values.push(req.bio);
