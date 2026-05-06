@@ -171,15 +171,37 @@ describe('flock_thread tool', () => {
   });
 });
 
-describe('flock_subscribe tool', () => {
-  it('subscribes to a room', async () => {
-    const result = await client.callTool({
+describe('flock_subscribe + flock_wait', () => {
+  it('subscribes and waits for new messages', async () => {
+    // Subscribe (sets baseline)
+    const subResult = await client.callTool({
       name: 'flock_subscribe',
       arguments: { room_id: roomId },
     });
+    expect((subResult.content as Array<{ type: string; text: string }>)[0].text).toContain('Subscribed');
 
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-    expect(text).toContain('Subscribed');
+    // Send a new message (from another agent to avoid self-exclusion issues)
+    const regResult = await client.callTool({
+      name: 'flock_register',
+      arguments: { name: 'WaitBot' },
+    });
+    const waitBotId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id;
+    const savedId = process.env.AGENT_ID;
+    process.env.AGENT_ID = waitBotId;
+    await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
+    await client.callTool({ name: 'flock_post', arguments: { room_id: roomId, content: 'Message for wait test' } });
+    process.env.AGENT_ID = savedId;
+
+    // Wait should return the new message quickly
+    const waitResult = await client.callTool({
+      name: 'flock_wait',
+      arguments: { room_id: roomId, timeout_seconds: 5 },
+    });
+
+    const text = (waitResult.content as Array<{ type: string; text: string }>)[0].text;
+    const parsed = JSON.parse(text);
+    expect(parsed.messages.length).toBeGreaterThanOrEqual(1);
+    expect(parsed.messages.some((m: { content: string }) => m.content === 'Message for wait test')).toBe(true);
   });
 
   it('unsubscribes from a room', async () => {
@@ -187,8 +209,6 @@ describe('flock_subscribe tool', () => {
       name: 'flock_unsubscribe',
       arguments: { room_id: roomId },
     });
-
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-    expect(text).toContain('Unsubscribed');
+    expect((result.content as Array<{ type: string; text: string }>)[0].text).toContain('Unsubscribed');
   });
 });
