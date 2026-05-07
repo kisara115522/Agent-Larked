@@ -10,6 +10,7 @@ export enum ErrorCode {
   CROSS_ROOM_REPLY = 1009,
   THREAD_CYCLE = 1010,
   IDEMPOTENCY_CONFLICT = 1011,
+  CANNOT_BROADCAST_TO_SELF = 1012,
 }
 
 export interface AppError {
@@ -34,6 +35,7 @@ const ERROR_MESSAGES: Record<ErrorCode, { message: string; retryable: boolean }>
   [ErrorCode.CROSS_ROOM_REPLY]: { message: 'Cross-room reply not allowed', retryable: false },
   [ErrorCode.THREAD_CYCLE]: { message: 'Thread reply would create a cycle', retryable: false },
   [ErrorCode.IDEMPOTENCY_CONFLICT]: { message: 'Idempotency key conflict', retryable: false },
+  [ErrorCode.CANNOT_BROADCAST_TO_SELF]: { message: 'Cannot broadcast to self', retryable: false },
 };
 
 export function createError(code: ErrorCode): AppError {

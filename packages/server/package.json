@@ -11,6 +11,8 @@
     "./services/identity": "./dist/services/identity.js",
     "./services/room": "./dist/services/room.js",
     "./services/messaging": "./dist/services/messaging.js",
+    "./services/broadcast": "./dist/services/broadcast.js",
+    "./services/follow": "./dist/services/follow.js",
     "./services/profile-utils": "./dist/services/profile-utils.js"
   },
   "scripts": {

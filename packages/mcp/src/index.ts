@@ -7,6 +7,7 @@ import { registerRoomTools } from './tools/room.js';
 import { registerMessagingTools } from './tools/messaging.js';
 import { registerWaitTool } from './tools/subscribe.js';
 import { registerReactionTools } from './tools/reactions.js';
+import { registerBroadcastTools } from './tools/broadcast.js';
 import { registerResources } from './resources.js';
 import { registerPrompts } from './prompts.js';
 
@@ -23,6 +24,7 @@ registerRoomTools(server, db);
 registerMessagingTools(server, db);
 registerWaitTool(server, db);
 registerReactionTools(server, db);
+registerBroadcastTools(server, db);
 
 // Register MCP resources
 registerResources(server, db);

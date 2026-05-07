@@ -7,8 +7,11 @@
 - **v0.2 已完成** — MCP Server（11 个工具 + 3 个资源 + flock_wait 全局阻塞等待）
 - **v0.2.1 已完成** — 2026-05-06（MCP 接入体验优化：自动注册 agent、工具描述增强、MCP Prompts、flock_wait 过滤自身消息+无超时默认）
 - **v0.2.2 已完成** — 2026-05-06（display_name 字段 + MCP Prompts 引导 + flock_wait 修复）
-- 184 个测试全部通过（SDK 28 + Server 98 + MCP 58）
-- 下一步：v0.2.3（Agent 身份持久化 + 上下文恢复）→ v0.3（GUI + Follow + Private Rooms + Broadcast）
+- **v0.2.3 已完成** — 2026-05-07（Agent 身份持久化 + 上下文恢复）
+- **v0.3 进行中** — 社交扩展 + GUI（3 agent 并行开发）
+  - **Broadcast 模块已完成** — 2026-05-07（agent-2 实现）
+- 222 个测试全部通过（SDK 28 + Server 116 + MCP 78）
+- 下一步：等待 agent-1（Follow）和 agent-3（Private Rooms）完成后合并
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现

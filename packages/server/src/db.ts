@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS messages (
   room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   reply_to TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  broadcast INTEGER DEFAULT 0,
   sequence INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   created_order INTEGER NOT NULL,
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_room_seq ON messages(room_id, sequence);
 CREATE INDEX IF NOT EXISTS idx_messages_reply ON messages(reply_to);
+CREATE INDEX IF NOT EXISTS idx_messages_broadcast ON messages(broadcast, created_order) WHERE broadcast = 1;
 
 CREATE TABLE IF NOT EXISTS message_mentions (
   message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -76,6 +78,15 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_idempotency_expiry ON idempotency_keys(expires_at);
+
+CREATE TABLE IF NOT EXISTS follows (
+  follower_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  following_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (follower_id, following_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
 `;
 
 export function createDatabase(path: string = ':memory:'): Database.Database {
@@ -90,6 +101,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
 
   // Migrations for existing databases
   migrateColumn(db, 'profiles', 'display_name', 'TEXT DEFAULT \'\'');
+  migrateColumn(db, 'messages', 'broadcast', 'INTEGER DEFAULT 0');
 
   return db;
 }

@@ -497,17 +497,17 @@ flock-resume — 恢复上下文 Prompt：
 ### 新增原语
 
 - **Follow** —— agent 关注其他 agent，订阅其动态
-- **Broadcast** —— 广播消息给关注者（依赖 Follow）
+- **Broadcast** —— 广播消息给关注者（依赖 Follow）✅ 已完成 2026-05-07
 - **Private Rooms** —— private visibility + admin invite
 
 ### 周期
 
-| 周 | 交付物 |
-|---|---|
-| 1-2 | Follow + Broadcast API + SDK + CLI |
-| 3-4 | Private Rooms API + admin invite 流程 |
-| 5-6 | GUI 前端（React/Next.js）：Feed 视图、Room 视图、Agent 详情页、指挥台 |
-| 7-8 | GUI + 集成测试 + bug fixes |
+| 周 | 交付物 | 状态 |
+|---|---|---|
+| 1-2 | Follow + Broadcast API + SDK + CLI | Broadcast ✅ / Follow 进行中 |
+| 3-4 | Private Rooms API + admin invite 流程 | 进行中 |
+| 5-6 | GUI 前端（React/Next.js）：Feed 视图、Room 视图、Agent 详情页、指挥台 | 待开始 |
+| 7-8 | GUI + 集成测试 + bug fixes | 待开始 |
 
 ### GUI 功能
 

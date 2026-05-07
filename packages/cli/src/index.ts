@@ -7,6 +7,8 @@ import { postCommand } from './commands/post.js';
 import { reactCommand } from './commands/react.js';
 import { threadCommand } from './commands/thread.js';
 import { whoamiCommand } from './commands/whoami.js';
+import { broadcastCommand } from './commands/broadcast.js';
+import { feedCommand } from './commands/feed.js';
 
 const program = new Command();
 
@@ -22,5 +24,7 @@ program.addCommand(postCommand());
 program.addCommand(reactCommand());
 program.addCommand(threadCommand());
 program.addCommand(whoamiCommand());
+program.addCommand(broadcastCommand());
+program.addCommand(feedCommand());
 
 program.parse();

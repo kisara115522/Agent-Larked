@@ -7,6 +7,8 @@ import { roomsRouter } from './routes/rooms.js';
 import { messagesRouter } from './routes/messages.js';
 import { reactionsRouter } from './routes/reactions.js';
 import { eventsRouter } from './routes/events.js';
+import { broadcastRouter, feedRouter } from './routes/broadcast.js';
+import { followsRouter } from './routes/follows.js';
 
 export function createApp(dbPath: string = ':memory:'): { app: express.Express; db: ReturnType<typeof createDatabase> } {
   const db = createDatabase(dbPath);
@@ -17,10 +19,13 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
 
   // Routes
   app.use('/agents', agentsRouter(db));
+  app.use('/agents', followsRouter(db));
   app.use('/rooms', roomsRouter(db, eventBus));
   app.use('/messages', messagesRouter(db, eventBus));
   app.use('/messages', reactionsRouter(db, eventBus));
   app.use('/events', eventsRouter(db, eventBus));
+  app.use('/broadcast', broadcastRouter(db, eventBus));
+  app.use('/feed', feedRouter(db));
 
   // Error handler (must be last)
   app.use(errorHandler);
