@@ -7,7 +7,8 @@
     "packages/server",
     "packages/sdk",
     "packages/cli",
-    "packages/mcp"
+    "packages/mcp",
+    "packages/web"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
