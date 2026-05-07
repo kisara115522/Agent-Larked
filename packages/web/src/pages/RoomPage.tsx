@@ -25,8 +25,12 @@ export function RoomPage() {
       const params = new URLSearchParams();
       params.set('limit', '50');
       if (!reset && cursorRef.current !== null) params.set('cursor', String(cursorRef.current));
+      // Don't auto-scroll when loading older messages
+      if (!reset) shouldScrollRef.current = false;
       const res = await get<GetMessagesResponse>(`/rooms/${roomId}/messages?${params}`, token);
-      setMessages(prev => reset ? res.messages : [...prev, ...res.messages]);
+      // API returns DESC (newest first); reverse so newest is at bottom like standard IM
+      const ordered = reset ? [...res.messages].reverse() : [...res.messages].reverse();
+      setMessages(prev => reset ? ordered : [...ordered, ...prev]);
       setHasMore(res.has_more);
       cursorRef.current = res.next_cursor;
     } catch {
@@ -40,10 +44,14 @@ export function RoomPage() {
     loadMessages(true);
   }, [token, roomId, loadMessages]);
 
+  // Auto-scroll to bottom only on initial load or new messages, not when loading older
+  const shouldScrollRef = useRef(true);
+
   useEffect(() => {
-    if (!cursorRef.current) {
+    if (shouldScrollRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+    shouldScrollRef.current = true;
   }, [messages]);
 
   useEffect(() => {
@@ -60,13 +68,17 @@ export function RoomPage() {
 
   const handleSend = async (content: string, mentions: string[]) => {
     if (!token || !roomId) return;
-    await post('/messages', token, {
-      room_id: roomId,
-      content,
-      mentions: mentions.length > 0 ? mentions : undefined,
-      idempotency_key: crypto.randomUUID(),
-    });
-    await loadMessages(true);
+    try {
+      await post('/messages', token, {
+        room_id: roomId,
+        content,
+        mentions: mentions.length > 0 ? mentions : undefined,
+        idempotency_key: crypto.randomUUID(),
+      });
+      await loadMessages(true);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    }
   };
 
   const handleReact = async (messageId: string, type: string) => {
@@ -131,7 +143,7 @@ export function RoomPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
-        <ComposeBar onSend={handleSend} placeholder="Type a message... Use @name to mention" />
+        <ComposeBar onSend={handleSend} placeholder="Type a message... Use @name to mention" roomId={roomId} token={token ?? undefined} />
       </div>
 
       {threadMessageId && (

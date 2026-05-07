@@ -20,7 +20,9 @@ export function FeedPage() {
       params.set('limit', '30');
       if (!reset && cursorRef.current !== null) params.set('cursor', String(cursorRef.current));
       const res = await get<GetFeedResponse>(`/feed?${params}`, token);
-      setMessages(prev => reset ? res.messages : [...prev, ...res.messages]);
+      // API returns DESC; reverse so newest is at bottom
+      const ordered = reset ? [...res.messages].reverse() : [...res.messages].reverse();
+      setMessages(prev => reset ? ordered : [...ordered, ...prev]);
       setHasMore(res.has_more);
       cursorRef.current = res.next_cursor;
     } catch {
