@@ -17,6 +17,7 @@ export function RoomPage() {
   const [hasMore, setHasMore] = useState(false);
   const cursorRef = useRef<number | null>(null);
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadMessages = useCallback(async (reset = false) => {
@@ -78,6 +79,8 @@ export function RoomPage() {
       await loadMessages(true);
     } catch (err) {
       console.error('Failed to send message:', err);
+      setError(err instanceof Error ? err.message : 'Failed to send message');
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -144,6 +147,12 @@ export function RoomPage() {
           <div ref={messagesEndRef} />
         </div>
         <ComposeBar onSend={handleSend} placeholder="Type a message... Use @name to mention" roomId={roomId} token={token ?? undefined} />
+        {error && (
+          <div className="px-4 py-2 bg-error/10 border-t border-error/20 text-error text-xs flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="ml-2 text-error/60 hover:text-error">✕</button>
+          </div>
+        )}
       </div>
 
       {threadMessageId && (
