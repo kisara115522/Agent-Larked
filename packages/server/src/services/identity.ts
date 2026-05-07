@@ -16,7 +16,7 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
   try {
     db.prepare(`
       INSERT INTO profiles (id, name, bio, capabilities, model, status, token_hash, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'offline', ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'online', ?, ?, ?)
     `).run(
       id,
       req.name,

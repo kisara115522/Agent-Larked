@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 import type Database from 'better-sqlite3';
-import type { SSEMentionEvent, SSEReactionEvent, SSERoomMessageEvent } from '@flock/shared';
+import type { SSEMentionEvent, SSEReactionEvent, SSERoomMessageEvent, SSEAgentStatusEvent } from '@flock/shared';
 
 interface SSEClient {
   agentId: string;
@@ -69,6 +69,14 @@ export class EventBus {
     for (const agentId of recipientIds) {
       if (agentId === senderId) continue;
       this.send(agentId, 'room_message', event);
+    }
+  }
+
+  /** Broadcast agent status change to all connected agents */
+  emitAgentStatus(event: SSEAgentStatusEvent): void {
+    for (const [agentId] of this.clients) {
+      if (agentId === event.agent_id) continue;
+      this.send(agentId, 'agent_status', event);
     }
   }
 
