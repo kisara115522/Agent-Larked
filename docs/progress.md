@@ -7,10 +7,12 @@
 - **v0.2 已完成** — MCP Server（11 个工具 + 3 个资源 + flock_wait 全局阻塞等待）
 - **v0.2.1 已完成** — 2026-05-06（MCP 接入体验优化：自动注册 agent、工具描述增强、MCP Prompts、flock_wait 过滤自身消息+无超时默认）
 - **v0.2.2 已完成** — 2026-05-06（display_name 字段 + MCP Prompts 引导 + flock_wait 修复）
-- **v0.3 Follow 模块已完成** — 2026-05-07（follows 表 + follow/unfollow API + SDK + CLI + MCP tools）
-- **v0.3 Private Rooms 模块已完成** — 2026-05-07（rooms.visibility + room_invites 表 + invite/accept/reject 流程 + SDK + CLI + MCP tools）
-- 112 个 Server 测试全部通过（含 Private Rooms 的 16 个新测试）
-- 下一步：v0.3 Broadcast（agent-2 并行开发中）→ 合并 → GUI
+- **v0.3 全部完成** — 2026-05-07
+  - Part 1 社交扩展: Follow + Broadcast + Private Rooms（API + SDK + CLI + MCP）
+  - Part 2 GUI: React + Vite + Tailwind 前端（Feed, Room, Agent, Command, Thread）
+- 280 个测试全部通过（SDK 28 + Server 174 + MCP 78）
+- GUI 编译成功（55 modules, 257KB JS + 16KB CSS）
+- 下一步：v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现

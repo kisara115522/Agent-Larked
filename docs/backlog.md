@@ -173,6 +173,103 @@
 
 ---
 
+## v0.3 代码审查发现（2026-05-07）
+
+> 已修复：P1-P3（🔴）、P4-P5、P11（🟡）在 commit 031bcb6 中修复。剩余 P6-P10 为技术债。
+
+### 🔴 私密 Room 消息无权限校验
+- **发现于：** 2026-05-07，agent-2 审查发现
+- **问题：** `getMessages` 不检查 Room 成员身份。任何已认证 agent 都能读私密 Room 消息。`sendMessage` 正确调了 `isRoomMember`，但 `getMessages` 没有。`GET /rooms/:id` 和 `GET /rooms/:id/members` 同样缺少检查
+- **影响：** 安全漏洞——私密 Room 的消息对所有 agent 可见
+- **建议修复：** `getMessages`、`getRoom`、`getRoomMembers` 加 `isRoomMember` 检查
+- **状态：** done（031bcb6）
+
+### 🔴 invitesRouter 重复挂载
+- **发现于：** 2026-05-07，代码审查发现
+- **问题：** `packages/server/src/index.ts` 第 24-25 行，同一个 router 挂在 `/agents` 和 `/invites` 下。`GET /me/invites` 匹配到两个路径，`POST /:id/accept` 和 `/:id/reject` 同理
+- **影响：** 冗余路由，`/invites/me/invites` 路径语义奇怪
+- **建议修复：** 只保留 `/agents` 下挂载，删除 `/invites` 挂载
+- **状态：** done（031bcb6）
+
+### 🔴 ThreadView reply_to 挂在错误消息
+- **发现于：** 2026-05-07，agent-2 审查发现
+- **问题：** `ThreadView.tsx:36-43` — reply_to 用了 thread 最后一条消息的 ID，而不是根消息的 prop messageId。用户回复 thread 时，新消息会挂在最后一条回复上而不是根消息上
+- **影响：** Thread 结构混乱，回复挂在错误位置
+- **建议修复：** reply_to 应使用根消息的 messageId prop
+- **状态：** done（031bcb6）
+
+### 🟡 broadcast/follow/invite 不发 SSE 事件
+- **发现于：** 2026-05-07，代码审查发现
+- **问题：** `broadcastRouter` 接收了 `eventBus` 参数但未使用（`_eventBus`）。Follow/Invite 也没有 SSE 事件。广播消息不会推送给在线 agent
+- **影响：** GUI FeedPage 无法实时更新，关注者收不到广播通知
+- **建议修复：** 接入 EventBus，广播/follow/invite 时发 SSE 事件
+- **状态：** done（031bcb6 — broadcast SSE 已接入，follow/invite 待后续）
+
+### 🟡 FeedPage 没有 SSE 订阅
+- **发现于：** 2026-05-07，agent-2 审查发现
+- **问题：** `FeedPage.tsx` 没调用 `useSSE()`。关注者的广播消息不会实时出现，只能手动刷新
+- **影响：** 用户必须手动刷新才能看到新广播
+- **建议修复：** 添加 SSE 订阅，收到 broadcast 事件时刷新 feed
+- **状态：** done（031bcb6）
+
+### 🟡 getFollowers/getFollowing cursor 逻辑重复
+- **发现于：** 2026-05-07，代码审查发现
+- **问题：** `packages/server/src/services/follow.ts` — 两个函数的 cursor 查询逻辑完全重复。cursor 中的 `created_at` 来自 follows 表，但 ORDER BY 是 `f.created_at DESC, p.id DESC`，如果多个 follow 的 created_at 相同，cursor 可能跳过记录
+- **影响：** 分页可能丢失数据
+- **建议修复：** 提取公共分页函数，确保 cursor 字段与 ORDER BY 一致
+- **状态：** open
+
+### 🟡 AgentPage 加载效率低（4 次 API 调用）
+- **发现于：** 2026-05-07，代码审查发现
+- **问题：** `AgentPage.tsx:21-36` — 查看一个 agent profile 需要：搜索 agents + get followers + get following + 检查是否 follow（拉自己的全部 following）
+- **影响：** 页面加载慢，浪费 API 调用
+- **建议修复：** 用 `GET /agents/:id` 直接拿 profile，follow 关系用 `/agents/:id/followers?limit=1` 检查
+- **状态：** open
+
+### 🟡 Room 标题显示 roomId 而非名字
+- **发现于：** 2026-05-07，代码审查发现
+- **问题：** `RoomPage.tsx:94` — `💬 Room ${roomId?.slice(0, 8)}` 显示 UUID 前 8 位
+- **影响：** 用户无法辨识 Room
+- **建议修复：** 先调 `GET /rooms/:id` 拿到 room name 显示
+- **状态：** open
+
+### 🟡 fromName 显示原始 agent ID
+- **发现于：** 2026-05-07，代码审查发现
+- **问题：** `FeedPage.tsx:73`、`RoomPage.tsx:120` — `fromName={msg.from}` 传的是 UUID
+- **影响：** 消息列表中显示 UUID 而非可读名字
+- **建议修复：** 查询消息时 join profiles 表带上 name/display_name
+- **状态：** open
+
+### 🟡 flock follow 命令双重嵌套
+- **发现于：** 2026-05-07，代码审查发现
+- **问题：** `followCommand()` 返回 `new Command('follow')`，子命令也是 `follow <agent-name>`。CLI 用法变成 `flock follow follow agentName`
+- **影响：** CLI 体验差
+- **建议修复：** 把 follow/unfollow 做成顶级命令，或改父命令名为 `social`
+- **状态：** open
+
+### 🟡 虚拟 broadcast room 污染 room 列表
+- **发现于：** 2026-05-07，agent-2 审查发现
+- **问题：** `GET /rooms` 会返回 `broadcast-${agentId}` 虚拟 room 条目
+- **影响：** Room 列表中出现无意义的 broadcast room
+- **建议修复：** `listRooms` 过滤掉 `broadcast-` 前缀的 room，或用独立表存 broadcast
+- **状态：** done（031bcb6）
+
+### 🟡 所有 catch 块静默吞错误
+- **发现于：** 2026-05-07，agent-2 审查发现
+- **问题：** web 包 6 个文件的 catch 块全部为空或 `// ignore`。API 失败时用户看不到任何反馈
+- **影响：** 用户体验差——操作失败无提示
+- **建议修复：** 添加 toast/notification 组件，catch 块中显示错误信息
+- **状态：** open
+
+### 🟡 @mention 正则不匹配连字符名字
+- **发现于：** 2026-05-07，agent-2 审查发现
+- **问题：** ComposeBar 的 `@mention` 正则 `/@(\w+)/` 不匹配连字符名字如 `code-reviewer`
+- **影响：** 带连字符的 agent 名字无法被 @mention
+- **建议修复：** 正则改为 `/@([\w-]+)/`
+- **状态：** open
+
+---
+
 ## v0.2 — MCP Server 技术债
 
 ### 🟡 roomSequences 全局共享，多 agent 会互相干扰
