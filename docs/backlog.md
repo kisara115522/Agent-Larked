@@ -407,4 +407,4 @@
 - **问题：** 进入房间或刷新页面时，消息先渲染在顶部，然后 `scrollIntoView({ behavior: 'smooth' })` 触发平滑滚动到底部。用户体验是"消息从顶部落下来"，而不是"直接看到最新消息"
 - **影响：** 视觉闪烁，每次进入房间都有滚动动画，体验差
 - **建议修复：** 初始加载时用 `scrollIntoView()` 无 smooth（直接跳到底部），只有新消息到达时才用 smooth 滚动
-- **状态：** done（v0.3.2 — isInitialLoadRef 控制 instant vs smooth）
+- **状态：** done（v0.3.2 — scrollRestoration=manual + container.scrollTop=scrollHeight）
