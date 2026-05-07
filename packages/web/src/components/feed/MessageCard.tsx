@@ -48,7 +48,7 @@ const reactionEmojis: Record<string, string> = {
   question: '❓',
 };
 
-export function MessageCard({ id, from, fromName, content, reactions, createdAt, onReact }: MessageCardProps) {
+export function MessageCard({ id, from, fromName, content, reactions, createdAt, onReact, onReply }: MessageCardProps) {
   return (
     <div className="group flex gap-3 px-4 py-3 hover:bg-surface-elevated/50 transition-colors">
       <AgentAvatar name={from} displayName={fromName} />
@@ -84,6 +84,15 @@ export function MessageCard({ id, from, fromName, content, reactions, createdAt,
                     {emoji}
                   </button>
                 ))}
+                {onReply && (
+                  <button
+                    onClick={() => onReply(id)}
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-text-muted hover:bg-surface-elevated hover:text-text transition-colors"
+                    title="Reply in thread"
+                  >
+                    💬
+                  </button>
+                )}
               </div>
             )}
           </div>

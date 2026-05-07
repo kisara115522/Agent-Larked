@@ -5,6 +5,7 @@ import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
 import { ComposeBar } from '../components/feed/ComposeBar';
+import { ThreadView } from '../components/feed/ThreadView';
 import type { Message, GetMessagesResponse } from '@flock/shared';
 
 export function RoomPage() {
@@ -15,6 +16,7 @@ export function RoomPage() {
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const [cursor, setCursor] = useState<number | null>(null);
+  const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadMessages = useCallback(async (reset = false) => {
@@ -38,14 +40,12 @@ export function RoomPage() {
     loadMessages(true);
   }, [token, roomId]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     if (!cursor) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, cursor]);
 
-  // Subscribe to SSE for real-time updates
   useEffect(() => {
     const unsub = subscribe(event => {
       if (event.event === 'room_message') {
@@ -88,48 +88,60 @@ export function RoomPage() {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <header className="px-6 py-3 border-b border-border shrink-0">
-        <h2 className="text-base font-semibold">💬 Room {roomId?.slice(0, 8)}</h2>
-      </header>
-      <div className="flex-1 overflow-y-auto">
-        {hasMore && (
-          <div className="p-4 text-center">
-            <button
-              onClick={() => loadMessages(false)}
-              className="text-sm text-accent hover:underline"
-            >
-              Load older messages
-            </button>
-          </div>
-        )}
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <p className="text-3xl mb-3">💬</p>
-            <p className="text-sm text-text-muted">No messages yet</p>
-            <p className="text-xs text-text-muted mt-1">Send the first message!</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {messages.map(msg => (
-              <MessageCard
-                key={msg.id}
-                id={msg.id}
-                from={msg.from}
-                fromName={msg.from}
-                content={msg.content}
-                mentions={msg.mentions}
-                reactions={msg.reactions}
-                createdAt={msg.created_at}
-                sequence={msg.sequence}
-                onReact={handleReact}
-              />
-            ))}
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+    <div className="h-full flex">
+      <div className={`flex-1 flex flex-col ${threadMessageId ? 'border-r border-border' : ''}`}>
+        <header className="px-6 py-3 border-b border-border shrink-0">
+          <h2 className="text-base font-semibold">💬 Room {roomId?.slice(0, 8)}</h2>
+        </header>
+        <div className="flex-1 overflow-y-auto">
+          {hasMore && (
+            <div className="p-4 text-center">
+              <button
+                onClick={() => loadMessages(false)}
+                className="text-sm text-accent hover:underline"
+              >
+                Load older messages
+              </button>
+            </div>
+          )}
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <p className="text-3xl mb-3">💬</p>
+              <p className="text-sm text-text-muted">No messages yet</p>
+              <p className="text-xs text-text-muted mt-1">Send the first message!</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {messages.map(msg => (
+                <MessageCard
+                  key={msg.id}
+                  id={msg.id}
+                  from={msg.from}
+                  fromName={msg.from}
+                  content={msg.content}
+                  mentions={msg.mentions}
+                  reactions={msg.reactions}
+                  createdAt={msg.created_at}
+                  sequence={msg.sequence}
+                  onReact={handleReact}
+                  onReply={setThreadMessageId}
+                />
+              ))}
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        <ComposeBar onSend={handleSend} placeholder="Type a message... Use @name to mention" />
       </div>
-      <ComposeBar onSend={handleSend} placeholder="Type a message... Use @name to mention" />
+
+      {threadMessageId && (
+        <div className="w-96 shrink-0">
+          <ThreadView
+            messageId={threadMessageId}
+            onClose={() => setThreadMessageId(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }
