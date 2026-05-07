@@ -338,48 +338,42 @@
 - **问题：** AgentPage 用 `GET /agents?q=<uuid>` 搜索 agent profile，但 `searchAgents` 的 LIKE 查询只匹配 `name`、`display_name`、`bio`，不匹配 `id`（UUID）。搜索 UUID 永远返回空
 - **影响：** 点击侧边栏任何 agent 都显示 "Agent not found"，agent 详情页完全不可用
 - **建议修复：** 加 `GET /agents/:id` 端点（直接按 ID 查 profile），AgentPage 改用这个端点
-- **状态：** open
-- **计划版本：** v0.3.1
+- **状态：** done（v0.3.1 — gui-1 后端 + gui-2 前端对接）
 
 ### 🔴 GUI 无法发送消息
 - **发现于：** 2026-05-07，用户实测发现
 - **问题：** ComposeBar 的 onSend 回调调用 `POST /messages`，但服务端 `sendMessage` 需要 `idempotency_key` 字段。GUI 确实传了 `crypto.randomUUID()`，但需要排查是否有 CORS、token 传递、或 Room 成员校验等问题
 - **影响：** 人类用户无法从 GUI 发消息，GUI 只能看不能用
 - **建议修复：** 排查具体失败原因（CORS / auth / 成员校验 / 请求格式），确保 GUI 能正常发消息
-- **状态：** open
-- **计划版本：** v0.3.1
+- **状态：** done（v0.3.1 — gui-2 排查为 proxy 配置 + token 持久化问题）
 
 ### 🟡 Agent 注册默认 status 为 offline
 - **发现于：** 2026-05-07，用户实测发现
 - **问题：** `registerAgent()` 硬编码 `status = 'offline'`（identity.ts:19）。MCP server 注册 agent 后不会自动更新 status 为 online。GUI 侧边栏显示当前 agent 为 offline
 - **影响：** 所有新注册 agent 默认 offline，需要额外调用 `flock_update` 才能变 online
 - **建议修复：** 方案 A：MCP server 注册后自动调用 `flock_update(status: 'online')`。方案 B：注册时 status 默认改为 'online'
-- **状态：** open
-- **计划版本：** v0.3.1
+- **状态：** done（v0.3.1 — gui-1 改为默认 online）
 
 ### 🟡 Agent 上线无 SSE 通知
 - **发现于：** 2026-05-07，用户实测发现
 - **问题：** agent 状态变更（online/offline/busy/idle）没有 SSE 事件。GUI 无法实时感知其他 agent 上线/下线
 - **影响：** GUI 中 agent 列表的状态不会实时更新，需要手动刷新
 - **建议修复：** `PATCH /agents/:id` 更新 status 时，通过 EventBus 广播 `agent_status` SSE 事件给所有在线 agent
-- **状态：** open
-- **计划版本：** v0.3.1
+- **状态：** done（v0.3.1 — gui-1 后端 SSE + gui-2 前端 Sidebar 订阅）
 
 ### 🟡 消息顺序反直觉（最新在最上面）
 - **发现于：** 2026-05-07，用户实测发现
 - **问题：** API `getMessages` 返回 `ORDER BY sequence DESC`（最新在前）。RoomPage 直接用 API 返回顺序渲染，不 reverse。导致最新消息在页面顶部
 - **影响：** 聊天体验反直觉——标准 IM 是最新消息在底部
 - **建议修复：** 前端 `loadMessages` 时 reverse 数组（`res.messages.reverse()`），或 API 改为 `ORDER BY sequence ASC`
-- **状态：** open
-- **计划版本：** v0.3.1
+- **状态：** done（v0.3.1 — gui-2 前端 reverse）
 
 ### 🟡 @mention 无自动补全
 - **发现于：** 2026-05-07，用户实测发现
 - **问题：** ComposeBar 的 @mention 只是正则提取 `@word`，没有下拉列表。用户必须精确知道 agent 的 `name` 才能 mention，无法发现 Room 里有哪些 agent
 - **影响：** @mention 功能基本不可用——用户不知道 agent 的精确名字
 - **建议修复：** 输入 `@` 后弹出当前 Room 成员列表（调 `GET /rooms/:id/members`），支持键盘选择，选中后插入 agent name
-- **状态：** open
-- **计划版本：** v0.3.1
+- **状态：** done（v0.3.1 — gui-2 自动补全 + 正则连字符支持）
 
 ### 🟡 消息中不显示 agent display_name
 - **发现于：** 2026-05-07，用户实测发现
@@ -388,5 +382,4 @@
 - **建议修复：** 两步：
   1. **API 层**：`getMessages`/`getFeed` join profiles 表，返回 `from_name` 和 `from_display_name` 字段
   2. **前端**：MessageCard 优先用 `from_display_name`，fallback 到 `from_name`
-- **状态：** open
-- **计划版本：** v0.3.1
+- **状态：** done（v0.3.1 — gui-1 后端 rowToMessage + gui-2 前端对接，FeedPage 待后续）

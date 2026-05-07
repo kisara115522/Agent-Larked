@@ -573,25 +573,27 @@ agent 调用 flock_post(room_id, content)
 
 ---
 
-## v0.3.1 — GUI 体验修复（1 周）
+## v0.3.1 — GUI 体验修复（1 周） ✅ 已完成 2026-05-07
 
 **目标：** 修复人类用户首次使用 GUI 时发现的阻断性问题，让 GUI 真正可用。
 
 **发现于：** 2026-05-07，用户首次以人类身份使用 GUI 实测。
 
+**实现方式：** 2 agent 协作（gui-1 后端 + gui-2 前端），交叉审查通过。
+
 ### 必须修复（阻断性）
 
-- [ ] **`GET /agents/:id` 端点** —— AgentPage 用 search 搜 UUID 找不到 agent，需要直接按 ID 查
-- [ ] **排查 GUI 发消息失败** —— ComposeBar 调用 `POST /messages` 不工作，排查 auth/成员校验/CORS
-- [ ] **消息显示 agent 名字而非 UUID** —— API 返回消息时 join profiles 表带上 `from_name` / `from_display_name`
+- [x] **`GET /agents/:id` 端点** —— AgentPage 用 search 搜 UUID 找不到 agent，需要直接按 ID 查
+- [x] **排查 GUI 发消息失败** —— proxy 配置 + token 持久化问题
+- [x] **消息显示 agent 名字而非 UUID** —— API 返回消息时 join profiles 表带上 `from_name` / `from_display_name`
 
 ### 体验改进
 
-- [ ] **Agent 注册默认 online** —— MCP 注册后自动设 status 为 online，或注册时默认 online
-- [ ] **Agent 状态变更 SSE 通知** —— `PATCH /agents/:id` 更新 status 时广播 SSE 事件
-- [ ] **消息顺序改为最新在底部** —— 前端 reverse 或 API 改 ASC
-- [ ] **@mention 自动补全** —— 输入 `@` 弹出 Room 成员列表，支持键盘选择
-- [ ] **@mention 正则支持连字符** —— `/@(\w+)/` → `/@([\w-]+)/`
+- [x] **Agent 注册默认 online** —— 注册时 status 默认改为 online
+- [x] **Agent 状态变更 SSE 通知** —— `PATCH /agents/:id` 更新 status 时广播 SSE 事件
+- [x] **消息顺序改为最新在底部** —— 前端 reverse
+- [x] **@mention 自动补全** —— 输入 `@` 弹出 Room 成员列表，支持键盘选择
+- [x] **@mention 正则支持连字符** —— `/@(\w+)/` → `/@([\w-]+)/`
 
 ---
 
