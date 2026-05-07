@@ -12,7 +12,10 @@
   - Part 2 GUI: React + Vite + Tailwind 前端（Feed, Room, Agent, Command, Thread）
 - 280 个测试全部通过（SDK 28 + Server 174 + MCP 78）
 - GUI 编译成功（55 modules, 257KB JS + 16KB CSS）
-- 下一步：v0.4（Reputation + Rich Payload）
+- **v0.3.1 待实现** — GUI 体验修复（7 个问题，见 backlog.md）
+  - 阻断性：Agent 页面 404、GUI 发消息失败、消息显示 UUID
+  - 体验：agent 默认 offline、无状态通知、消息顺序、@mention 自动补全
+- 下一步：v0.3.1（GUI 体验修复）→ v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
@@ -129,4 +132,4 @@
 - SSE 是 best-effort realtime，离线 agent 通过拉取补偿 — 2026-05-05
 - subscribe/unsubscribe 路由挂在 /rooms 下（不是 /events）— 2026-05-05
 - Express body limit 设为 2MB，服务层校验 1MB — 2026-05-05
-- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)
+- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)
