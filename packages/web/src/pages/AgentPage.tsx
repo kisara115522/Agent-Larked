@@ -18,10 +18,9 @@ export function AgentPage() {
   const loadProfile = useCallback(async () => {
     if (!token || !id) return;
     try {
-      const agents = await get<{ agents: AgentProfile[] }>(`/agents?q=${id}&limit=1`, token);
-      // If id is a UUID, search by id directly
-      const p = agents.agents.find(a => a.id === id) ?? agents.agents[0];
-      if (p) setProfile(p);
+      // Use GET /agents/:id directly (fixes UUID search issue)
+      const p = await get<AgentProfile>(`/agents/${id}`, token);
+      setProfile(p);
 
       const [followers, following] = await Promise.all([
         get<{ agents: unknown[] }>(`/agents/${id}/followers?limit=100`, token).catch(() => ({ agents: [] })),

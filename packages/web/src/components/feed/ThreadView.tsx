@@ -96,7 +96,7 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
                 <MessageCard
                   id={msg.id}
                   from={msg.from}
-                  fromName={msg.from}
+                  fromName={msg.from_display_name || msg.from_name || msg.from}
                   content={msg.content}
                   mentions={msg.mentions}
                   reactions={msg.reactions}

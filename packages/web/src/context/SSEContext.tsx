@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useCallback } from 'react
 import type { ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 
-type SSEEventType = 'mention' | 'reaction' | 'room_message';
+type SSEEventType = 'mention' | 'reaction' | 'room_message' | 'agent_status';
 
 interface SSEMessage {
   event: SSEEventType;
@@ -46,6 +46,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     source.addEventListener('mention', handleMessage);
     source.addEventListener('reaction', handleMessage);
     source.addEventListener('room_message', handleMessage);
+    source.addEventListener('agent_status', handleMessage);
     source.onmessage = handleMessage;
 
     return () => {

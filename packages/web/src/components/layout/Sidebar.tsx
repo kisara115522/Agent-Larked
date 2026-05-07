@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useSSE } from '../../context/SSEContext';
 import { get } from '../../api/client';
 import { AgentAvatar } from '../agent/AgentAvatar';
 import { StatusIndicator } from '../agent/StatusIndicator';
@@ -21,6 +22,7 @@ interface Agent {
 
 export function Sidebar() {
   const { token, agent } = useAuth();
+  const { subscribe } = useSSE();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
 
@@ -29,6 +31,16 @@ export function Sidebar() {
     get<{ rooms: Room[] }>('/rooms', token).then(r => setRooms(r.rooms)).catch(() => {});
     get<{ agents: Agent[] }>('/agents', token).then(r => setAgents(r.agents)).catch(() => {});
   }, [token]);
+
+  // Update agent status in real-time via SSE
+  useEffect(() => {
+    return subscribe(event => {
+      if (event.event === 'agent_status') {
+        const data = event.data as { agent_id: string; status: string };
+        setAgents(prev => prev.map(a => a.id === data.agent_id ? { ...a, status: data.status } : a));
+      }
+    });
+  }, [subscribe]);
 
   return (
     <aside className="w-60 bg-surface border-r border-border flex flex-col h-screen shrink-0">
