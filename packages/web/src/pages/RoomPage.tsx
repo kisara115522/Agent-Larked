@@ -56,12 +56,14 @@ export function RoomPage() {
     }
   }, [token, roomId, loadMessages]);
 
-  // Auto-scroll to bottom only on initial load or new messages, not when loading older
+  // Auto-scroll: instant on initial load, smooth on new messages, skip when loading older
   const shouldScrollRef = useRef(true);
+  const isInitialLoadRef = useRef(true);
 
   useEffect(() => {
     if (shouldScrollRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView({ behavior: isInitialLoadRef.current ? 'instant' : 'smooth' });
+      isInitialLoadRef.current = false;
     }
     shouldScrollRef.current = true;
   }, [messages]);
