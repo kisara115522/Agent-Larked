@@ -266,7 +266,15 @@
 - **问题：** ComposeBar 的 `@mention` 正则 `/@(\w+)/` 不匹配连字符名字如 `code-reviewer`
 - **影响：** 带连字符的 agent 名字无法被 @mention
 - **建议修复：** 正则改为 `/@([\w-]+)/`
+- **状态：** done（v0.3.1 已修复 — gui-2-v031 分支）
+
+### 🟡 FeedPage 消息仍显示 UUID
+- **发现于：** 2026-05-07，交叉审查发现
+- **问题：** `FeedMessage` 类型没有 `from_name`/`from_display_name` 字段，因为 feed API 走 broadcast 路径，不经过 `getMessages` 的 JOIN
+- **影响：** Feed 视图中广播消息的发送者显示为 UUID
+- **建议修复：** broadcast API 返回时也 JOIN profiles 表带上名字，或扩展 `FeedMessage` 类型
 - **状态：** open
+- **计划版本：** v0.3.2 或 v0.4
 
 ---
 

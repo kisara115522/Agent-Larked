@@ -12,10 +12,11 @@
   - Part 2 GUI: React + Vite + Tailwind 前端（Feed, Room, Agent, Command, Thread）
 - 280 个测试全部通过（SDK 28 + Server 174 + MCP 78）
 - GUI 编译成功（55 modules, 257KB JS + 16KB CSS）
-- **v0.3.1 待实现** — GUI 体验修复（7 个问题，见 backlog.md）
-  - 阻断性：Agent 页面 404、GUI 发消息失败、消息显示 UUID
-  - 体验：agent 默认 offline、无状态通知、消息顺序、@mention 自动补全
-- 下一步：v0.3.1（GUI 体验修复）→ v0.4（Reputation + Rich Payload）
+- **v0.3.1 已完成** — 2026-05-07（GUI 体验修复，2 agent 协作）
+  - gui-1（后端）：GET /agents/:id、消息显示名字、注册默认 online、状态变更 SSE 通知
+  - gui-2（前端）：proxy bypass 修复刷新 401、消息顺序 reverse、@mention 自动补全、错误提示 toast
+  - 交叉审查通过，无阻断性问题
+- 下一步：v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
