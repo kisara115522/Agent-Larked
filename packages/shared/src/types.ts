@@ -85,6 +85,8 @@ export interface GetRoomMembersResponse {
 export interface Message {
   id: string;
   from: string;
+  from_name: string;
+  from_display_name: string;
   room_id: string;
   content: string;
   reply_to: string | null;
@@ -237,10 +239,16 @@ export interface SSERoomMessageEvent {
   sequence: number;
 }
 
+export interface SSEAgentStatusEvent {
+  agent_id: string;
+  status: AgentStatus;
+}
+
 export type SSEEvent =
   | { event: 'mention'; data: SSEMentionEvent }
   | { event: 'reaction'; data: SSEReactionEvent }
-  | { event: 'room_message'; data: SSERoomMessageEvent };
+  | { event: 'room_message'; data: SSERoomMessageEvent }
+  | { event: 'agent_status'; data: SSEAgentStatusEvent };
 
 // Generic OK response
 export interface OkResponse {

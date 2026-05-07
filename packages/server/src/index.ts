@@ -19,7 +19,7 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   app.use(express.json({ limit: '2mb' }));
 
   // Routes
-  app.use('/agents', agentsRouter(db));
+  app.use('/agents', agentsRouter(db, eventBus));
   app.use('/agents', followsRouter(db));
   app.use('/agents', agentInvitesRouter(db));
   app.use('/invites', invitesActionsRouter(db));

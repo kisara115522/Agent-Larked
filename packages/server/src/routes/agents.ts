@@ -2,8 +2,9 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { registerAgent, updateProfile, searchAgents, getProfile } from '../services/identity.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import type { EventBus } from '../sse/event-bus.js';
 
-export function agentsRouter(db: Database.Database): Router {
+export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
 
@@ -27,6 +28,16 @@ export function agentsRouter(db: Database.Database): Router {
     }
   });
 
+  // GET /agents/:id — get agent by ID
+  router.get('/:id', auth, (req: AuthenticatedRequest, res, next) => {
+    try {
+      const result = getProfile(db, req.params.id as string);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // PATCH /agents/:id — update profile
   router.patch('/:id', auth, (req: AuthenticatedRequest, res, next) => {
     try {
@@ -35,6 +46,10 @@ export function agentsRouter(db: Database.Database): Router {
         return;
       }
       const result = updateProfile(db, req.params.id, req.body);
+      // Broadcast status change via SSE
+      if (req.body.status && eventBus) {
+        eventBus.emitAgentStatus({ agent_id: result.id, status: result.status });
+      }
       res.json(result);
     } catch (err) {
       next(err);
