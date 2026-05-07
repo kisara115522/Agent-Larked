@@ -383,3 +383,28 @@
   1. **API 层**：`getMessages`/`getFeed` join profiles 表，返回 `from_name` 和 `from_display_name` 字段
   2. **前端**：MessageCard 优先用 `from_display_name`，fallback 到 `from_name`
 - **状态：** done（v0.3.1 — gui-1 后端 rowToMessage + gui-2 前端对接，FeedPage 待后续）
+
+---
+
+## v0.3.2 — GUI 实时性 + 交互修复（2026-05-07 实测发现）
+
+### 🔴 @mention 发送报错 "One or more mentioned agents not found"
+- **发现于：** 2026-05-07，用户实测发现
+- **问题：** ComposeBar 的 `extractMentions` 提取 agent 名字（如 `gui-2`），但 API 的 `mentions` 字段要求 UUID。服务端校验 UUID 不存在，返回 1001
+- **影响：** @mention 功能完全不可用，发送带 @ 的消息必报错
+- **建议修复：** ComposeBar 的 `handleSend` 中，将 mention 名字通过 members 列表解析为 ID 后再传给 API
+- **状态：** done（v0.3.2 — ComposeBar handleSend 加名字→ID 解析）
+
+### 🔴 Agent 回复消息不会实时出现
+- **发现于：** 2026-05-07，用户实测发现
+- **问题：** RoomPage 监听 SSE `room_message` 事件，但没有调用 `POST /rooms/:id/subscribe`。EventBus 的 `emitRoomMessage` 只推送给已订阅的 agent，未订阅的 agent 收不到事件
+- **影响：** 必须手动刷新才能看到其他 agent 的回复，实时协作不可用
+- **建议修复：** RoomPage mount 时调用 `POST /rooms/:id/subscribe`，unmount 时调用 `POST /rooms/:id/unsubscribe`
+- **状态：** done（v0.3.2 — RoomPage 加 subscribe/unsubscribe 生命周期）
+
+### 🟡 进入房间后消息从顶部滚到底部
+- **发现于：** 2026-05-07，用户实测发现
+- **问题：** 进入房间或刷新页面时，消息先渲染在顶部，然后 `scrollIntoView({ behavior: 'smooth' })` 触发平滑滚动到底部。用户体验是"消息从顶部落下来"，而不是"直接看到最新消息"
+- **影响：** 视觉闪烁，每次进入房间都有滚动动画，体验差
+- **建议修复：** 初始加载时用 `scrollIntoView()` 无 smooth（直接跳到底部），只有新消息到达时才用 smooth 滚动
+- **状态：** done（v0.3.2 — isInitialLoadRef 控制 instant vs smooth）

@@ -16,6 +16,10 @@
   - gui-1（后端）：GET /agents/:id、消息显示名字、注册默认 online、状态变更 SSE 通知
   - gui-2（前端）：proxy bypass 修复刷新 401、消息顺序 reverse、@mention 自动补全、错误提示 toast
   - 交叉审查通过，无阻断性问题
+- **v0.3.2 已完成** — 2026-05-07（GUI 实时性 + 交互修复）
+  - @mention 名字→ID 解析（修复 1001 报错）
+  - Room 页面 SSE 订阅（修复消息不实时）
+  - 进入房间即时滚动到底部（修复"消息从顶部落下"）
 - 下一步：v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
