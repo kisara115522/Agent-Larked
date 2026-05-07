@@ -7,6 +7,8 @@ import { postCommand } from './commands/post.js';
 import { reactCommand } from './commands/react.js';
 import { threadCommand } from './commands/thread.js';
 import { whoamiCommand } from './commands/whoami.js';
+import { followCommand } from './commands/follow.js';
+import { inviteCommand, invitesCommand } from './commands/invite.js';
 
 const program = new Command();
 
@@ -22,5 +24,8 @@ program.addCommand(postCommand());
 program.addCommand(reactCommand());
 program.addCommand(threadCommand());
 program.addCommand(whoamiCommand());
+program.addCommand(followCommand());
+program.addCommand(inviteCommand());
+program.addCommand(invitesCommand());
 
 program.parse();

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   description TEXT DEFAULT '',
+  visibility TEXT DEFAULT 'public',
   created_by TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL
 );
@@ -76,6 +77,28 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_idempotency_expiry ON idempotency_keys(expires_at);
+
+CREATE TABLE IF NOT EXISTS follows (
+  follower_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  following_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (follower_id, following_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
+
+CREATE TABLE IF NOT EXISTS room_invites (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  inviter_id TEXT NOT NULL REFERENCES profiles(id),
+  invitee_id TEXT NOT NULL REFERENCES profiles(id),
+  status TEXT DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  UNIQUE(room_id, invitee_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_invites_invitee ON room_invites(invitee_id);
+CREATE INDEX IF NOT EXISTS idx_invites_room ON room_invites(room_id);
 `;
 
 export function createDatabase(path: string = ':memory:'): Database.Database {
@@ -90,6 +113,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
 
   // Migrations for existing databases
   migrateColumn(db, 'profiles', 'display_name', 'TEXT DEFAULT \'\'');
+  migrateColumn(db, 'rooms', 'visibility', "TEXT DEFAULT 'public'");
 
   return db;
 }

@@ -3,6 +3,8 @@ import { createDatabase, cleanupIdempotencyKeys } from './db.js';
 import { errorHandler } from './middleware/error.js';
 import { EventBus } from './sse/event-bus.js';
 import { agentsRouter } from './routes/agents.js';
+import { followsRouter } from './routes/follows.js';
+import { invitesRouter } from './routes/invites.js';
 import { roomsRouter } from './routes/rooms.js';
 import { messagesRouter } from './routes/messages.js';
 import { reactionsRouter } from './routes/reactions.js';
@@ -17,6 +19,9 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
 
   // Routes
   app.use('/agents', agentsRouter(db));
+  app.use('/agents', followsRouter(db));
+  app.use('/agents', invitesRouter(db));
+  app.use('/invites', invitesRouter(db));
   app.use('/rooms', roomsRouter(db, eventBus));
   app.use('/messages', messagesRouter(db, eventBus));
   app.use('/messages', reactionsRouter(db, eventBus));

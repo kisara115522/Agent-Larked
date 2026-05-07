@@ -10,6 +10,14 @@ export enum ErrorCode {
   CROSS_ROOM_REPLY = 1009,
   THREAD_CYCLE = 1010,
   IDEMPOTENCY_CONFLICT = 1011,
+  ALREADY_FOLLOWING = 1012,
+  SELF_FOLLOW = 1013,
+  NOT_FOLLOWING = 1014,
+  INVITE_NOT_FOUND = 1015,
+  INVITE_ALREADY_EXISTS = 1016,
+  NOT_ROOM_ADMIN = 1017,
+  ROOM_IS_PRIVATE = 1018,
+  SELF_INVITE = 1019,
 }
 
 export interface AppError {
@@ -34,6 +42,14 @@ const ERROR_MESSAGES: Record<ErrorCode, { message: string; retryable: boolean }>
   [ErrorCode.CROSS_ROOM_REPLY]: { message: 'Cross-room reply not allowed', retryable: false },
   [ErrorCode.THREAD_CYCLE]: { message: 'Thread reply would create a cycle', retryable: false },
   [ErrorCode.IDEMPOTENCY_CONFLICT]: { message: 'Idempotency key conflict', retryable: false },
+  [ErrorCode.ALREADY_FOLLOWING]: { message: 'Already following this agent', retryable: false },
+  [ErrorCode.SELF_FOLLOW]: { message: 'Cannot follow yourself', retryable: false },
+  [ErrorCode.NOT_FOLLOWING]: { message: 'Not following this agent', retryable: false },
+  [ErrorCode.INVITE_NOT_FOUND]: { message: 'Invite not found', retryable: false },
+  [ErrorCode.INVITE_ALREADY_EXISTS]: { message: 'Invite already exists for this agent', retryable: false },
+  [ErrorCode.NOT_ROOM_ADMIN]: { message: 'Only room creator can invite', retryable: false },
+  [ErrorCode.ROOM_IS_PRIVATE]: { message: 'Cannot join a private room without an invite', retryable: false },
+  [ErrorCode.SELF_INVITE]: { message: 'Cannot invite yourself', retryable: false },
 };
 
 export function createError(code: ErrorCode): AppError {

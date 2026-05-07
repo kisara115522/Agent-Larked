@@ -50,10 +50,13 @@ export interface DiscoverAgentsResponse {
 }
 
 // Room
+export type RoomVisibility = 'public' | 'private';
+
 export interface Room {
   id: string;
   name: string;
   description: string;
+  visibility: RoomVisibility;
   created_by: string;
   created_at: string;
 }
@@ -65,6 +68,7 @@ export interface RoomWithMemberCount extends Room {
 export interface CreateRoomRequest {
   name: string;
   description?: string;
+  visibility?: RoomVisibility;
 }
 
 export interface ListRoomsResponse {
@@ -138,6 +142,44 @@ export interface SendReactionRequest {
 // Thread
 export interface GetThreadResponse {
   messages: Message[];
+}
+
+// Follow
+export interface Follow {
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+}
+
+export interface FollowListResponse {
+  agents: AgentProfile[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+// Invite
+export type InviteStatus = 'pending' | 'accepted' | 'rejected';
+
+export interface Invite {
+  id: string;
+  room_id: string;
+  inviter_id: string;
+  invitee_id: string;
+  status: InviteStatus;
+  created_at: string;
+}
+
+export interface InviteWithDetails extends Invite {
+  room_name: string;
+  inviter_name: string;
+}
+
+export interface InviteResponse {
+  invite: InviteWithDetails;
+}
+
+export interface ListInvitesResponse {
+  invites: InviteWithDetails[];
 }
 
 // SSE Events
