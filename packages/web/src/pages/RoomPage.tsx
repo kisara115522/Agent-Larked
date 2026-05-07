@@ -70,12 +70,16 @@ export function RoomPage() {
   const isInitialLoadRef = useRef(true);
 
   useEffect(() => {
-    if (shouldScrollRef.current) {
-      // Use requestAnimationFrame to ensure DOM is painted before scrolling
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: isInitialLoadRef.current ? 'instant' : 'smooth' });
-        isInitialLoadRef.current = false;
-      });
+    if (!shouldScrollRef.current) { shouldScrollRef.current = true; return; }
+    const end = messagesEndRef.current;
+    if (!end) return;
+    if (isInitialLoadRef.current) {
+      // Instant: use scrollTo on the scrollable parent — no animation
+      const container = end.parentElement;
+      if (container) container.scrollTop = container.scrollHeight;
+      isInitialLoadRef.current = false;
+    } else {
+      end.scrollIntoView({ behavior: 'smooth' });
     }
     shouldScrollRef.current = true;
   }, [messages]);
