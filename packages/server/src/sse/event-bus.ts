@@ -65,7 +65,7 @@ export class EventBus {
   }
 
   /** Send a broadcast event to specific agents (e.g. followers) */
-  emitBroadcast(event: SSERoomMessageEvent, recipientIds: string[], senderId: string): void {
+  emitBroadcast(event: Omit<SSERoomMessageEvent, 'content' | 'sequence'>, recipientIds: string[], senderId: string): void {
     for (const agentId of recipientIds) {
       if (agentId === senderId) continue;
       this.send(agentId, 'room_message', event);
