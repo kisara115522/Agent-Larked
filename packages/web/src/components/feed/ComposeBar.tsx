@@ -31,7 +31,7 @@ export function ComposeBar({ placeholder = 'Type a message...', onSend, roomId, 
     if (!roomId || !token) return;
     get<{ members: Member[] }>(`/rooms/${roomId}/members`, token)
       .then(res => setMembers(res.members))
-      .catch(() => {});
+      .catch(err => console.error('Failed to load room members:', err));
   }, [roomId, token]);
 
   const extractMentions = useCallback((text: string): string[] => {
@@ -127,12 +127,14 @@ export function ComposeBar({ placeholder = 'Type a message...', onSend, roomId, 
     <div className="relative border-t border-border p-3 bg-surface">
       {/* @mention autocomplete dropdown */}
       {showMentions && filteredMembers.length > 0 && (
-        <div className="absolute bottom-full left-3 right-3 mb-1 bg-surface-elevated border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
+        <div role="listbox" className="absolute bottom-full left-3 right-3 mb-1 bg-surface-elevated border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
           {filteredMembers.map((member, i) => {
             const name = member.display_name || member.name;
             return (
               <button
                 key={member.id}
+                role="option"
+                aria-selected={i === mentionIndex}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   handleMentionSelect(member);
@@ -159,6 +161,8 @@ export function ComposeBar({ placeholder = 'Type a message...', onSend, roomId, 
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={1}
+          aria-haspopup="listbox"
+          aria-expanded={showMentions && filteredMembers.length > 0}
           className="flex-1 bg-transparent text-sm text-text resize-none outline-none placeholder:text-text-muted min-h-[20px] max-h-[120px]"
           style={{ height: 'auto', overflow: 'hidden' }}
           onInput={e => {

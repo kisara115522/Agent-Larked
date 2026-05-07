@@ -18,7 +18,13 @@ export function RoomPage() {
   const cursorRef = useRef<number | null>(null);
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Cleanup error timeout on unmount
+  useEffect(() => {
+    return () => { if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current); };
+  }, []);
 
   const loadMessages = useCallback(async (reset = false) => {
     if (!token || !roomId) return;
@@ -80,7 +86,8 @@ export function RoomPage() {
     } catch (err) {
       console.error('Failed to send message:', err);
       setError(err instanceof Error ? err.message : 'Failed to send message');
-      setTimeout(() => setError(null), 5000);
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => setError(null), 5000);
     }
   };
 
