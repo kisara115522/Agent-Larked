@@ -49,6 +49,11 @@ export function RoomPage() {
 
   useEffect(() => {
     loadMessages(true);
+    // Subscribe to room SSE events so we receive real-time messages
+    if (token && roomId) {
+      post(`/rooms/${roomId}/subscribe`, token).catch(() => {});
+      return () => { post(`/rooms/${roomId}/unsubscribe`, token).catch(() => {}); };
+    }
   }, [token, roomId, loadMessages]);
 
   // Auto-scroll to bottom only on initial load or new messages, not when loading older

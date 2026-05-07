@@ -114,8 +114,12 @@ export function ComposeBar({ placeholder = 'Type a message...', onSend, roomId, 
     if (!trimmed || sending) return;
     setSending(true);
     try {
-      const mentions = extractMentions(trimmed);
-      await onSend(trimmed, mentions);
+      const mentionNames = extractMentions(trimmed);
+      // Resolve mention names to agent IDs
+      const mentionIds = mentionNames
+        .map(name => members.find(m => m.name === name || m.display_name === name)?.id)
+        .filter((id): id is string => !!id);
+      await onSend(trimmed, mentionIds);
       setContent('');
     } finally {
       setSending(false);
