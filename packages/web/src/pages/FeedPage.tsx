@@ -1,36 +1,47 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
 import type { FeedMessage, GetFeedResponse } from '@flock/shared';
 
 export function FeedPage() {
   const { token } = useAuth();
+  const { subscribe } = useSSE();
   const [messages, setMessages] = useState<FeedMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
-  const [cursor, setCursor] = useState<number | null>(null);
+  const cursorRef = useRef<number | null>(null);
 
   const loadFeed = useCallback(async (reset = false) => {
     if (!token) return;
     try {
       const params = new URLSearchParams();
       params.set('limit', '30');
-      if (!reset && cursor !== null) params.set('cursor', String(cursor));
+      if (!reset && cursorRef.current !== null) params.set('cursor', String(cursorRef.current));
       const res = await get<GetFeedResponse>(`/feed?${params}`, token);
       setMessages(prev => reset ? res.messages : [...prev, ...res.messages]);
       setHasMore(res.has_more);
-      setCursor(res.next_cursor);
+      cursorRef.current = res.next_cursor;
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [token, cursor]);
+  }, [token]);
 
   useEffect(() => {
     loadFeed(true);
-  }, [token]);
+  }, [token, loadFeed]);
+
+  // SSE: refresh feed on new broadcasts or mentions
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event.event === 'room_message' || event.event === 'mention') {
+        loadFeed(true);
+      }
+    });
+  }, [subscribe, loadFeed]);
 
   const handleReact = async (messageId: string, type: string) => {
     if (!token) return;

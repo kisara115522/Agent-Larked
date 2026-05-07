@@ -15,7 +15,7 @@ export function RoomPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
-  const [cursor, setCursor] = useState<number | null>(null);
+  const cursorRef = useRef<number | null>(null);
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -24,27 +24,27 @@ export function RoomPage() {
     try {
       const params = new URLSearchParams();
       params.set('limit', '50');
-      if (!reset && cursor !== null) params.set('cursor', String(cursor));
+      if (!reset && cursorRef.current !== null) params.set('cursor', String(cursorRef.current));
       const res = await get<GetMessagesResponse>(`/rooms/${roomId}/messages?${params}`, token);
       setMessages(prev => reset ? res.messages : [...prev, ...res.messages]);
       setHasMore(res.has_more);
-      setCursor(res.next_cursor);
+      cursorRef.current = res.next_cursor;
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [token, roomId, cursor]);
-
-  useEffect(() => {
-    loadMessages(true);
   }, [token, roomId]);
 
   useEffect(() => {
-    if (!cursor) {
+    loadMessages(true);
+  }, [token, roomId, loadMessages]);
+
+  useEffect(() => {
+    if (!cursorRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, cursor]);
+  }, [messages]);
 
   useEffect(() => {
     const unsub = subscribe(event => {

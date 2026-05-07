@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { broadcastMessage, getFeed } from '../services/broadcast.js';
+import { getFollowerIds } from '../services/follow.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 
-export function broadcastRouter(db: Database.Database, _eventBus: EventBus): Router {
+export function broadcastRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
 
@@ -12,6 +13,15 @@ export function broadcastRouter(db: Database.Database, _eventBus: EventBus): Rou
   router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       const result = broadcastMessage(db, req.agentId!, req.body);
+      // Notify followers via SSE
+      const followerIds = getFollowerIds(db, req.agentId!);
+      if (followerIds.length > 0) {
+        eventBus.emitBroadcast(
+          { room_id: `broadcast-${req.agentId}`, message_id: result.id, from: req.agentId! },
+          followerIds,
+          req.agentId!,
+        );
+      }
       res.status(201).json(result);
     } catch (err) {
       next(err);

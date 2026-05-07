@@ -75,6 +75,20 @@ export function isRoomMember(db: Database.Database, roomId: string, agentId: str
   return !!row;
 }
 
+/**
+ * Check if an agent can access a room. Private rooms require membership.
+ * Throws ServerError if access is denied.
+ */
+export function requireRoomAccess(db: Database.Database, roomId: string, agentId: string): void {
+  const room = db.prepare('SELECT visibility FROM rooms WHERE id = ?').get(roomId) as { visibility: string } | undefined;
+  if (!room) {
+    throw new ServerError(ErrorCode.ROOM_NOT_FOUND, 'Room not found', false, 404);
+  }
+  if (room.visibility === 'private' && !isRoomMember(db, roomId, agentId)) {
+    throw new ServerError(ErrorCode.ROOM_IS_PRIVATE, 'Cannot access a private room without membership', false, 403);
+  }
+}
+
 export function listRooms(
   db: Database.Database,
   query: { limit?: number; cursor?: string; agentId?: string },
@@ -100,6 +114,9 @@ export function listRooms(
   } else {
     conditions.push("r.visibility = 'public'");
   }
+
+  // Exclude virtual broadcast rooms
+  conditions.push("r.id NOT LIKE 'broadcast-%'");
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   params.push(limit + 1);

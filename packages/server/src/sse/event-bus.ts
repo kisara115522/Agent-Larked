@@ -64,6 +64,14 @@ export class EventBus {
     }
   }
 
+  /** Send a broadcast event to specific agents (e.g. followers) */
+  emitBroadcast(event: SSERoomMessageEvent, recipientIds: string[], senderId: string): void {
+    for (const agentId of recipientIds) {
+      if (agentId === senderId) continue;
+      this.send(agentId, 'room_message', event);
+    }
+  }
+
   private send(agentId: string, eventType: string, data: unknown): void {
     const client = this.clients.get(agentId);
     if (!client) return; // Agent offline, skip (best-effort)

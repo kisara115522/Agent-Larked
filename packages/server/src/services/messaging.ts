@@ -122,7 +122,19 @@ export function getMessages(
   db: Database.Database,
   roomId: string,
   query: GetMessagesQuery = {},
+  agentId?: string,
 ): GetMessagesResponse {
+  // Check room exists and get visibility
+  const room = db.prepare('SELECT id, visibility FROM rooms WHERE id = ?').get(roomId) as { id: string; visibility: string } | undefined;
+  if (!room) {
+    throw new ServerError(ErrorCode.ROOM_NOT_FOUND, 'Room not found', false, 404);
+  }
+
+  // Private rooms require membership
+  if (room.visibility === 'private' && agentId && !isRoomMember(db, roomId, agentId)) {
+    throw new ServerError(ErrorCode.NOT_ROOM_MEMBER, 'Not a member of this private room', false, 403);
+  }
+
   const limit = Math.min(query.limit ?? 20, 100);
   const params: unknown[] = [roomId];
 

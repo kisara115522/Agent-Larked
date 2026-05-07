@@ -33,16 +33,23 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
 
   const handleSend = async (content: string, mentions: string[]) => {
     if (!token) return;
-    const parent = messages[messages.length - 1];
-    if (!parent) return;
-    await post('/messages', token, {
-      room_id: parent.room_id,
-      content,
-      mentions: mentions.length > 0 ? mentions : undefined,
-      reply_to: parent.id,
-      idempotency_key: crypto.randomUUID(),
-    });
-    await loadThread();
+    // Use the root message's room_id for the reply. The thread's first message
+    // (index 0) is always the root. reply_to points to the root messageId prop,
+    // not the last message in the chain.
+    const root = messages[0];
+    if (!root) return;
+    try {
+      await post('/messages', token, {
+        room_id: root.room_id,
+        content,
+        mentions: mentions.length > 0 ? mentions : undefined,
+        reply_to: messageId,
+        idempotency_key: crypto.randomUUID(),
+      });
+      await loadThread();
+    } catch {
+      // ignore — ComposeBar handles UI feedback
+    }
   };
 
   const handleReact = async (msgId: string, type: string) => {

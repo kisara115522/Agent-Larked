@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { createRoom, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, inviteToRoom, acceptInvite, rejectInvite } from '../services/room.js';
+import { createRoom, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, inviteToRoom, acceptInvite, rejectInvite, requireRoomAccess } from '../services/room.js';
 import { getMessages } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
@@ -36,8 +36,9 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // GET /rooms/:id/members — list room members
-  router.get('/:id/members', auth, (req, res, next) => {
+  router.get('/:id/members', auth, (req: AuthenticatedRequest, res, next) => {
     try {
+      requireRoomAccess(db, req.params.id as string, req.agentId!);
       const result = getRoomMembers(db, req.params.id as string);
       res.json(result);
     } catch (err) {
@@ -90,6 +91,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   // GET /rooms/:id/messages — get room messages
   router.get('/:id/messages', auth, (req: AuthenticatedRequest, res, next) => {
     try {
+      requireRoomAccess(db, req.params.id as string, req.agentId!);
       const rawLimit = req.query.limit ? Number(req.query.limit) : undefined;
       const limit = rawLimit !== undefined && Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
       const result = getMessages(db, req.params.id as string, {
@@ -103,8 +105,9 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // GET /rooms/:id — room details (must be after /:id/members and /:id/messages)
-  router.get('/:id', auth, (req, res, next) => {
+  router.get('/:id', auth, (req: AuthenticatedRequest, res, next) => {
     try {
+      requireRoomAccess(db, req.params.id as string, req.agentId!);
       const result = getRoom(db, req.params.id as string);
       res.json(result);
     } catch (err) {
