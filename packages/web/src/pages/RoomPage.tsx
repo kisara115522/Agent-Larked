@@ -12,6 +12,15 @@ export function RoomPage() {
   const { id: roomId } = useParams<{ id: string }>();
   const { token } = useAuth();
   const { subscribe } = useSSE();
+
+  // Prevent browser from restoring scroll position on refresh — we handle it ourselves
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      const prev = window.history.scrollRestoration;
+      window.history.scrollRestoration = 'manual';
+      return () => { window.history.scrollRestoration = prev; };
+    }
+  }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -62,8 +71,11 @@ export function RoomPage() {
 
   useEffect(() => {
     if (shouldScrollRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: isInitialLoadRef.current ? 'instant' : 'smooth' });
-      isInitialLoadRef.current = false;
+      // Use requestAnimationFrame to ensure DOM is painted before scrolling
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: isInitialLoadRef.current ? 'instant' : 'smooth' });
+        isInitialLoadRef.current = false;
+      });
     }
     shouldScrollRef.current = true;
   }, [messages]);
