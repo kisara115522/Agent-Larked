@@ -28,7 +28,7 @@ function formatTime(iso: string): string {
 
 function renderContent(content: string): React.ReactNode {
   // Split on @mentions and render them as pills
-  const parts = content.split(/(@\w+)/g);
+  const parts = content.split(/(@[\w-]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('@')) {
       return (

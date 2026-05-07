@@ -110,7 +110,7 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
         )}
       </div>
 
-      <ComposeBar onSend={handleSend} placeholder="Reply to thread..." />
+      <ComposeBar onSend={handleSend} placeholder="Reply to thread..." roomId={messages[0]?.room_id} token={token ?? undefined} />
     </div>
   );
 }
