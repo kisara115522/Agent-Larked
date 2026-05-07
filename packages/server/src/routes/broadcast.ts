@@ -30,7 +30,7 @@ export function feedRouter(db: Database.Database): Router {
     try {
       const query = {
         limit: req.query.limit !== undefined ? Number(req.query.limit) : undefined,
-        cursor: req.query.cursor !== undefined ? String(req.query.cursor) : undefined,
+        cursor: req.query.cursor !== undefined ? Number(req.query.cursor) : undefined,
       };
       const result = getFeed(db, req.agentId!, query);
       res.json(result);

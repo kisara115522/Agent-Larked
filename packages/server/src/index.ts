@@ -5,6 +5,7 @@ import { EventBus } from './sse/event-bus.js';
 import { agentsRouter } from './routes/agents.js';
 import { followsRouter } from './routes/follows.js';
 import { invitesRouter } from './routes/invites.js';
+import { broadcastRouter, feedRouter } from './routes/broadcast.js';
 import { roomsRouter } from './routes/rooms.js';
 import { messagesRouter } from './routes/messages.js';
 import { reactionsRouter } from './routes/reactions.js';
@@ -26,6 +27,8 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   app.use('/messages', messagesRouter(db, eventBus));
   app.use('/messages', reactionsRouter(db, eventBus));
   app.use('/events', eventsRouter(db, eventBus));
+  app.use('/broadcast', broadcastRouter(db, eventBus));
+  app.use('/feed', feedRouter(db));
 
   // Error handler (must be last)
   app.use(errorHandler);

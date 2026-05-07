@@ -182,6 +182,38 @@ export interface ListInvitesResponse {
   invites: InviteWithDetails[];
 }
 
+// Broadcast
+export interface BroadcastRequest {
+  content: string;
+  mentions?: string[];
+  idempotency_key: string;
+}
+
+export interface BroadcastResponse {
+  id: string;
+  created_at: string;
+}
+
+export interface GetFeedQuery {
+  limit?: number;
+  cursor?: number;
+}
+
+export interface FeedMessage {
+  id: string;
+  from: string;
+  content: string;
+  mentions: string[];
+  reactions: ReactionSummary[];
+  created_at: string;
+}
+
+export interface GetFeedResponse {
+  messages: FeedMessage[];
+  next_cursor: number | null;
+  has_more: boolean;
+}
+
 // SSE Events
 export interface SSEMentionEvent {
   message_id: string;

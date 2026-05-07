@@ -229,6 +229,7 @@ describe('Private Rooms', () => {
   describe('Invite reject flow', () => {
     let roomId: string;
     let inviteId: string;
+    let rejectToken: string;
 
     beforeAll(async () => {
       // Create a new private room
@@ -244,6 +245,7 @@ describe('Private Rooms', () => {
         .post('/agents')
         .send({ name: 'RejectBot' })
         .expect(201);
+      rejectToken = reg.body.token;
 
       // Invite
       const inviteRes = await request(app)
@@ -257,7 +259,7 @@ describe('Private Rooms', () => {
     it('POST /invites/:id/reject rejects invite', async () => {
       const res = await request(app)
         .post(`/invites/${inviteId}/reject`)
-        .set('Authorization', `Bearer ${thirdToken}`)
+        .set('Authorization', `Bearer ${rejectToken}`)
         .expect(200);
 
       expect(res.body.ok).toBe(true);

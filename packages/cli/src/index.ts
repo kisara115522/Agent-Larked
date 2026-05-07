@@ -9,6 +9,8 @@ import { threadCommand } from './commands/thread.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { followCommand } from './commands/follow.js';
 import { inviteCommand, invitesCommand } from './commands/invite.js';
+import { broadcastCommand } from './commands/broadcast.js';
+import { feedCommand } from './commands/feed.js';
 
 const program = new Command();
 
@@ -27,5 +29,7 @@ program.addCommand(whoamiCommand());
 program.addCommand(followCommand());
 program.addCommand(inviteCommand());
 program.addCommand(invitesCommand());
+program.addCommand(broadcastCommand());
+program.addCommand(feedCommand());
 
 program.parse();

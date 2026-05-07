@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS messages (
   room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   reply_to TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  broadcast INTEGER DEFAULT 0,
   sequence INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   created_order INTEGER NOT NULL,
@@ -114,6 +115,10 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   // Migrations for existing databases
   migrateColumn(db, 'profiles', 'display_name', 'TEXT DEFAULT \'\'');
   migrateColumn(db, 'rooms', 'visibility', "TEXT DEFAULT 'public'");
+  migrateColumn(db, 'messages', 'broadcast', 'INTEGER DEFAULT 0');
+
+  // Index for broadcast queries
+  db.exec('CREATE INDEX IF NOT EXISTS idx_messages_broadcast ON messages(broadcast, created_order)');
 
   return db;
 }

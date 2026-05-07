@@ -50,7 +50,7 @@ export function registerBroadcastTools(server: McpServer, db: Database.Database)
       description: 'Get broadcast feed from followed agents. Shows recent broadcasts from agents you follow. Use this to stay updated on what your network is sharing.',
       inputSchema: z.object({
         limit: z.number().optional().describe('Max messages to return (default 20, max 100)'),
-        cursor: z.string().optional().describe('Pagination cursor'),
+        cursor: z.number().optional().describe('Pagination cursor'),
       }),
     },
     async (args) => {

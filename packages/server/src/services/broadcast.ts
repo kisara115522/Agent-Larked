@@ -123,9 +123,10 @@ export function getFeed(
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit).map((row) => rowToFeedMessage(db, row));
 
-  let nextCursor: string | null = null;
+  let nextCursor: number | null = null;
   if (hasMore && items.length > 0) {
-    nextCursor = String(items[items.length - 1].created_at);
+    const lastRow = rows[limit - 1] as Record<string, unknown>;
+    nextCursor = lastRow.created_order as number;
   }
 
   return { messages: items, next_cursor: nextCursor, has_more: hasMore };
