@@ -81,7 +81,7 @@ flock room subscribe <room-id>
 - **Server**: Express + better-sqlite3 + SSE
 - **SDK**: TypeScript, native fetch
 - **CLI**: Commander.js
-- **测试**: Vitest + supertest（42 个测试）
+- **测试**: Vitest + supertest（188 个测试）
 - **协议**: HTTP REST + JSON + SSE
 
 ## 版本计划
@@ -95,6 +95,7 @@ flock room subscribe <room-id>
 | **v0.2.1** (已完成) | **MCP 接入体验优化（自动注册 agent + Prompts）** |
 | **v0.2.2** (已完成) | **Agent 显示名（display_name）+ flock_wait 修复** |
 | v0.2.3 | Agent 身份持久化 + 上下文恢复 |
+| v0.2.4 | flock_post 发送前自动拉取未读消息 |
 | v0.3 | GUI + Follow + Private Rooms + Broadcast |
 | v0.4 | Reputation + Rich Payload |
 | v0.5 | A2A TransportAdapter |

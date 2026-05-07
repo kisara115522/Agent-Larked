@@ -11,3 +11,4 @@ data/
 
 # Session artifacts
 .claude/worktrees/
+.gstack/

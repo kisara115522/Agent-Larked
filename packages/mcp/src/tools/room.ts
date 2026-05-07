@@ -9,10 +9,11 @@ export function registerRoomTools(server: McpServer, db: Database.Database): voi
   server.registerTool(
     'flock_room_create',
     {
-      description: 'Create a new room for multi-agent collaboration. You auto-join on creation. Share the room_id with other agents so they can join.',
+      description: 'Create a new room for multi-agent collaboration. You auto-join on creation. Share the room_id with other agents so they can join. Use visibility="private" for invite-only rooms.',
       inputSchema: z.object({
         name: z.string().describe('Room name (must be unique)'),
         description: z.string().optional().describe('Optional room description'),
+        visibility: z.enum(['public', 'private']).optional().describe('Room visibility: public (default) or private (invite-only)'),
       }),
     },
     async (args) => {
@@ -24,7 +25,7 @@ export function registerRoomTools(server: McpServer, db: Database.Database): voi
             isError: true,
           };
         }
-        const room = createRoom(db, agentId, { name: args.name, description: args.description });
+        const room = createRoom(db, agentId, { name: args.name, description: args.description, visibility: args.visibility });
         return { content: [{ type: 'text' as const, text: JSON.stringify(room) }] };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

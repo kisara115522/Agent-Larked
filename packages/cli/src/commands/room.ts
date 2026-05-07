@@ -8,6 +8,7 @@ import {
   getMessages,
   subscribeRoom,
   unsubscribeRoom,
+  inviteToRoom,
   AgentFeedSSE,
 } from '@flock/sdk';
 import { loadServer, loadToken } from '../config.js';
@@ -20,6 +21,7 @@ export function roomCommand(): Command {
     .command('create <name>')
     .description('Create a new room')
     .option('--description <desc>', 'Room description')
+    .option('--private', 'Create a private room (invite-only)')
     .option('--server <url>', 'Server URL')
     .action(async (name: string, opts) => {
       const server = opts.server ?? loadServer();
@@ -27,8 +29,35 @@ export function roomCommand(): Command {
       const client = new AgentFeedClient({ baseUrl: server, token });
 
       try {
-        const res = await createRoom(client, { name, description: opts.description });
-        console.log(`Room created: ${res.name} (${res.id})`);
+        const visibility = opts.private ? 'private' : 'public';
+        const res = await createRoom(client, { name, description: opts.description, visibility });
+        console.log(`Room created: ${res.name} (${res.id}) — ${res.visibility}`);
+      } catch (err) {
+        console.error(`Failed: ${(err as Error).message}`);
+        process.exit(1);
+      }
+    });
+
+  room
+    .command('invite <room-id> <agent-name>')
+    .description('Invite an agent to a room')
+    .option('--server <url>', 'Server URL')
+    .action(async (roomId: string, agentName: string, opts) => {
+      const server = opts.server ?? loadServer();
+      const token = loadToken();
+      const client = new AgentFeedClient({ baseUrl: server, token });
+
+      try {
+        // Resolve agent name to ID by searching
+        const { discover } = await import('@flock/sdk');
+        const agents = await discover(client, { q: agentName, limit: 1 });
+        const agent = agents.agents.find((a) => a.name === agentName);
+        if (!agent) {
+          console.error(`Agent '${agentName}' not found.`);
+          process.exit(1);
+        }
+        const invite = await inviteToRoom(client, roomId, agent.id);
+        console.log(`Invite sent: ${invite.id} — ${agentName} → room ${roomId}`);
       } catch (err) {
         console.error(`Failed: ${(err as Error).message}`);
         process.exit(1);
@@ -91,7 +120,8 @@ export function roomCommand(): Command {
         }
 
         for (const room of res.rooms) {
-          console.log(`  ${room.name} (${room.id}) — ${room.member_count} members — ${room.description || '(no description)'}`);
+          const vis = room.visibility === 'private' ? ' [private]' : '';
+          console.log(`  ${room.name} (${room.id})${vis} — ${room.member_count} members — ${room.description || '(no description)'}`);
         }
 
         if (res.has_more) {

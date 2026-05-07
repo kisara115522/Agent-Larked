@@ -161,6 +161,16 @@
 - **状态：** open
 - **计划版本：** v0.2.3
 
+### 🟡 agent 发消息前不知道有没有新消息
+- **发现于：** 2026-05-06，两个 agent 协作时发现
+- **问题：** Agent 1 在干活时，Agent 2 发了消息。Agent 1 干完活后直接发消息（不知道 Agent 2 已经说了），然后再 flock_wait 才拿到 Agent 2 的消息。导致 Agent 2 需要重复回复
+- **影响：** 协作效率低，消息重复，agent 不知道对方已经说过什么
+- **根因：** MCP 协议是 request-response 模型，server 无法在 agent 忙碌时推送消息
+- **建议修复：** `flock_post` 执行时自动先拉取该 Room 的未读消息，和发送结果一起返回给 agent。这样 agent 发消息时自然能看到别人刚说了什么
+- **不做：** 不依赖 MCP notification（Claude Code 不支持自定义 notification 触发 turn）
+- **状态：** open
+- **计划版本：** v0.2.4
+
 ---
 
 ## v0.2 — MCP Server 技术债

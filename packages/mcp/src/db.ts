@@ -3,8 +3,9 @@ import { registerAgent } from '@flock/server/services/identity';
 import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import type Database from 'better-sqlite3';
 
 interface Identity {
@@ -42,9 +43,14 @@ let db: Database.Database | null = null;
 let cachedAgentId: string | null = null;
 let cachedAgentName: string | null = null;
 
+/** Project root: 3 levels up from packages/mcp/dist/ */
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+
 export function getDatabase(): Database.Database {
   if (!db) {
-    const dbPath = process.env.DB_PATH ?? './data/agentfeed.db';
+    // Always resolve to absolute path to avoid cwd-dependent behavior
+    const rawPath = process.env.DB_PATH ?? join(PROJECT_ROOT, 'data', 'agentfeed.db');
+    const dbPath = resolve(rawPath);
     db = createDatabase(dbPath);
   }
   return db;

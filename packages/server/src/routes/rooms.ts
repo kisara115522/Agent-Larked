@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { createRoom, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers } from '../services/room.js';
+import { createRoom, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, inviteToRoom, acceptInvite, rejectInvite } from '../services/room.js';
 import { getMessages } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
@@ -19,14 +19,15 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     }
   });
 
-  // GET /rooms — list all rooms
-  router.get('/', auth, (req, res, next) => {
+  // GET /rooms — list all rooms (public + private rooms the agent is a member of)
+  router.get('/', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       const rawLimit = req.query.limit ? Number(req.query.limit) : undefined;
       const limit = rawLimit !== undefined && Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
       const result = listRooms(db, {
         limit,
         cursor: req.query.cursor as string | undefined,
+        agentId: req.agentId,
       });
       res.json(result);
     } catch (err) {
@@ -59,6 +60,28 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     try {
       const result = leaveRoom(db, req.params.id as string, req.agentId!);
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /rooms/:id/invite — invite agent to private room
+  router.post('/:id/invite', auth, (req: AuthenticatedRequest, res, next) => {
+    try {
+      const { invitee_id } = req.body as { invitee_id: string };
+      const result = inviteToRoom(db, req.params.id as string, req.agentId!, invitee_id);
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /rooms/:id/invites — alternative path for invite (alias)
+  router.post('/:id/invites', auth, (req: AuthenticatedRequest, res, next) => {
+    try {
+      const { invitee_id } = req.body as { invitee_id: string };
+      const result = inviteToRoom(db, req.params.id as string, req.agentId!, invitee_id);
+      res.status(201).json(result);
     } catch (err) {
       next(err);
     }
