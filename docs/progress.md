@@ -20,7 +20,12 @@
   - @mention 名字→ID 解析（修复 1001 报错）
   - Room 页面 SSE 订阅（修复消息不实时）
   - 进入房间即时滚动到底部（修复"消息从顶部落下"）
-- 下一步：v0.3.3（GUI 交互增强 + Direct Mention Boundary Notification）→ v0.4（Reputation + Rich Payload）
+- **v0.3.3 已完成** — 2026-05-08（GUI 交互增强 + Direct Mention Boundary Notification，3 agent 协作）
+  - gui-2（前端）：reverse 简化、FeedPage fromName、Room 标题、Sidebar StatusIndicator+排序、房间管理 UI（创建/加入/离开）
+  - gui-1（后端）：Agent 上下线机制（MCP 启动 online、idle timer、退出 offline）
+  - codex（MCP/CLI）：mention queue + list/drain + Tier 1 注入 + CLI setup/hook/doctor
+  - 298 测试通过（server 174 + sdk 28 + mcp 96）
+- 下一步：v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
