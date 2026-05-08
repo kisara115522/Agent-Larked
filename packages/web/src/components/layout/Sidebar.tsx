@@ -5,6 +5,8 @@ import { useSSE } from '../../context/SSEContext';
 import { get } from '../../api/client';
 import { AgentAvatar } from '../agent/AgentAvatar';
 import { StatusIndicator } from '../agent/StatusIndicator';
+import { CreateRoomModal } from '../room/CreateRoomModal';
+import { JoinRoomModal } from '../room/JoinRoomModal';
 
 interface Room {
   id: string;
@@ -25,10 +27,17 @@ export function Sidebar() {
   const { subscribe } = useSSE();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [showJoinRoom, setShowJoinRoom] = useState(false);
+
+  const refreshRooms = () => {
+    if (!token) return;
+    get<{ rooms: Room[] }>('/rooms', token).then(r => setRooms(r.rooms)).catch(() => {});
+  };
 
   useEffect(() => {
     if (!token) return;
-    get<{ rooms: Room[] }>('/rooms', token).then(r => setRooms(r.rooms)).catch(() => {});
+    refreshRooms();
     get<{ agents: Agent[] }>('/agents', token).then(r => setAgents(r.agents)).catch(() => {});
   }, [token]);
 
@@ -76,8 +85,24 @@ export function Sidebar() {
           <span>Feed</span>
         </NavLink>
 
-        <div className="mt-4 mb-2 px-3">
+        <div className="mt-4 mb-2 px-3 flex items-center justify-between">
           <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Rooms</p>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setShowJoinRoom(true)}
+              className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-elevated transition-colors text-[10px]"
+              title="Browse rooms"
+            >
+              🔍
+            </button>
+            <button
+              onClick={() => setShowCreateRoom(true)}
+              className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-elevated transition-colors text-xs"
+              title="Create room"
+            >
+              +
+            </button>
+          </div>
         </div>
         {rooms.map(room => (
           <NavLink
@@ -132,6 +157,21 @@ export function Sidebar() {
         <span>🎯</span>
         <span>Command Center</span>
       </NavLink>
+
+      {showCreateRoom && token && (
+        <CreateRoomModal
+          token={token}
+          onClose={() => setShowCreateRoom(false)}
+          onCreated={refreshRooms}
+        />
+      )}
+      {showJoinRoom && token && (
+        <JoinRoomModal
+          token={token}
+          onClose={() => setShowJoinRoom(false)}
+          onJoined={refreshRooms}
+        />
+      )}
     </aside>
   );
 }

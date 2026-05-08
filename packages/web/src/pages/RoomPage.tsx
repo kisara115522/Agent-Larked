@@ -133,6 +133,18 @@ export function RoomPage() {
     }
   };
 
+  const handleLeave = async () => {
+    if (!token || !roomId) return;
+    try {
+      await post(`/rooms/${roomId}/leave`, token);
+      window.location.href = '/';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to leave room');
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => setError(null), 5000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -144,8 +156,14 @@ export function RoomPage() {
   return (
     <div className="h-full flex">
       <div className={`flex-1 flex flex-col ${threadMessageId ? 'border-r border-border' : ''}`}>
-        <header className="px-6 py-3 border-b border-border shrink-0">
+        <header className="px-6 py-3 border-b border-border shrink-0 flex items-center justify-between">
           <h2 className="text-base font-semibold">💬 {roomName || `Room ${roomId?.slice(0, 8)}`}</h2>
+          <button
+            onClick={handleLeave}
+            className="px-2.5 py-1 text-xs text-text-muted border border-border rounded-md hover:border-error hover:text-error transition-colors"
+          >
+            Leave
+          </button>
         </header>
         <div className="flex-1 overflow-y-auto">
           {hasMore && (
