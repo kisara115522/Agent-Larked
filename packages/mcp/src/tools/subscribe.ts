@@ -33,9 +33,15 @@ messageBus.setMaxListeners(100);
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-/** Reset the idle timer. Called on each flock_wait invocation. */
-export function resetIdleTimer(db: Database.Database): void {
+/** Clear the idle timer while the agent is actively waiting. */
+function clearIdleTimer(): void {
   if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = null;
+}
+
+/** Reset the idle timer after flock_wait returns. */
+export function resetIdleTimer(db: Database.Database): void {
+  clearIdleTimer();
   idleTimer = setTimeout(() => {
     setAgentOffline(db);
     idleTimer = null;
@@ -80,8 +86,8 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         };
       }
 
-      // Reset idle timer — agent is actively communicating
-      resetIdleTimer(db);
+      // The agent is actively waiting, so it should not be marked idle mid-wait.
+      clearIdleTimer();
 
       // Get list of rooms this agent has joined
       const joinedRooms = new Set(
@@ -90,6 +96,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
       );
 
       if (joinedRooms.size === 0) {
+        resetIdleTimer(db);
         return {
           content: [{ type: 'text' as const, text: 'Error: Not a member of any room. Join a room first.' }],
           isError: true,
@@ -142,6 +149,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         if (statusUpdates.length > 0) {
           response.my_status_updates = statusUpdates;
         }
+        resetIdleTimer(db);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(response) }],
         };
@@ -175,6 +183,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           if (statusUpdates.length > 0) {
             response.my_status_updates = statusUpdates;
           }
+          resetIdleTimer(db);
           resolve({
             content: [{ type: 'text' as const, text: JSON.stringify(response) }],
           });
@@ -218,6 +227,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           cleanup();
           if (!resolved) {
             resolved = true;
+            resetIdleTimer(db);
             resolve({
               content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], count: 0, timed_out: true }) }],
             });
