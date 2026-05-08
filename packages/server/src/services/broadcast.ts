@@ -134,6 +134,12 @@ export function getFeed(
 
 function rowToFeedMessage(db: Database.Database, row: Record<string, unknown>): FeedMessage {
   const messageId = row.id as string;
+  const fromAgent = row.from_agent as string;
+
+  // Get sender profile
+  const profile = db.prepare(
+    'SELECT name, display_name FROM profiles WHERE id = ?',
+  ).get(fromAgent) as { name: string; display_name: string | null } | undefined;
 
   const mentions = db.prepare(
     'SELECT agent_id FROM message_mentions WHERE message_id = ?',
@@ -145,7 +151,9 @@ function rowToFeedMessage(db: Database.Database, row: Record<string, unknown>): 
 
   return {
     id: messageId,
-    from: row.from_agent as string,
+    from: fromAgent,
+    from_name: profile?.name ?? '',
+    from_display_name: profile?.display_name ?? '',
     content: row.content as string,
     mentions: mentions.map((m) => m.agent_id),
     reactions: reactions.map((r) => ({ type: r.type as ReactionSummary['type'], count: Number(r.count) })),
