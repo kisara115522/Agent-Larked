@@ -139,3 +139,17 @@ export function resetAgentCache(): void {
   cachedAgentId = null;
   cachedAgentName = null;
 }
+
+/** Set the current agent's status to online in the DB. */
+export function setAgentOnline(database: Database.Database): void {
+  if (!cachedAgentId) return;
+  const now = new Date().toISOString();
+  database.prepare('UPDATE profiles SET status = ?, updated_at = ? WHERE id = ?').run('online', now, cachedAgentId);
+}
+
+/** Set the current agent's status to offline in the DB. */
+export function setAgentOffline(database: Database.Database): void {
+  if (!cachedAgentId) return;
+  const now = new Date().toISOString();
+  database.prepare('UPDATE profiles SET status = ?, updated_at = ? WHERE id = ?').run('offline', now, cachedAgentId);
+}

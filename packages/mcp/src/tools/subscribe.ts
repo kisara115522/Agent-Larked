@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { getMessages } from '@flock/server/services/messaging';
-import { getAgentId } from '../db.js';
+import { getAgentId, setAgentOffline } from '../db.js';
 
 /** Get the agent's own recent status updates from joined rooms for context recovery */
 function getMyStatusUpdates(
@@ -28,6 +28,21 @@ function getMyStatusUpdates(
 // Global message event bus — shared across all tool registrations
 export const messageBus = new EventEmitter();
 messageBus.setMaxListeners(100);
+
+// Idle timer: if flock_wait is not called within 5 minutes, set agent to offline
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Reset the idle timer. Called on each flock_wait invocation. */
+export function resetIdleTimer(db: Database.Database): void {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    setAgentOffline(db);
+    idleTimer = null;
+  }, IDLE_TIMEOUT_MS);
+  // Don't keep the process alive just for the idle timer
+  if (idleTimer.unref) idleTimer.unref();
+}
 
 // Track last-seen sequence per room (global, keyed by room_id)
 const roomSequences = new Map<string, number>();
@@ -64,6 +79,9 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           isError: true,
         };
       }
+
+      // Reset idle timer — agent is actively communicating
+      resetIdleTimer(db);
 
       // Get list of rooms this agent has joined
       const joinedRooms = new Set(
