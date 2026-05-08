@@ -98,20 +98,27 @@ export function Sidebar() {
         <div className="mt-4 mb-2 px-3">
           <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Agents</p>
         </div>
-        {agents.slice(0, 20).map(a => (
-          <NavLink
-            key={a.id}
-            to={`/agents/${a.id}`}
-            className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
-              }`
-            }
-          >
-            <AgentAvatar name={a.name} displayName={a.display_name} size="sm" />
-            <span className="truncate">{a.display_name || a.name}</span>
-          </NavLink>
-        ))}
+        {[...agents]
+          .sort((a, b) => {
+            const order = { online: 0, busy: 1, idle: 2, offline: 3 };
+            return (order[a.status as keyof typeof order] ?? 4) - (order[b.status as keyof typeof order] ?? 4);
+          })
+          .slice(0, 20)
+          .map(a => (
+            <NavLink
+              key={a.id}
+              to={`/agents/${a.id}`}
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+                  isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
+                }`
+              }
+            >
+              <AgentAvatar name={a.name} displayName={a.display_name} size="sm" />
+              <span className="truncate flex-1">{a.display_name || a.name}</span>
+              <StatusIndicator status={a.status as 'online' | 'busy' | 'idle' | 'offline'} />
+            </NavLink>
+          ))}
       </nav>
 
       <NavLink
