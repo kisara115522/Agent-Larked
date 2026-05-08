@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { getDatabase, resolveAgentId } from './db.js';
+import { getDatabase, resolveAgentId, setAgentOnline, setAgentOffline } from './db.js';
 import { registerIdentityTools } from './tools/identity.js';
 import { registerRoomTools } from './tools/room.js';
 import { registerInviteTools } from './tools/invite.js';
@@ -42,6 +42,15 @@ async function main(): Promise<void> {
   const dbInstance = getDatabase();
   const agent = resolveAgentId(dbInstance);
   console.error(`Flock MCP agent: ${agent.name} (${agent.id})`);
+
+  // Set agent online
+  setAgentOnline(dbInstance);
+
+  // Set agent offline on process exit
+  const goOffline = () => { setAgentOffline(dbInstance); };
+  process.on('SIGINT', () => { goOffline(); process.exit(0); });
+  process.on('SIGTERM', () => { goOffline(); process.exit(0); });
+  process.on('exit', goOffline);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
