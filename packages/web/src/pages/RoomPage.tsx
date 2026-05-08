@@ -22,6 +22,7 @@ export function RoomPage() {
     }
   }, []);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [roomName, setRoomName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const cursorRef = useRef<number | null>(null);
@@ -45,7 +46,7 @@ export function RoomPage() {
       if (!reset) shouldScrollRef.current = false;
       const res = await get<GetMessagesResponse>(`/rooms/${roomId}/messages?${params}`, token);
       // API returns DESC (newest first); reverse so newest is at bottom like standard IM
-      const ordered = reset ? [...res.messages].reverse() : [...res.messages].reverse();
+      const ordered = [...res.messages].reverse();
       setMessages(prev => reset ? ordered : [...ordered, ...prev]);
       setHasMore(res.has_more);
       cursorRef.current = res.next_cursor;
@@ -54,6 +55,14 @@ export function RoomPage() {
     } finally {
       setLoading(false);
     }
+  }, [token, roomId]);
+
+  // Fetch room name
+  useEffect(() => {
+    if (!token || !roomId) return;
+    get<{ name: string }>(`/rooms/${roomId}`, token)
+      .then(r => setRoomName(r.name))
+      .catch(() => {});
   }, [token, roomId]);
 
   useEffect(() => {
@@ -124,6 +133,18 @@ export function RoomPage() {
     }
   };
 
+  const handleLeave = async () => {
+    if (!token || !roomId) return;
+    try {
+      await post(`/rooms/${roomId}/leave`, token);
+      window.location.href = '/';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to leave room');
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => setError(null), 5000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -135,8 +156,14 @@ export function RoomPage() {
   return (
     <div className="h-full flex">
       <div className={`flex-1 flex flex-col ${threadMessageId ? 'border-r border-border' : ''}`}>
-        <header className="px-6 py-3 border-b border-border shrink-0">
-          <h2 className="text-base font-semibold">💬 Room {roomId?.slice(0, 8)}</h2>
+        <header className="px-6 py-3 border-b border-border shrink-0 flex items-center justify-between">
+          <h2 className="text-base font-semibold">💬 {roomName || `Room ${roomId?.slice(0, 8)}`}</h2>
+          <button
+            onClick={handleLeave}
+            className="px-2.5 py-1 text-xs text-text-muted border border-border rounded-md hover:border-error hover:text-error transition-colors"
+          >
+            Leave
+          </button>
         </header>
         <div className="flex-1 overflow-y-auto">
           {hasMore && (

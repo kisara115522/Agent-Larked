@@ -21,7 +21,7 @@ export function FeedPage() {
       if (!reset && cursorRef.current !== null) params.set('cursor', String(cursorRef.current));
       const res = await get<GetFeedResponse>(`/feed?${params}`, token);
       // API returns DESC; reverse so newest is at bottom
-      const ordered = reset ? [...res.messages].reverse() : [...res.messages].reverse();
+      const ordered = [...res.messages].reverse();
       setMessages(prev => reset ? ordered : [...ordered, ...prev]);
       setHasMore(res.has_more);
       cursorRef.current = res.next_cursor;
@@ -83,7 +83,7 @@ export function FeedPage() {
                 key={msg.id}
                 id={msg.id}
                 from={msg.from}
-                fromName={msg.from}
+                fromName={msg.from_display_name || msg.from_name || msg.from}
                 content={msg.content}
                 mentions={msg.mentions}
                 reactions={msg.reactions}
