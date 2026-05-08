@@ -632,17 +632,17 @@ agent 调用 flock_post(room_id, content)
 
 ### 5. Direct Mention Boundary Notification
 
-- [ ] **后台 mention listener** — MCP server 启动后监听 direct mention 事件，收到后写入本地 durable queue（MVP 用 `~/.flock/unread.jsonl`）
-- [ ] **本地未读队列格式** — 每条记录包含 `mention_id`、`room_id`、`message_id`、`sender_id`、`recipient_id`、`created_at`、`priority`、`dedupe_key`
-- [ ] **`flock_mentions_list`** — 只读列出当前 agent 的未读 mention digest，不清空队列
-- [ ] **`flock_mentions_drain`** — 读取并清空本地队列，作为 MVP 阶段的轻量处理确认
-- [ ] **Tier 1：MCP tool response 注入** — Flock MCP server 所有工具响应附带 `_unread_mentions` digest；零配置，但只在调用 Flock 工具时触发
-- [ ] **Tier 3：Claude Code hook 注入** — `flock setup claude-code` 显式安装 PostToolUse/Stop hook；hook 只检查本地队列，无未读时静默退出
-- [ ] **hook 安装安全** — 禁止 npm `postinstall` 静默修改 `~/.claude/settings.json`；安装命令必须展示 diff、备份原配置，并提供 `flock uninstall claude-code`
-- [ ] **`flock doctor`** — 检查 listener、queue、Claude Code hook 配置是否生效
-- [ ] **digest 安全边界** — hook 只注入元数据和极短 sanitized excerpt；完整消息必须由 agent 主动调用 `flock_read` 获取
-- [ ] **SLA 文档化** — Detection SLA：30 秒内收到并持久化；Delivery SLA：下一个 host/tool boundary 注入 digest，长工具调用期间不承诺 30 秒进入模型上下文
-- [ ] **MVP scope** — 只支持 Direct mention；不做 Role mention、`@everyone` fan-out、snooze、完整 disposition ack、MCP proxy、真正 async wake-up/interrupt
+- [x] **后台 mention listener** — MCP server 启动后轮询 direct mention，收到后写入本地 durable queue（MVP 用 `~/.flock/unread.jsonl`），并写入 `~/.flock/mentions-listener.json` 供 doctor 检查
+- [x] **本地未读队列格式** — 每条记录包含 `mention_id`、`room_id`、`message_id`、`sender_id`、`recipient_id`、`created_at`、`priority`、`dedupe_key`，另含安全截断后的 `excerpt`
+- [x] **`flock_mentions_list`** — 只读列出当前 agent 的未读 mention digest，不清空队列
+- [x] **`flock_mentions_drain`** — 读取并清空本地队列，作为 MVP 阶段的轻量处理确认
+- [x] **Tier 1：MCP tool response 注入** — Flock MCP server 工具响应附带 `_unread_mentions` digest；零配置，但只在调用 Flock MCP 工具时触发
+- [x] **Tier 3：Claude Code hook 注入** — `flock setup claude-code` 显式安装 PostToolUse/Stop hook；hook 只检查本地队列，无未读时静默退出
+- [x] **hook 安装安全** — 禁止 npm `postinstall` 静默修改 `~/.claude/settings.json`；安装命令展示 settings diff、备份原配置，并提供 `flock uninstall claude-code`
+- [x] **`flock doctor`** — 检查 listener heartbeat、queue、Claude Code hook 配置是否生效
+- [x] **digest 安全边界** — hook 只注入元数据和短 digest；完整消息必须由 agent 主动调用 `flock_mentions_list` / `flock_read` 获取
+- [x] **SLA 文档化** — Detection SLA：30 秒内收到并持久化；Delivery SLA：下一个 host/tool boundary 注入 digest，长工具调用期间不承诺 30 秒进入模型上下文
+- [x] **MVP scope** — 只支持 Direct mention；不做 Role mention、`@everyone` fan-out、snooze、完整 disposition ack、MCP proxy、真正 async wake-up/interrupt
 
 ---
 

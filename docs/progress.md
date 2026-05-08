@@ -138,4 +138,5 @@
 - subscribe/unsubscribe 路由挂在 /rooms 下（不是 /events）— 2026-05-05
 - Express body limit 设为 2MB，服务层校验 1MB — 2026-05-05
 - 2026-05-08：v0.3.3 定义 Direct Mention Boundary Notification。Flock 不承诺真正异步唤醒忙碌 agent；MVP 通过后台 listener + 本地未读队列 + digest 注入，在下一个 host/tool boundary 提醒 agent，再由 agent 主动 `flock_mentions_list` / `flock_read` 读取详情
+- 2026-05-08：v0.3.3 Direct Mention Boundary Notification 实现：MCP 后台 listener 持久化 direct mention 到 `~/.flock/unread.jsonl`，Flock MCP 工具响应注入 `_unread_mentions`，CLI 提供 `flock setup claude-code` / `flock uninstall claude-code` / `flock doctor`，doctor 读取 queue、hook 和 `mentions-listener.json` 心跳状态
 - 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)

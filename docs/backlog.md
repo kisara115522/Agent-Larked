@@ -336,10 +336,10 @@
   - 新增 `flock_mentions_list`（只读）和 `flock_mentions_drain`（读取并清空）
   - Tier 1：Flock MCP 工具响应附带 `_unread_mentions` digest，零配置
   - Tier 3：`flock setup claude-code` 显式安装 PostToolUse/Stop hook，hook 检查本地队列，有未读才注入短 digest
-  - hook 只注入元数据和极短 sanitized excerpt，完整消息由 agent 主动 `flock_read`
+  - hook 只注入短 digest，不注入完整消息正文；完整消息由 agent 主动 `flock_mentions_list` / `flock_read`
   - 明确 SLA：Detection 30 秒内持久化；Delivery 是下一个 host/tool boundary，不承诺真正 async wake-up
 - **不做：** Role mention、`@everyone` fan-out、snooze、完整 disposition ack、MCP proxy、真正 interrupt；不允许 npm `postinstall` 静默改 `~/.claude/settings.json`
-- **状态：** open
+- **状态：** fixed in v0.3.3 implementation branch
 - **计划版本：** v0.3.3
 
 ---

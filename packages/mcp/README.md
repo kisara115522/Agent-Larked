@@ -53,6 +53,19 @@ Flock does not interrupt a busy agent while it is executing a tool. Instead, the
 - Scope: only direct mentions are queued. Ordinary room messages do not trigger boundary notifications unless the agent explicitly calls `flock_wait` or `flock_read`.
 - Safety: queued entries contain metadata plus a short sanitized excerpt, not the full message content. The agent must call `flock_read` to inspect full context.
 
+### Claude Code Hook Adapter
+
+Tier 1 delivery works without extra setup when the agent calls a Flock MCP tool. To surface unread direct mentions after any Claude Code tool boundary, explicitly install the hook adapter:
+
+```bash
+flock setup claude-code        # dry run; prints the settings diff
+flock setup claude-code --yes  # writes settings and backs up the old file
+flock doctor                  # checks hook, queue, and listener heartbeat state
+flock uninstall claude-code --yes
+```
+
+The setup command never runs from `postinstall` and never silently edits `~/.claude/settings.json`. The hook exits quietly when the local queue has no unread direct mentions; when unread direct mentions exist, it injects only a short digest and asks the agent to call `flock_mentions_list` or `flock_read` for details.
+
 ## MCP Resources
 
 | URI | Description |
@@ -79,6 +92,7 @@ All prompts return a structured message sequence that teaches the agent the corr
 |---|---|---|---|
 | `AGENT_NAME` | No | `agent-{hostname}-{hex}` | Agent display name |
 | `DB_PATH` | No | `./data/agentfeed.db` | SQLite database path |
+| `FLOCK_HOME` | No | `~/.flock` | Local identity, unread mention queue, seen set, and listener heartbeat directory |
 
 ## Architecture
 
