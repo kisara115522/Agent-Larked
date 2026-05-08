@@ -44,6 +44,10 @@ function seenPath(): string {
   return join(flockHome(), 'mentions-seen.json');
 }
 
+function listenerStatusPath(): string {
+  return join(flockHome(), 'mentions-listener.json');
+}
+
 function ensureHome(): void {
   mkdirSync(flockHome(), { recursive: true });
 }
@@ -85,6 +89,19 @@ function readSeen(): Set<string> {
 function writeSeen(seen: Set<string>): void {
   ensureHome();
   writeFileSync(seenPath(), JSON.stringify([...seen], null, 2), { encoding: 'utf-8', mode: 0o600 });
+}
+
+function writeListenerStatus(agentId: string, status: 'running' | 'stopped'): void {
+  ensureHome();
+  writeFileSync(
+    listenerStatusPath(),
+    `${JSON.stringify({
+      agent_id: agentId,
+      status,
+      checked_at: new Date().toISOString(),
+    }, null, 2)}\n`,
+    { encoding: 'utf-8', mode: 0o600 },
+  );
 }
 
 function sanitizeExcerpt(content: string): string {
@@ -209,15 +226,27 @@ export function startMentionListener(
   agentIdProvider: () => string | null,
   intervalMs = 30_000,
 ): { stop: () => void } {
+  let lastAgentId: string | null = null;
   const poll = () => {
     const agentId = agentIdProvider();
     if (!agentId) return;
-    pollDirectMentionsOnce(db, agentId);
+    lastAgentId = agentId;
+    writeListenerStatus(agentId, 'running');
+    try {
+      pollDirectMentionsOnce(db, agentId);
+    } catch {
+      // Background polling must not terminate the MCP process.
+    }
   };
 
+  poll();
   const timer = setInterval(poll, intervalMs);
   return {
-    stop: () => clearInterval(timer),
+    stop: () => {
+      clearInterval(timer);
+      const agentId = agentIdProvider() ?? lastAgentId;
+      if (agentId) writeListenerStatus(agentId, 'stopped');
+    },
   };
 }
 

@@ -27,6 +27,17 @@ export interface QueuedMentionDigest {
   recipient_id?: string;
 }
 
+export interface DoctorStatus {
+  claude_code_settings: string;
+  post_tool_use_hook: boolean;
+  stop_hook: boolean;
+  unread_queue: string;
+  unread_queue_exists: boolean;
+  mention_listener_status_file: string;
+  mention_listener_status_exists: boolean;
+  mention_listener_status: unknown | null;
+}
+
 function flockHome(): string {
   return process.env.FLOCK_HOME || join(homedir(), '.flock');
 }
@@ -122,6 +133,15 @@ function readSettings(path: string): ClaudeCodeSettings {
   return JSON.parse(readFileSync(path, 'utf-8')) as ClaudeCodeSettings;
 }
 
+function readJsonFile(path: string): unknown | null {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 function writeSettings(path: string, settings: ClaudeCodeSettings): void {
   mkdirSync(dirname(path), { recursive: true });
   if (existsSync(path)) {
@@ -156,6 +176,28 @@ function readQueuedMentions(): QueuedMentionDigest[] {
     }
   }
   return mentions;
+}
+
+export function buildDoctorStatus(
+  settings: ClaudeCodeSettings,
+  settingsPath: string,
+  commandPrefix: string,
+  home = flockHome(),
+): DoctorStatus {
+  const commands = hookCommands(commandPrefix);
+  const queuePath = join(home, 'unread.jsonl');
+  const listenerStatusPath = join(home, 'mentions-listener.json');
+
+  return {
+    claude_code_settings: settingsPath,
+    post_tool_use_hook: hasHook(settings.hooks?.PostToolUse ?? [], commands.postToolUse),
+    stop_hook: hasHook(settings.hooks?.Stop ?? [], commands.stop),
+    unread_queue: queuePath,
+    unread_queue_exists: existsSync(queuePath),
+    mention_listener_status_file: listenerStatusPath,
+    mention_listener_status_exists: existsSync(listenerStatusPath),
+    mention_listener_status: readJsonFile(listenerStatusPath),
+  };
 }
 
 export function setupCommand(): Command {
@@ -230,16 +272,6 @@ export function doctorCommand(): Command {
     .option('--command <command>', 'Hook command prefix', 'flock hook claude-code')
     .action((opts: { settings: string; command: string }) => {
       const settings = readSettings(opts.settings);
-      const commands = hookCommands(opts.command);
-      const postOk = hasHook(settings.hooks?.PostToolUse ?? [], commands.postToolUse);
-      const stopOk = hasHook(settings.hooks?.Stop ?? [], commands.stop);
-      const queuePath = join(flockHome(), 'unread.jsonl');
-      console.log(JSON.stringify({
-        claude_code_settings: opts.settings,
-        post_tool_use_hook: postOk,
-        stop_hook: stopOk,
-        unread_queue: queuePath,
-        unread_queue_exists: existsSync(queuePath),
-      }, null, 2));
+      console.log(JSON.stringify(buildDoctorStatus(settings, opts.settings, opts.command), null, 2));
     });
 }

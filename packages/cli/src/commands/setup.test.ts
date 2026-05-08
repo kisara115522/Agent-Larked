@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
+  buildDoctorStatus,
   buildClaudeCodeHookSettings,
   formatSettingsDiff,
   removeClaudeCodeHookSettings,
@@ -88,5 +92,34 @@ describe('hook digest', () => {
     expect(summary).toContain('gui-2');
     expect(summary).toContain('flock_mentions_list');
     expect(summary).not.toContain('please review');
+  });
+});
+
+describe('doctor status', () => {
+  it('reports Claude Code hooks, queue, and listener heartbeat state', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'flock-cli-doctor-'));
+    try {
+      writeFileSync(join(tempDir, 'unread.jsonl'), '', 'utf-8');
+      writeFileSync(
+        join(tempDir, 'mentions-listener.json'),
+        JSON.stringify({ agent_id: 'agent-1', status: 'running', checked_at: '2026-05-08T00:00:00.000Z' }),
+        'utf-8',
+      );
+      const settings = buildClaudeCodeHookSettings({}, 'flock hook claude-code');
+
+      const status = buildDoctorStatus(settings, '/tmp/settings.json', 'flock hook claude-code', tempDir);
+
+      expect(status.post_tool_use_hook).toBe(true);
+      expect(status.stop_hook).toBe(true);
+      expect(status.unread_queue_exists).toBe(true);
+      expect(status.mention_listener_status_exists).toBe(true);
+      expect(status.mention_listener_status).toEqual({
+        agent_id: 'agent-1',
+        status: 'running',
+        checked_at: '2026-05-08T00:00:00.000Z',
+      });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

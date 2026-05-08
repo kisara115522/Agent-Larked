@@ -6,7 +6,7 @@ import { createDatabase } from '@flock/server/db';
 import { registerAgent } from '@flock/server/services/identity';
 import { createRoom, joinRoom } from '@flock/server/services/room';
 import { sendMessage } from '@flock/server/services/messaging';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { registerMentionTools } from '../tools/mentions.js';
@@ -192,6 +192,24 @@ describe('unread mention response injection', () => {
 });
 
 describe('background mention listener', () => {
+  it('writes local listener status and marks it stopped', () => {
+    const listener = startMentionListener(db, () => recipient.id, 1000);
+    const statusPath = join(tempDir, 'mentions-listener.json');
+
+    expect(existsSync(statusPath)).toBe(true);
+    expect(JSON.parse(readFileSync(statusPath, 'utf-8'))).toMatchObject({
+      agent_id: recipient.id,
+      status: 'running',
+    });
+
+    listener.stop();
+
+    expect(JSON.parse(readFileSync(statusPath, 'utf-8'))).toMatchObject({
+      agent_id: recipient.id,
+      status: 'stopped',
+    });
+  });
+
   it('polls direct mentions on an interval and can be stopped', () => {
     vi.useFakeTimers();
     try {
