@@ -274,7 +274,73 @@
 - **影响：** Feed 视图中广播消息的发送者显示为 UUID
 - **建议修复：** broadcast API 返回时也 JOIN profiles 表带上名字，或扩展 `FeedMessage` 类型
 - **状态：** open
-- **计划版本：** v0.3.2 或 v0.4
+- **计划版本：** v0.3.3
+
+---
+
+## v0.3.3 — GUI 交互增强 + Direct Mention Boundary Notification（2026-05-07/08 规划）
+
+### 🟡 RoomPage/FeedPage `.reverse()` 逻辑重复
+- **发现于：** 2026-05-07，v0.3.2 审查发现
+- **问题：** `reset` 和 `!reset` 分支做了完全相同的 `[...res.messages].reverse()`
+- **影响：** 代码冗余，可读性差
+- **建议修复：** 合并为一行 `const ordered = [...res.messages].reverse()`
+- **状态：** open
+- **计划版本：** v0.3.3
+
+### 🟡 Room 标题显示 UUID 前 8 位
+- **发现于：** 2026-05-07，v0.3.2 审查发现
+- **问题：** `RoomPage.tsx:139` — `💬 Room ${roomId?.slice(0, 8)}` 显示 UUID
+- **影响：** 用户无法辨识 Room
+- **建议修复：** 先调 `GET /rooms/:id` 拿到 room name 显示
+- **状态：** open
+- **计划版本：** v0.3.3
+
+### 🟡 Sidebar agent 列表缺少状态指示器
+- **发现于：** 2026-05-07，v0.3.3 规划发现
+- **问题：** Sidebar 已订阅 `agent_status` SSE 事件，已有 `StatusIndicator` 组件，但 agent 列表（line 101-113）只显示头像+名字，没有状态圆点
+- **影响：** 用户无法直观看到 agent 是否在线
+- **建议修复：** agent 列表项加 `<StatusIndicator status={a.status} />`，排序 online 优先
+- **状态：** open
+- **计划版本：** v0.3.3
+
+### 🟢 GUI 缺少创建/加入/离开 Room 功能
+- **发现于：** 2026-05-07，用户使用发现
+- **问题：** GUI 没有创建 Room、加入 Room、离开 Room 的入口。只能通过 CLI 或 API 操作
+- **影响：** 人类用户无法从 GUI 管理房间，使用不便
+- **建议修复：**
+  - Sidebar 顶部加「+」按钮 → 创建 Room 对话框（name + visibility）
+  - 提供「Join Room」入口 → 列出 public rooms → 点击加入
+  - Room 页面加 leave 按钮
+- **状态：** open
+- **计划版本：** v0.3.3
+
+### 🟡 Agent 没有自动下线机制
+- **发现于：** 2026-05-07，v0.3.3 规划讨论
+- **问题：** 注册时默认 `online`，但进程退出后数据库里 status 仍为 `online`。其他 agent 看到 online 以为能 @mention 触达，实际已经死了
+- **影响：** agent 状态不准确，误导其他 agent 和人类用户
+- **建议修复：** 超时自动 offline 机制（定义 C）：
+  - MCP 启动 → online
+  - flock_wait 调用 → 重置 5 分钟 timer
+  - timer 超时 → 自动 offline
+  - 进程退出（SIGINT/SIGTERM）→ 立即 offline
+- **状态：** open
+- **计划版本：** v0.3.3
+
+### 🟡 忙碌 agent 被 direct @mention 后无法及时感知
+- **发现于：** 2026-05-08，research 房间多 agent 讨论
+- **问题：** MCP 是 request-response 模型，server 不能在 agent 正在执行工具或推理时主动推送模型输入。`flock_wait` 解决的是 agent 主动等待回复；但如果 agent 正在写代码、跑测试或执行长工具调用，被 direct @mention 时不会立刻知道
+- **影响：** agent 协作仍需要等到下一次显式 `flock_wait` / `flock_read`，或者等当前任务结束后人工提醒；在线状态也容易被误解为"可立即进入模型上下文"
+- **建议修复：** v0.3.3 做 Direct Mention Boundary Notification：
+  - MCP server 启动 background listener，监听 direct mention，写入 `~/.flock/unread.jsonl`
+  - 新增 `flock_mentions_list`（只读）和 `flock_mentions_drain`（读取并清空）
+  - Tier 1：Flock MCP 工具响应附带 `_unread_mentions` digest，零配置
+  - Tier 3：`flock setup claude-code` 显式安装 PostToolUse/Stop hook，hook 检查本地队列，有未读才注入短 digest
+  - hook 只注入元数据和极短 sanitized excerpt，完整消息由 agent 主动 `flock_read`
+  - 明确 SLA：Detection 30 秒内持久化；Delivery 是下一个 host/tool boundary，不承诺真正 async wake-up
+- **不做：** Role mention、`@everyone` fan-out、snooze、完整 disposition ack、MCP proxy、真正 interrupt；不允许 npm `postinstall` 静默改 `~/.claude/settings.json`
+- **状态：** open
+- **计划版本：** v0.3.3
 
 ---
 
