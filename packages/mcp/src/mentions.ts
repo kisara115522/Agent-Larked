@@ -52,10 +52,15 @@ function readJsonl(path: string): QueuedMention[] {
   if (!existsSync(path)) return [];
   const raw = readFileSync(path, 'utf-8').trim();
   if (!raw) return [];
-  return raw
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as QueuedMention);
+  const mentions: QueuedMention[] = [];
+  for (const line of raw.split('\n').filter(Boolean)) {
+    try {
+      mentions.push(JSON.parse(line) as QueuedMention);
+    } catch {
+      // Skip malformed queue entries so one bad line cannot block delivery.
+    }
+  }
+  return mentions;
 }
 
 function writeJsonl(path: string, mentions: QueuedMention[]): void {
@@ -122,36 +127,40 @@ interface ToolResult {
 function injectDigestIntoResult(result: ToolResult, db: Database.Database, agentId: string): ToolResult {
   if (result.isError) return result;
 
-  pollDirectMentionsOnce(db, agentId);
-  const digest = buildUnreadDigest(agentId);
-  if (digest.count === 0 || !result.content || result.content.length === 0) return result;
-
-  const first = result.content[0];
-  if (first.type !== 'text' || !first.text) return result;
-
   try {
-    const parsed = JSON.parse(first.text) as Record<string, unknown>;
-    return {
-      ...result,
-      content: [
-        {
-          ...first,
-          text: JSON.stringify({
-            ...parsed,
-            _unread_mentions: digest,
-          }),
-        },
-        ...result.content.slice(1),
-      ],
-    };
+    pollDirectMentionsOnce(db, agentId);
+    const digest = buildUnreadDigest(agentId);
+    if (digest.count === 0 || !result.content || result.content.length === 0) return result;
+
+    const first = result.content[0];
+    if (first.type !== 'text' || !first.text) return result;
+
+    try {
+      const parsed = JSON.parse(first.text) as Record<string, unknown>;
+      return {
+        ...result,
+        content: [
+          {
+            ...first,
+            text: JSON.stringify({
+              ...parsed,
+              _unread_mentions: digest,
+            }),
+          },
+          ...result.content.slice(1),
+        ],
+      };
+    } catch {
+      return {
+        ...result,
+        content: [
+          ...result.content,
+          { type: 'text', text: JSON.stringify({ _unread_mentions: digest }) },
+        ],
+      };
+    }
   } catch {
-    return {
-      ...result,
-      content: [
-        ...result.content,
-        { type: 'text', text: JSON.stringify({ _unread_mentions: digest }) },
-      ],
-    };
+    return result;
   }
 }
 

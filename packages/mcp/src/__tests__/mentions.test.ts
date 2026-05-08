@@ -6,7 +6,7 @@ import { createDatabase } from '@flock/server/db';
 import { registerAgent } from '@flock/server/services/identity';
 import { createRoom, joinRoom } from '@flock/server/services/room';
 import { sendMessage } from '@flock/server/services/messaging';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { registerMentionTools } from '../tools/mentions.js';
@@ -84,6 +84,12 @@ describe('direct mention queue', () => {
     expect(pollDirectMentionsOnce(db, recipient.id)).toHaveLength(0);
     expect(listMentionQueue(recipient.id)).toHaveLength(1);
   });
+
+  it('skips malformed queue lines instead of failing the whole queue read', () => {
+    writeFileSync(join(tempDir, 'unread.jsonl'), '{bad json}\n', 'utf-8');
+
+    expect(listMentionQueue(recipient.id)).toEqual([]);
+  });
 });
 
 describe('flock mention tools', () => {
@@ -149,6 +155,37 @@ describe('unread mention response injection', () => {
     expect(parsed._unread_mentions.count).toBe(1);
     expect(parsed._unread_mentions.summary).toContain('Flock: 1 unread direct mention');
     expect(parsed._unread_mentions.mentions[0].room_name).toBe('mention-room');
+
+    await client.close();
+  });
+
+  it('returns the original tool response when mention injection fails', async () => {
+    const failingDb = {
+      prepare: () => {
+        throw new Error('poll failed');
+      },
+    } as unknown as Database.Database;
+    const server = new McpServer({ name: 'mention-injection-failure-test', version: '0.1.0' });
+    installUnreadMentionInjection(server, failingDb, () => recipient.id);
+    server.registerTool(
+      'dummy_tool',
+      {
+        description: 'dummy',
+        inputSchema: {},
+      },
+      async () => ({
+        content: [{ type: 'text' as const, text: JSON.stringify({ ok: true }) }],
+      }),
+    );
+
+    const client = new Client({ name: 'mention-client', version: '0.1.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+    const result = await client.callTool({ name: 'dummy_tool', arguments: {} });
+    const parsed = JSON.parse((result.content as Array<{ text: string }>)[0].text);
+
+    expect(parsed).toEqual({ ok: true });
 
     await client.close();
   });
