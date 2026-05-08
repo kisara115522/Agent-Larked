@@ -204,6 +204,8 @@ export interface GetFeedQuery {
 export interface FeedMessage {
   id: string;
   from: string;
+  from_name: string;
+  from_display_name: string;
   content: string;
   mentions: string[];
   reactions: ReactionSummary[];
