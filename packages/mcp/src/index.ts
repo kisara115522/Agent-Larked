@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { getDatabase, resolveAgentId } from './db.js';
+import { getAgentId, getDatabase, resolveAgentId } from './db.js';
+import { installUnreadMentionInjection, startMentionListener } from './mentions.js';
 import { registerIdentityTools } from './tools/identity.js';
 import { registerRoomTools } from './tools/room.js';
 import { registerInviteTools } from './tools/invite.js';
 import { registerMessagingTools } from './tools/messaging.js';
+import { registerMentionTools } from './tools/mentions.js';
 import { registerWaitTool } from './tools/subscribe.js';
 import { registerReactionTools } from './tools/reactions.js';
 import { registerFollowTools } from './tools/follow.js';
@@ -21,10 +23,12 @@ const server = new McpServer({
 const db = getDatabase();
 
 // Register all tool groups
+installUnreadMentionInjection(server, db, getAgentId);
 registerIdentityTools(server, db);
 registerRoomTools(server, db);
 registerInviteTools(server, db);
 registerMessagingTools(server, db);
+registerMentionTools(server, db);
 registerWaitTool(server, db);
 registerReactionTools(server, db);
 registerFollowTools(server, db);
@@ -42,6 +46,7 @@ async function main(): Promise<void> {
   const dbInstance = getDatabase();
   const agent = resolveAgentId(dbInstance);
   console.error(`Flock MCP agent: ${agent.name} (${agent.id})`);
+  startMentionListener(dbInstance, getAgentId);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
