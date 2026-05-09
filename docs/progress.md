@@ -25,9 +25,13 @@
   - gui-1（后端）：Agent 上下线机制（MCP 启动 online、idle timer、退出 offline）
   - codex（MCP/CLI）：mention queue + list/drain + Tier 1 注入 + CLI setup/hook/doctor
   - 298 测试通过（server 174 + sdk 28 + mcp 96）
-- **v0.3.4 进行中** — 2026-05-09（3 agent 协作）
-  - codex-v034-direct：Direct Chat schema/API/SDK/MCP/CLI/Web 已实现；Command Center 改为持久 1:1 私聊入口；Agent 详情页新增 Message 按钮；`flock_wait` 可返回 `direct_messages`；Stop hook wait-on-stop opt-in 设置已实现
-- 下一步：v0.3.4 完成剩余 Turn Liveness + Human Admin GUI/Auth 交叉审查 → 修复忙碌时 @mention 不触达回归 → v0.4（Reputation + Rich Payload）
+- **v0.3.4 已完成** — 2026-05-09（Turn Liveness + Human Admin GUI/Auth + Direct Chat，3 agent 协作）
+  - kisara-claude（后端/MCP）：模块 1+2+3 — Host Turn Lifecycle Hook（PostToolUse→online, Stop→offline）、MCP 启动不再 auto-online、移除 idle timer、stale online 兜底（last_active_at + 5 分钟阈值）
+  - gui-2（前端+后端）：模块 4 — POST /auth/login（id 或 display_name 登录）、POST /agents/:id/token（token 重新生成）、DELETE /agents/:id + POST /agents/batch-delete、PATCH 支持 name 更新、LoginPage 双模式、AdminPage（agent 管理面板）
+  - codex-v034-direct（全栈）：模块 5+6 — Direct Chat（persistent 1:1 私聊模型）、MCP flock_dm_send/read/list、CLI flock dm、Command Center 改为 Direct Chat、Stop hook wait-on-stop opt-in
+  - 327 测试通过（server 189 + sdk 34 + mcp 104）
+  - 交叉审查通过，3 个阻断问题已修复
+- 下一步：v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
