@@ -171,6 +171,7 @@ function migrateColumn(db: Database.Database, table: string, column: string, def
 }
 
 export function cleanupIdempotencyKeys(db: Database.Database): number {
-  const result = db.prepare("DELETE FROM idempotency_keys WHERE expires_at < datetime('now')").run();
-  return result.changes;
+  const roomResult = db.prepare("DELETE FROM idempotency_keys WHERE expires_at < datetime('now')").run();
+  const directResult = db.prepare("DELETE FROM direct_idempotency_keys WHERE expires_at < datetime('now')").run();
+  return roomResult.changes + directResult.changes;
 }
