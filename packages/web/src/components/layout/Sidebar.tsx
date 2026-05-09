@@ -158,6 +158,18 @@ export function Sidebar() {
         <span>Command Center</span>
       </NavLink>
 
+      <NavLink
+        to="/admin"
+        className={({ isActive }) =>
+          `mx-2 mb-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            isActive ? 'bg-accent text-white' : 'bg-surface-elevated text-text-muted hover:text-text'
+          }`
+        }
+      >
+        <span>⚙️</span>
+        <span>Admin</span>
+      </NavLink>
+
       {showCreateRoom && token && (
         <CreateRoomModal
           token={token}

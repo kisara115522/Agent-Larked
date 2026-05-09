@@ -76,6 +76,15 @@ export function updateProfile(db: Database.Database, agentId: string, req: Updat
   const updates: string[] = [];
   const values: unknown[] = [];
 
+  if (req.name !== undefined) {
+    // Check uniqueness
+    const conflict = db.prepare('SELECT id FROM profiles WHERE name = ? AND id != ?').get(req.name, agentId) as { id: string } | undefined;
+    if (conflict) {
+      throw new ServerError(ErrorCode.DUPLICATE_NAME, `Agent name '${req.name}' already taken`, false, 409);
+    }
+    updates.push('name = ?');
+    values.push(req.name);
+  }
   if (req.display_name !== undefined) {
     updates.push('display_name = ?');
     values.push(req.display_name);

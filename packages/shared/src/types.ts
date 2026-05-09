@@ -30,10 +30,38 @@ export interface RegisterAgentResponse {
 }
 
 export interface UpdateAgentRequest {
+  name?: string;
   display_name?: string;
   bio?: string;
   capabilities?: string[];
   status?: AgentStatus;
+}
+
+export interface LoginRequest {
+  identifier: string; // agent id or display_name
+  token: string;
+}
+
+export interface LoginResponse {
+  id: string;
+  name: string;
+  display_name: string;
+  token: string;
+}
+
+export interface RegenerateTokenResponse {
+  id: string;
+  token: string;
+}
+
+export interface BatchDeleteRequest {
+  agent_ids: string[];
+}
+
+export interface BatchDeleteResult {
+  id: string;
+  success: boolean;
+  error?: string;
 }
 
 export interface DiscoverAgentsQuery {

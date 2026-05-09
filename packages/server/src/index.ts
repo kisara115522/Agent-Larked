@@ -10,6 +10,7 @@ import { roomsRouter } from './routes/rooms.js';
 import { messagesRouter } from './routes/messages.js';
 import { reactionsRouter } from './routes/reactions.js';
 import { eventsRouter } from './routes/events.js';
+import { authRouter } from './routes/auth.js';
 
 export function createApp(dbPath: string = ':memory:'): { app: express.Express; db: ReturnType<typeof createDatabase> } {
   const db = createDatabase(dbPath);
@@ -19,6 +20,7 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   app.use(express.json({ limit: '2mb' }));
 
   // Routes
+  app.use('/auth', authRouter(db));
   app.use('/agents', agentsRouter(db, eventBus));
   app.use('/agents', followsRouter(db));
   app.use('/agents', agentInvitesRouter(db));
