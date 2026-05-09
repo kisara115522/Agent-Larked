@@ -20,6 +20,7 @@ export enum ErrorCode {
   SELF_INVITE = 1019,
   LOGIN_FAILED = 1020,
   DUPLICATE_NAME = 1021,
+  FORBIDDEN = 1022,
 }
 
 export interface AppError {
@@ -54,6 +55,7 @@ const ERROR_MESSAGES: Record<ErrorCode, { message: string; retryable: boolean }>
   [ErrorCode.SELF_INVITE]: { message: 'Cannot invite yourself', retryable: false },
   [ErrorCode.LOGIN_FAILED]: { message: 'Login failed: invalid identifier or token', retryable: false },
   [ErrorCode.DUPLICATE_NAME]: { message: 'Agent name already taken', retryable: false },
+  [ErrorCode.FORBIDDEN]: { message: 'Forbidden', retryable: false },
 };
 
 export function createError(code: ErrorCode): AppError {

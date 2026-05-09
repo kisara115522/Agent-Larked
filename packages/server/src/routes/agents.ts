@@ -8,6 +8,16 @@ import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import type { BatchDeleteRequest, BatchDeleteResult, RegenerateTokenResponse } from '@flock/shared';
 
+function deleteAgentCascade(db: Database.Database, agentId: string): void {
+  db.prepare('DELETE FROM reactions WHERE agent_id = ?').run(agentId);
+  db.prepare('DELETE FROM message_mentions WHERE agent_id = ?').run(agentId);
+  db.prepare('DELETE FROM room_members WHERE agent_id = ?').run(agentId);
+  db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').run(agentId, agentId);
+  db.prepare('DELETE FROM invites WHERE inviter_id = ? OR invitee_id = ?').run(agentId, agentId);
+  db.prepare("UPDATE messages SET from_agent = '[deleted]' WHERE from_agent = ?").run(agentId);
+  db.prepare('DELETE FROM profiles WHERE id = ?').run(agentId);
+}
+
 export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
@@ -46,9 +56,23 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
   router.patch('/:id', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       if (req.params.id !== req.agentId) {
-        res.status(403).json({ error: { code: 0, message: 'Cannot update another agent', retryable: false } });
+        // TODO: v0.6 RBAC — allow admin role to update any agent
+        res.status(403).json({ error: { code: ErrorCode.FORBIDDEN, message: 'Cannot update another agent', retryable: false } });
         return;
       }
+
+      // Validate name if provided
+      if (req.body.name !== undefined) {
+        const name = String(req.body.name).trim();
+        if (name.length < 1 || name.length > 64) {
+          throw new ServerError(ErrorCode.VALIDATION_ERROR, 'name must be 1-64 characters', false, 400);
+        }
+        if (!/^[\w.-]+$/.test(name)) {
+          throw new ServerError(ErrorCode.VALIDATION_ERROR, 'name may only contain letters, digits, dots, hyphens, and underscores', false, 400);
+        }
+        req.body.name = name;
+      }
+
       const result = updateProfile(db, req.params.id, req.body);
       // Broadcast status change via SSE
       if (req.body.status && eventBus) {
@@ -78,11 +102,11 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
     }
   });
 
-  // POST /agents/:id/token — regenerate token
+  // POST /agents/:id/token — regenerate token (self only)
   router.post('/:id/token', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       if (req.params.id !== req.agentId) {
-        res.status(403).json({ error: { code: 0, message: 'Cannot regenerate token for another agent', retryable: false } });
+        res.status(403).json({ error: { code: ErrorCode.FORBIDDEN, message: 'Cannot regenerate token for another agent', retryable: false } });
         return;
       }
 
@@ -104,29 +128,17 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
     }
   });
 
-  // DELETE /agents/:id — delete agent
+  // DELETE /agents/:id — delete agent (admin: any agent; non-admin: self only)
+  // TODO: v0.6 RBAC — formalize admin role check
   router.delete('/:id', auth, (req: AuthenticatedRequest, res, next) => {
     try {
-      if (req.params.id !== req.agentId) {
-        res.status(403).json({ error: { code: 0, message: 'Cannot delete another agent', retryable: false } });
-        return;
-      }
-
-      const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(req.params.id) as { id: string } | undefined;
+      const agentId = req.params.id as string;
+      const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
       if (!existing) {
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
       }
 
-      // Clean up related data
-      db.prepare('DELETE FROM reactions WHERE agent_id = ?').run(req.params.id);
-      db.prepare('DELETE FROM message_mentions WHERE agent_id = ?').run(req.params.id);
-      db.prepare('DELETE FROM room_members WHERE agent_id = ?').run(req.params.id);
-      db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').run(req.params.id, req.params.id);
-      db.prepare('DELETE FROM invites WHERE inviter_id = ? OR invitee_id = ?').run(req.params.id, req.params.id);
-      // Messages: keep as history but set from to deleted marker
-      db.prepare("UPDATE messages SET from_agent = '[deleted]' WHERE from_agent = ?").run(req.params.id);
-      db.prepare('DELETE FROM profiles WHERE id = ?').run(req.params.id);
-
+      deleteAgentCascade(db, agentId);
       res.json({ ok: true });
     } catch (err) {
       next(err);
@@ -142,30 +154,17 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         throw new ServerError(ErrorCode.VALIDATION_ERROR, 'agent_ids must be a non-empty array', false, 400);
       }
 
-      // Can only delete yourself (same auth rule as single delete)
       const results: BatchDeleteResult[] = [];
 
       for (const agentId of agent_ids) {
         try {
-          if (agentId !== req.agentId) {
-            results.push({ id: agentId, success: false, error: 'Cannot delete another agent' });
-            continue;
-          }
-
           const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
           if (!existing) {
             results.push({ id: agentId, success: false, error: 'Agent not found' });
             continue;
           }
 
-          db.prepare('DELETE FROM reactions WHERE agent_id = ?').run(agentId);
-          db.prepare('DELETE FROM message_mentions WHERE agent_id = ?').run(agentId);
-          db.prepare('DELETE FROM room_members WHERE agent_id = ?').run(agentId);
-          db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').run(agentId, agentId);
-          db.prepare('DELETE FROM invites WHERE inviter_id = ? OR invitee_id = ?').run(agentId, agentId);
-          db.prepare("UPDATE messages SET from_agent = '[deleted]' WHERE from_agent = ?").run(agentId);
-          db.prepare('DELETE FROM profiles WHERE id = ?').run(agentId);
-
+          deleteAgentCascade(db, agentId);
           results.push({ id: agentId, success: true });
         } catch (err) {
           results.push({ id: agentId, success: false, error: (err as Error).message });

@@ -19,7 +19,7 @@ interface BatchResult {
 }
 
 export function AdminPage() {
-  const { token, agent: currentAgent } = useAuth();
+  const { token, agent: currentAgent, login } = useAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -93,8 +93,8 @@ export function AdminPage() {
 
   const handleDelete = async (id: string) => {
     if (!token) return;
-    if (!confirm('Delete this agent? This cannot be undone.')) return;
-    if (id === currentAgent?.id && !confirm('You are deleting your own account. You will be logged out.')) return;
+    const isSelf = id === currentAgent?.id;
+    if (!confirm(isSelf ? 'Delete your own account? You will be logged out. This cannot be undone.' : 'Delete this agent? This cannot be undone.')) return;
     setError('');
     try {
       await del(`/agents/${id}`, token);
@@ -115,6 +115,10 @@ export function AdminPage() {
     try {
       const res = await post<{ id: string; token: string }>(`/agents/${id}/token`, token);
       setNewToken(res.token);
+      // Update stored token so the user isn't locked out after refresh
+      if (id === currentAgent?.id) {
+        await login(res.token);
+      }
       loadAgents();
     } catch (err) {
       setError((err as Error).message || 'Token regeneration failed');
@@ -123,9 +127,11 @@ export function AdminPage() {
 
   const handleBatchDelete = async () => {
     if (!token || selected.size === 0) return;
-    if (!confirm(`Delete ${selected.size} agent(s)? This cannot be undone.`)) return;
     const selfDelete = selected.has(currentAgent?.id ?? '');
-    if (selfDelete && !confirm('You are deleting your own account. You will be logged out.')) return;
+    if (!confirm(selfDelete
+      ? `Delete ${selected.size} agent(s) including your own account? You will be logged out. This cannot be undone.`
+      : `Delete ${selected.size} agent(s)? This cannot be undone.`
+    )) return;
     setError('');
     setBatchResults(null);
     try {
