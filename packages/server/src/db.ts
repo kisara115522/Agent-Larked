@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   metadata TEXT DEFAULT '{}',
   token_hash TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  last_active_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS rooms (
@@ -116,6 +117,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'profiles', 'display_name', 'TEXT DEFAULT \'\'');
   migrateColumn(db, 'rooms', 'visibility', "TEXT DEFAULT 'public'");
   migrateColumn(db, 'messages', 'broadcast', 'INTEGER DEFAULT 0');
+  migrateColumn(db, 'profiles', 'last_active_at', 'TEXT');
 
   // Index for broadcast queries
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_broadcast ON messages(broadcast, created_order)');

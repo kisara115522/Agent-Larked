@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { getMessages } from '@flock/server/services/messaging';
-import { getAgentId, setAgentOffline } from '../db.js';
+import { getAgentId } from '../db.js';
 
 /** Get the agent's own recent status updates from joined rooms for context recovery */
 function getMyStatusUpdates(
@@ -28,27 +28,6 @@ function getMyStatusUpdates(
 // Global message event bus — shared across all tool registrations
 export const messageBus = new EventEmitter();
 messageBus.setMaxListeners(100);
-
-// Idle timer: if flock_wait is not called within 5 minutes, set agent to offline
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-/** Clear the idle timer while the agent is actively waiting. */
-function clearIdleTimer(): void {
-  if (idleTimer) clearTimeout(idleTimer);
-  idleTimer = null;
-}
-
-/** Reset the idle timer after flock_wait returns. */
-export function resetIdleTimer(db: Database.Database): void {
-  clearIdleTimer();
-  idleTimer = setTimeout(() => {
-    setAgentOffline(db);
-    idleTimer = null;
-  }, IDLE_TIMEOUT_MS);
-  // Don't keep the process alive just for the idle timer
-  if (idleTimer.unref) idleTimer.unref();
-}
 
 // Track last-seen sequence per room (global, keyed by room_id)
 const roomSequences = new Map<string, number>();
@@ -86,9 +65,6 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         };
       }
 
-      // The agent is actively waiting, so it should not be marked idle mid-wait.
-      clearIdleTimer();
-
       // Get list of rooms this agent has joined
       const joinedRooms = new Set(
         (db.prepare('SELECT room_id FROM room_members WHERE agent_id = ?').all(agentId) as Array<{ room_id: string }>)
@@ -96,7 +72,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
       );
 
       if (joinedRooms.size === 0) {
-        resetIdleTimer(db);
+
         return {
           content: [{ type: 'text' as const, text: 'Error: Not a member of any room. Join a room first.' }],
           isError: true,
@@ -149,7 +125,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         if (statusUpdates.length > 0) {
           response.my_status_updates = statusUpdates;
         }
-        resetIdleTimer(db);
+
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(response) }],
         };
@@ -183,7 +159,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           if (statusUpdates.length > 0) {
             response.my_status_updates = statusUpdates;
           }
-          resetIdleTimer(db);
+  
           resolve({
             content: [{ type: 'text' as const, text: JSON.stringify(response) }],
           });
@@ -227,7 +203,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           cleanup();
           if (!resolved) {
             resolved = true;
-            resetIdleTimer(db);
+    
             resolve({
               content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], count: 0, timed_out: true }) }],
             });

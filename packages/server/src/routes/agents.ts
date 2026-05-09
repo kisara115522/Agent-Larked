@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { registerAgent, updateProfile, searchAgents, getProfile } from '../services/identity.js';
+import { registerAgent, updateProfile, searchAgents, getProfile, cleanupStaleOnlineAgents } from '../services/identity.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 
@@ -59,6 +59,14 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
   // GET /agents — search/discover
   router.get('/', auth, (req, res, next) => {
     try {
+      // Clean up stale online agents before returning results
+      const staleIds = cleanupStaleOnlineAgents(db);
+      if (staleIds.length > 0 && eventBus) {
+        for (const id of staleIds) {
+          eventBus.emitAgentStatus({ agent_id: id, status: 'offline' });
+        }
+      }
+
       const rawLimit = req.query.limit ? Number(req.query.limit) : undefined;
       const limit = rawLimit !== undefined && Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
       const result = searchAgents(db, {

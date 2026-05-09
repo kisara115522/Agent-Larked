@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { getAgentId, getDatabase, resolveAgentId, setAgentOnline, setAgentOffline } from './db.js';
+import { getAgentId, getDatabase, resolveAgentId, setAgentOffline } from './db.js';
 import { installUnreadMentionInjection, startMentionListener } from './mentions.js';
 import { registerIdentityTools } from './tools/identity.js';
 import { registerRoomTools } from './tools/room.js';
@@ -48,10 +48,11 @@ async function main(): Promise<void> {
   console.error(`Flock MCP agent: ${agent.name} (${agent.id})`);
   const mentionListener = startMentionListener(dbInstance, getAgentId);
 
-  // Set agent online
-  setAgentOnline(dbInstance);
+  // NOTE: MCP startup does NOT set agent online.
+  // Online/offline is controlled by host turn lifecycle hooks (PostToolUse → online, Stop → offline).
+  // Process exit is a safety fallback only.
 
-  // Set agent offline on process exit
+  // Set agent offline on process exit (safety net)
   const goOffline = () => {
     mentionListener.stop();
     setAgentOffline(dbInstance);

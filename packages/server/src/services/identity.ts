@@ -6,6 +6,30 @@ import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { hashToken } from '../middleware/auth.js';
 import { rowToProfile } from './profile-utils.js';
+import type { EventBus } from '../sse/event-bus.js';
+
+const STALE_ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Mark agents as offline if their last_active_at is older than the lease threshold.
+ * This is a safety net for crashed hosts or hooks that didn't fire.
+ * Returns IDs of agents that were marked offline (for SSE broadcasting).
+ */
+export function cleanupStaleOnlineAgents(db: Database.Database): string[] {
+  const threshold = new Date(Date.now() - STALE_ONLINE_THRESHOLD_MS).toISOString();
+  const stale = db.prepare(
+    "SELECT id FROM profiles WHERE status = 'online' AND last_active_at IS NOT NULL AND last_active_at < ?"
+  ).all(threshold) as Array<{ id: string }>;
+
+  if (stale.length === 0) return [];
+
+  const now = new Date().toISOString();
+  db.prepare(
+    "UPDATE profiles SET status = 'offline', updated_at = ? WHERE status = 'online' AND last_active_at IS NOT NULL AND last_active_at < ?"
+  ).run(now, threshold);
+
+  return stale.map(a => a.id);
+}
 
 export function registerAgent(db: Database.Database, req: RegisterAgentRequest): RegisterAgentResponse {
   const id = uuidv4();
@@ -15,8 +39,8 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
 
   try {
     db.prepare(`
-      INSERT INTO profiles (id, name, bio, capabilities, model, status, token_hash, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'online', ?, ?, ?)
+      INSERT INTO profiles (id, name, bio, capabilities, model, status, token_hash, created_at, updated_at, last_active_at)
+      VALUES (?, ?, ?, ?, ?, 'online', ?, ?, ?, ?)
     `).run(
       id,
       req.name,
@@ -24,6 +48,7 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
       JSON.stringify(req.capabilities ?? []),
       req.model ?? '',
       tokenHash,
+      now,
       now,
       now,
     );
@@ -66,6 +91,10 @@ export function updateProfile(db: Database.Database, agentId: string, req: Updat
   if (req.status !== undefined) {
     updates.push('status = ?');
     values.push(req.status);
+    if (req.status === 'online') {
+      updates.push('last_active_at = ?');
+      values.push(now);
+    }
   }
 
   if (updates.length > 0) {

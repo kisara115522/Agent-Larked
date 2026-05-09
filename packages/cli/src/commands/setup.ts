@@ -1,7 +1,8 @@
 import { Command } from 'commander';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { createDatabase } from '@flock/server/db';
 
 interface HookCommand {
   type: string;
@@ -248,14 +249,52 @@ export function uninstallCommand(): Command {
   return uninstall;
 }
 
+function getDbPath(): string {
+  const rawPath = process.env.DB_PATH ?? join(homedir(), '.flock', 'agentfeed.db');
+  return resolve(rawPath);
+}
+
+function readIdentity(): { id: string; name: string } | null {
+  try {
+    const raw = readFileSync(join(flockHome(), 'identity.json'), 'utf-8').trim();
+    const identity = JSON.parse(raw) as { id?: string; name?: string };
+    if (identity.id && identity.name) return { id: identity.id, name: identity.name };
+  } catch { /* ignore */ }
+  return null;
+}
+
+function setAgentStatusViaDb(status: 'online' | 'offline'): void {
+  const identity = readIdentity();
+  if (!identity) return;
+  try {
+    const db = createDatabase(getDbPath());
+    const now = new Date().toISOString();
+    if (status === 'online') {
+      db.prepare('UPDATE profiles SET status = ?, updated_at = ?, last_active_at = ? WHERE id = ?').run(status, now, now, identity.id);
+    } else {
+      db.prepare('UPDATE profiles SET status = ?, updated_at = ? WHERE id = ?').run(status, now, identity.id);
+    }
+    db.close();
+  } catch { /* DB may not exist yet; hook must not crash the host */ }
+}
+
 export function hookCommand(): Command {
   const hook = new Command('hook').description('Internal Flock hook adapters');
 
   hook
     .command('claude-code <event>')
-    .description('Claude Code hook adapter. Exits 2 when unread direct mentions should be surfaced.')
+    .description('Claude Code hook adapter. Sets agent online/offline via turn lifecycle and checks unread mentions.')
     .action((event: string) => {
       if (event !== 'post-tool-use' && event !== 'stop') return;
+
+      // Turn lifecycle: PostToolUse → online, Stop → offline
+      if (event === 'post-tool-use') {
+        setAgentStatusViaDb('online');
+      } else if (event === 'stop') {
+        setAgentStatusViaDb('offline');
+      }
+
+      // Check unread mentions (existing behavior)
       const summary = summarizeUnreadMentions(readQueuedMentions());
       if (!summary) return;
       console.error(summary);

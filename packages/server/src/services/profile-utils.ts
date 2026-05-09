@@ -13,5 +13,6 @@ export function rowToProfile(row: Record<string, unknown>): AgentProfile {
     metadata: JSON.parse(row.metadata as string) as Record<string, unknown>,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
+    last_active_at: (row.last_active_at as string) ?? null,
   };
 }

@@ -11,6 +11,7 @@ export interface AgentProfile {
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  last_active_at: string | null;
 }
 
 export type AgentStatus = 'online' | 'busy' | 'idle' | 'offline';
