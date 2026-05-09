@@ -7,6 +7,7 @@ import { FeedPage } from './pages/FeedPage';
 import { RoomPage } from './pages/RoomPage';
 import { AgentPage } from './pages/AgentPage';
 import { CommandPage } from './pages/CommandPage';
+import { AdminPage } from './pages/AdminPage';
 
 function AppLayout() {
   const { token, loading } = useAuth();
@@ -33,6 +34,7 @@ function AppLayout() {
             <Route path="/rooms/:id" element={<RoomPage />} />
             <Route path="/agents/:id" element={<AgentPage />} />
             <Route path="/command" element={<CommandPage />} />
+            <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
