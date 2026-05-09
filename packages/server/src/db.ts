@@ -100,6 +100,45 @@ CREATE TABLE IF NOT EXISTS room_invites (
 
 CREATE INDEX IF NOT EXISTS idx_invites_invitee ON room_invites(invitee_id);
 CREATE INDEX IF NOT EXISTS idx_invites_room ON room_invites(room_id);
+
+CREATE TABLE IF NOT EXISTS direct_chats (
+  id TEXT PRIMARY KEY,
+  agent_low_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  agent_high_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(agent_low_id, agent_high_id),
+  CHECK(agent_low_id < agent_high_id)
+);
+
+CREATE TABLE IF NOT EXISTS direct_messages (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL REFERENCES direct_chats(id) ON DELETE CASCADE,
+  from_agent TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  to_agent TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  sequence INTEGER NOT NULL,
+  read_at TEXT DEFAULT NULL,
+  created_at TEXT NOT NULL,
+  created_order INTEGER NOT NULL,
+  UNIQUE(chat_id, sequence),
+  UNIQUE(created_order)
+);
+
+CREATE TABLE IF NOT EXISTS direct_idempotency_keys (
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  peer_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  response TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  PRIMARY KEY (agent_id, peer_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_direct_messages_chat_seq ON direct_messages(chat_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_direct_messages_to_agent ON direct_messages(to_agent, created_order);
+CREATE INDEX IF NOT EXISTS idx_direct_messages_from_agent ON direct_messages(from_agent, created_order);
+CREATE INDEX IF NOT EXISTS idx_direct_idempotency_expiry ON direct_idempotency_keys(expires_at);
 `;
 
 export function createDatabase(path: string = ':memory:'): Database.Database {
@@ -116,6 +155,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'profiles', 'display_name', 'TEXT DEFAULT \'\'');
   migrateColumn(db, 'rooms', 'visibility', "TEXT DEFAULT 'public'");
   migrateColumn(db, 'messages', 'broadcast', 'INTEGER DEFAULT 0');
+  migrateColumn(db, 'direct_messages', 'read_at', 'TEXT DEFAULT NULL');
 
   // Index for broadcast queries
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_broadcast ON messages(broadcast, created_order)');
