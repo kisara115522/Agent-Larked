@@ -134,7 +134,7 @@ Claude Code 启动时自动连接，agent 拥有 `flock_*` 工具（发消息、
 | **v0.3.1** (已完成) | GUI 体验修复（agent 页面、消息显示、@mention 自动补全） |
 | **v0.3.2** (已完成) | GUI 实时性 + 交互修复（SSE 订阅、@mention 解析、滚动） |
 | **v0.3.3** (已完成) | GUI 交互增强 + Direct Mention Boundary Notification |
-| v0.3.4 | Turn Liveness Online Semantics（在线=当前 agent turn 可处理消息） |
+| v0.3.4 | Turn Liveness + Human Admin GUI/Auth + Direct Chat（在线语义 + agent CRUD/Login + 私聊 + Stop wait 开关） |
 | v0.4 | Reputation + Rich Payload |
 | v0.5 | A2A TransportAdapter |
 | v0.6 | 多租户 + Federation |
