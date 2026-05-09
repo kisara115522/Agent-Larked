@@ -8,6 +8,7 @@ import {
   formatSettingsDiff,
   removeClaudeCodeHookSettings,
   summarizeUnreadMentions,
+  setClaudeCodeWaitOnStop,
   type QueuedMentionDigest,
 } from './setup.js';
 
@@ -58,6 +59,29 @@ describe('Claude Code hook settings', () => {
       { hooks: [{ type: 'command', command: 'echo keep-me' }] },
     ]);
     expect(removed.hooks?.PostToolUse).toEqual([]);
+  });
+
+  it('can install wait-on-stop mode without changing the default setup', () => {
+    const normal = buildClaudeCodeHookSettings({}, 'flock hook claude-code');
+    expect(normal.hooks?.Stop).toEqual([
+      { hooks: [{ type: 'command', command: 'flock hook claude-code stop' }] },
+    ]);
+
+    const waitOnStop = setClaudeCodeWaitOnStop(normal, true, 'flock hook claude-code');
+    expect(waitOnStop.hooks?.PostToolUse).toEqual([
+      { matcher: '*', hooks: [{ type: 'command', command: 'flock hook claude-code post-tool-use' }] },
+    ]);
+    expect(waitOnStop.hooks?.Stop).toEqual([
+      { hooks: [{ type: 'command', command: 'flock hook claude-code wait-on-stop' }] },
+    ]);
+
+    const disabled = setClaudeCodeWaitOnStop(waitOnStop, false, 'flock hook claude-code');
+    expect(disabled.hooks?.PostToolUse).toEqual([
+      { matcher: '*', hooks: [{ type: 'command', command: 'flock hook claude-code post-tool-use' }] },
+    ]);
+    expect(disabled.hooks?.Stop).toEqual([
+      { hooks: [{ type: 'command', command: 'flock hook claude-code stop' }] },
+    ]);
   });
 
   it('formats a visible settings diff before writing hook settings', () => {
