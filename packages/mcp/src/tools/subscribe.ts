@@ -72,7 +72,6 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
       );
 
       if (joinedRooms.size === 0) {
-
         return {
           content: [{ type: 'text' as const, text: 'Error: Not a member of any room. Join a room first.' }],
           isError: true,
@@ -125,7 +124,6 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         if (statusUpdates.length > 0) {
           response.my_status_updates = statusUpdates;
         }
-
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(response) }],
         };
@@ -159,7 +157,6 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           if (statusUpdates.length > 0) {
             response.my_status_updates = statusUpdates;
           }
-  
           resolve({
             content: [{ type: 'text' as const, text: JSON.stringify(response) }],
           });
@@ -203,7 +200,6 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           cleanup();
           if (!resolved) {
             resolved = true;
-    
             resolve({
               content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], count: 0, timed_out: true }) }],
             });
