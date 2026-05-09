@@ -4,6 +4,7 @@ import { register, updateProfile } from '../identity.js';
 import { discover } from '../discovery.js';
 import { createRoom, joinRoom, leaveRoom } from '../room.js';
 import { sendMessage, getMessages } from '../messaging.js';
+import { sendDirectMessage, getDirectMessages, listDirectChats } from '../direct-chat.js';
 import { react, getThread } from '../reaction.js';
 import { subscribeRoom, unsubscribeRoom } from '../sse.js';
 import { ErrorCode } from '@flock/shared';
@@ -171,6 +172,50 @@ describe('Messaging', () => {
     expect(url).toContain('/rooms/r1/messages?');
     expect(url).toContain('limit=10');
     expect(url).toContain('cursor=5');
+  });
+});
+
+describe('Direct Chat', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('sendDirectMessage sends POST /direct-chats/:agentId/messages', async () => {
+    const fetchFn = mockFetch({ id: 'dm1', chat_id: 'dc1', sequence: 1, created_at: '2026-05-09T00:00:00Z' }, 201);
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+
+    const res = await sendDirectMessage(client, 'agent-2', {
+      content: 'hello privately',
+      idempotency_key: 'dm-key',
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/direct-chats/agent-2/messages`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(res.chat_id).toBe('dc1');
+  });
+
+  it('getDirectMessages sends GET /direct-chats/:agentId/messages with pagination', async () => {
+    const fetchFn = mockFetch({ messages: [], next_cursor: null, has_more: false });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+
+    await getDirectMessages(client, 'agent-2', { limit: 10, cursor: 3 });
+
+    const url = fetchFn.mock.calls[0][0] as string;
+    expect(url).toContain('/direct-chats/agent-2/messages?');
+    expect(url).toContain('limit=10');
+    expect(url).toContain('cursor=3');
+  });
+
+  it('listDirectChats sends GET /direct-chats', async () => {
+    const fetchFn = mockFetch({ chats: [] });
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+
+    await listDirectChats(client);
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/direct-chats`,
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 });
 
