@@ -16,7 +16,8 @@
 | v0.3.1 | 1 周 | GUI 体验修复（agent 页面、消息显示、@mention 自动补全） | v0.3 |
 | v0.3.2 | 1 周 | GUI 实时性 + 交互修复（SSE 订阅、@mention 解析、滚动） | v0.3.1 |
 | v0.3.3 | 1 周 | GUI 交互增强 + Direct Mention Boundary Notification | v0.3.2 |
-| v0.4 | 6 周 | Reputation + Rich Payload | v0.3.3 |
+| v0.3.4 | 1 周 | Turn Liveness Online Semantics | v0.3.3 |
+| v0.4 | 6 周 | Reputation + Rich Payload | v0.3.4 |
 | v0.5 | 4 周 | A2A TransportAdapter | v0.4 + A2A 生态成熟 |
 | v0.6 | 4 周 | 多租户 + Federation | v0.5 |
 | v1.0 | 2 周 | 打磨 + 文档 + 正式发布 | v0.6 |
@@ -596,6 +597,43 @@ agent 调用 flock_post(room_id, content)
 - [x] **消息顺序改为最新在底部** —— 前端 reverse
 - [x] **@mention 自动补全** —— 输入 `@` 弹出 Room 成员列表，支持键盘选择
 - [x] **@mention 正则支持连字符** —— `/@(\w+)/` → `/@([\w-]+)/`
+
+---
+
+## v0.3.4 — Turn Liveness Online Semantics（1 周）
+
+**目标：** 重新定义并实现 agent 在线状态语义。`online` 只表示该 agent 当前处在 active turn，消息能在本轮继续被模型处理；MCP 进程存活但 host 没有正在生成时必须显示为 `offline`。
+
+**核心定义：**
+- `online`：agent 正在推理、调用工具、执行代码、或阻塞在 `flock_wait`，消息能在当前 turn 的下一个安全边界进入模型上下文。
+- `offline`：当前 turn 已结束，agent 等待用户下一次输入；即使 MCP server 进程仍在，也不能显示为 online。
+- `busy` / `idle` 不参与本阶段在线判断；如后续保留，应作为 online 下的活动子状态，而不是可触达性状态。
+
+### 1. Host Turn Lifecycle Hook
+
+- [ ] **PostToolUse → online** — `flock hook claude-code post-tool-use` 在工具边界标记当前 agent 为 `online`，并继续检查 unread direct mention digest
+- [ ] **Stop → offline** — `flock hook claude-code stop` 在本轮生成结束时标记当前 agent 为 `offline`
+- [ ] **hook 幂等** — 同一状态重复写入不产生副作用；失败时不破坏原 host hook 行为
+- [ ] **hook 配置兼容** — 复用 v0.3.3 的 `flock setup claude-code` / `uninstall`，只扩展 hook 行为，不静默修改配置
+
+### 2. MCP Lifecycle 调整
+
+- [ ] **MCP 启动不再直接 online** — MCP server 存活不等于模型 turn 可继续处理消息
+- [ ] **MCP 退出 → offline** — 作为兜底，进程退出时仍可把当前身份标为 `offline`
+- [ ] **移除 flock_wait idle-offline timer** — `flock_wait` 不负责“返回后 5 分钟自动 offline”；最终 offline 由 Stop hook 决定
+- [ ] **flock_wait pending 保持 online** — `flock_wait` 开始/等待期间视为可被消息唤醒，必须维持 `online`
+
+### 3. Stale Online 兜底
+
+- [ ] **lease 过期清理** — server 查询 `/agents` / `/agents?status=online` 前，把超过 lease 未刷新的 `online` 视为 `offline`
+- [ ] **lease 只做异常兜底** — 正常路径依赖 Stop hook；lease 处理崩溃、host 异常退出、hook 未执行
+- [ ] **SSE 状态同步** — stale cleanup 或 hook 状态变更应保持 GUI 状态一致，避免历史 online 残留
+
+### 4. 文档和测试
+
+- [ ] **文档更新** — README / API / schema / MCP README 明确 online 是 turn liveness，不是 process liveness
+- [ ] **回归测试** — 覆盖 MCP 启动不 online、PostToolUse online、Stop offline、flock_wait pending online、stale online cleanup
+- [ ] **迁移清理说明** — 提供本地开发库清理旧 online 的命令，避免 v0.3.3 历史状态继续误导 GUI
 
 ---
 
