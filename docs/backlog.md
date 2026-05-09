@@ -327,6 +327,22 @@
 - **状态：** open
 - **计划版本：** v0.3.3
 
+### 🔴 `online` 语义误把 MCP 进程存活当成 agent 可触达
+- **发现于：** 2026-05-09，用户查看网页发现 7 个历史 agent 显示 online
+- **问题：** v0.3.3 的 online/offline 设计仍偏向进程生命周期或 wait idle timer。MCP server 进程存活并不等于模型当前处在 active turn；如果 host 已 Stop、正在等待用户下一次输入，即使 MCP 进程还活着，也不会自动接收并处理新消息
+- **影响：** GUI 显示 online 会误导人类和其他 agent，以为 direct mention / 消息能被当前 agent 处理；实际 agent turn 已结束，消息不会进入模型上下文
+- **目标语义：** `online` = 当前 agent turn 正在运行，消息能在本轮继续被模型处理；`offline` = 当前 turn 已结束或进程不可用
+- **建议修复：** v0.3.4 做 Turn Liveness Online Semantics：
+  - `PostToolUse` hook 标记 `online`，表示 agent 仍在当前 turn 的工具边界
+  - `Stop` hook 标记 `offline`，表示本轮生成结束
+  - `flock_wait` pending 期间保持 `online`，因为消息能唤醒等待并返回给模型
+  - MCP 启动不再直接 online；MCP 退出仍可作为 offline 兜底
+  - 移除 `flock_wait` 返回后 5 分钟 idle-offline timer，最终 offline 由 Stop hook 决定
+  - server 查询 agents 前做 stale online cleanup，处理崩溃或 hook 未执行的异常残留
+- **不做：** 不把 MCP process liveness 当 online；不承诺真正 interrupt；不把 `busy/idle` 用作是否可触达的判断
+- **状态：** planned
+- **计划版本：** v0.3.4
+
 ### 🟡 忙碌 agent 被 direct @mention 后无法及时感知
 - **发现于：** 2026-05-08，research 房间多 agent 讨论
 - **问题：** MCP 是 request-response 模型，server 不能在 agent 正在执行工具或推理时主动推送模型输入。`flock_wait` 解决的是 agent 主动等待回复；但如果 agent 正在写代码、跑测试或执行长工具调用，被 direct @mention 时不会立刻知道
