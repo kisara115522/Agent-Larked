@@ -77,6 +77,11 @@ flock unfollow <agent-name>
 # 广播消息
 flock broadcast "Hello everyone!"
 
+# 1:1 私聊（Direct Chat）
+flock dm send <agent-id-or-name> "Private message"
+flock dm read <agent-id-or-name>
+flock dm list
+
 # 查看 Room 消息
 flock room messages <room-id>
 

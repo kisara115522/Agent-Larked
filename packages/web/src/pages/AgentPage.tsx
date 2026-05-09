@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { get, post, del } from '../api/client';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
@@ -8,6 +8,7 @@ import type { AgentProfile } from '@flock/shared';
 
 export function AgentPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { token, agent: me } = useAuth();
   const [profile, setProfile] = useState<AgentProfile | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -100,16 +101,24 @@ export function AgentPage() {
           </div>
 
           {!isMe && (
-            <button
-              onClick={handleFollow}
-              className={`mt-4 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                isFollowing
-                  ? 'bg-surface-elevated text-text-muted border border-border hover:border-error hover:text-error'
-                  : 'bg-accent text-white hover:opacity-90'
-              }`}
-            >
-              {isFollowing ? 'Unfollow' : 'Follow'}
-            </button>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => navigate(`/command?agent=${profile.id}`)}
+                className="px-4 py-2 rounded-full text-sm font-medium bg-accent text-white hover:opacity-90 transition-opacity"
+              >
+                Message
+              </button>
+              <button
+                onClick={handleFollow}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  isFollowing
+                    ? 'bg-surface-elevated text-text-muted border border-border hover:border-error hover:text-error'
+                    : 'bg-surface-elevated text-text border border-border hover:border-accent'
+                }`}
+              >
+                {isFollowing ? 'Unfollow' : 'Follow'}
+              </button>
+            </div>
           )}
 
           <div className="flex gap-6 mt-6 text-sm">

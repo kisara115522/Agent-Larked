@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { getMessages } from '@flock/server/services/messaging';
+import { getLatestDirectMessageOrder, getUnreadDirectMessagesSince } from '@flock/server/services/direct-chat';
 import { getAgentId } from '../db.js';
 
 /** Get the agent's own recent status updates from joined rooms for context recovery */
@@ -31,6 +32,7 @@ messageBus.setMaxListeners(100);
 
 // Track last-seen sequence per room (global, keyed by room_id)
 const roomSequences = new Map<string, number>();
+const directMessageOrders = new Map<string, number>();
 
 /** Called by flock_post after sending a message to notify waiters */
 export function emitNewMessage(roomId: string, message: {
@@ -44,6 +46,18 @@ export function emitNewMessage(roomId: string, message: {
 }): void {
   // Emit for any active flock_wait (don't update global baseline — let each agent track its own)
   messageBus.emit('message', { room_id: roomId, ...message });
+}
+
+export function emitNewDirectMessage(message: {
+  id: string;
+  chat_id: string;
+  from: string;
+  to: string;
+  content: string;
+  sequence: number;
+  created_at: string;
+}): void {
+  messageBus.emit('direct_message', message);
 }
 
 export function registerWaitTool(server: McpServer, db: Database.Database): void {
@@ -65,6 +79,24 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
         };
       }
 
+      const directLastOrder = directMessageOrders.get(agentId) ?? 0;
+      const alreadyDirect = getUnreadDirectMessagesSince(db, agentId, directLastOrder);
+      const latestDirectOrder = getLatestDirectMessageOrder(db, agentId);
+      directMessageOrders.set(agentId, latestDirectOrder);
+
+      if (alreadyDirect.length > 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              messages: [],
+              direct_messages: alreadyDirect,
+              count: alreadyDirect.length,
+            }),
+          }],
+        };
+      }
+
       // Get list of rooms this agent has joined
       const joinedRooms = new Set(
         (db.prepare('SELECT room_id FROM room_members WHERE agent_id = ?').all(agentId) as Array<{ room_id: string }>)
@@ -72,10 +104,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
       );
 
       if (joinedRooms.size === 0) {
-        return {
-          content: [{ type: 'text' as const, text: 'Error: Not a member of any room. Join a room first.' }],
-          isError: true,
-        };
+        return waitForDirectMessagesOnly(db, agentId, timeout_seconds);
       }
 
       // timeout: 0 or undefined = wait forever (no timeout)
@@ -143,8 +172,17 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           reply_to: string | null;
           created_at: string;
         }> = [];
+        const directCollected: Array<{
+          id: string;
+          chat_id: string;
+          from: string;
+          to: string;
+          content: string;
+          sequence: number;
+          created_at: string;
+        }> = [];
 
-        const finish = (msgs: typeof collected) => {
+        const finish = (msgs: typeof collected, directMessages = directCollected) => {
           if (resolved) return;
           resolved = true;
           cleanup();
@@ -153,7 +191,11 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
             roomSequences.set(msg.room_id, Math.max(roomSequences.get(msg.room_id) ?? 0, msg.sequence));
           }
           const statusUpdates = getMyStatusUpdates(db, agentId, joinedRooms);
-          const response: Record<string, unknown> = { messages: msgs, count: msgs.length };
+          const response: Record<string, unknown> = {
+            messages: msgs,
+            direct_messages: directMessages,
+            count: msgs.length + directMessages.length,
+          };
           if (statusUpdates.length > 0) {
             response.my_status_updates = statusUpdates;
           }
@@ -171,6 +213,12 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           }
         };
 
+        const onDirectMessage = (msg: { id: string; chat_id: string; from: string; to: string; content: string; sequence: number; created_at: string }) => {
+          if (msg.to !== agentId || msg.from === agentId) return;
+          directCollected.push(msg);
+          finish(collected, directCollected);
+        };
+
         // DB fallback: poll every 3s for messages sent via HTTP (cross-process)
         const dbPoll = setInterval(() => {
           for (const roomId of joinedRooms) {
@@ -182,8 +230,16 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
               }
             }
           }
+          const directLast = directMessageOrders.get(agentId) ?? 0;
+          const directMessages = getUnreadDirectMessagesSince(db, agentId, directLast);
+          if (directMessages.length > 0) {
+            directCollected.push(...directMessages);
+            directMessageOrders.set(agentId, getLatestDirectMessageOrder(db, agentId));
+          }
           if (collected.length > 0) {
             finish(collected);
+          } else if (directCollected.length > 0) {
+            finish(collected, directCollected);
           }
         }, 3000);
 
@@ -191,9 +247,11 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           if (timer) clearTimeout(timer);
           clearInterval(dbPoll);
           messageBus.off('message', onMessage);
+          messageBus.off('direct_message', onDirectMessage);
         };
 
         messageBus.on('message', onMessage);
+        messageBus.on('direct_message', onDirectMessage);
 
         // Timeout (0 = wait forever, use a very long timer to keep type simple)
         const timer = setTimeout(() => {
@@ -201,11 +259,68 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
           if (!resolved) {
             resolved = true;
             resolve({
-              content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], count: 0, timed_out: true }) }],
+              content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], direct_messages: [], count: 0, timed_out: true }) }],
             });
           }
         }, timeout > 0 ? timeout * 1000 : 24 * 60 * 60 * 1000);
       });
     },
   );
+}
+
+function waitForDirectMessagesOnly(
+  db: Database.Database,
+  agentId: string,
+  timeoutSeconds: number | undefined,
+): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  const timeout = timeoutSeconds && timeoutSeconds > 0 ? Math.min(timeoutSeconds, 3600) : 0;
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (directMessages: Array<{
+      id: string;
+      chat_id: string;
+      from: string;
+      to: string;
+      content: string;
+      sequence: number;
+      created_at: string;
+    }>, timedOut = false) => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+      directMessageOrders.set(agentId, getLatestDirectMessageOrder(db, agentId));
+      resolve({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            messages: [],
+            direct_messages: directMessages,
+            count: directMessages.length,
+            ...(timedOut ? { timed_out: true } : {}),
+          }),
+        }],
+      });
+    };
+
+    const onDirectMessage = (msg: { id: string; chat_id: string; from: string; to: string; content: string; sequence: number; created_at: string }) => {
+      if (msg.to !== agentId || msg.from === agentId) return;
+      finish([msg]);
+    };
+
+    const poll = setInterval(() => {
+      const last = directMessageOrders.get(agentId) ?? 0;
+      const directMessages = getUnreadDirectMessagesSince(db, agentId, last);
+      if (directMessages.length > 0) finish(directMessages);
+    }, 3000);
+
+    const cleanup = () => {
+      clearInterval(poll);
+      clearTimeout(timer);
+      messageBus.off('direct_message', onDirectMessage);
+    };
+
+    messageBus.on('direct_message', onDirectMessage);
+    const timer = setTimeout(() => finish([], true), timeout > 0 ? timeout * 1000 : 24 * 60 * 60 * 1000);
+  });
 }

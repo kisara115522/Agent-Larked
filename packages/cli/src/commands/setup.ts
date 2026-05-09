@@ -54,6 +54,10 @@ function hookCommands(commandPrefix: string): { postToolUse: string; stop: strin
   };
 }
 
+function waitOnStopCommand(commandPrefix: string): string {
+  return `${commandPrefix} wait-on-stop`;
+}
+
 function hasHook(entries: HookEntry[], command: string): boolean {
   return entries.some((entry) => entry.hooks.some((hook) => hook.type === 'command' && hook.command === command));
 }
@@ -106,6 +110,36 @@ export function removeClaudeCodeHookSettings(
       .filter((entry) => entry.hooks.length > 0);
   }
 
+  return { ...settings, hooks };
+}
+
+export function setClaudeCodeWaitOnStop(
+  settings: ClaudeCodeSettings,
+  enabled: boolean,
+  commandPrefix = 'flock hook claude-code',
+): ClaudeCodeSettings {
+  const commands = hookCommands(commandPrefix);
+  const stopCommand = enabled ? waitOnStopCommand(commandPrefix) : commands.stop;
+  const removed = removeSpecificHook(removeSpecificHook(settings, commands.stop), waitOnStopCommand(commandPrefix));
+  return {
+    ...removed,
+    hooks: {
+      ...(removed.hooks ?? {}),
+      Stop: [{ hooks: [{ type: 'command', command: stopCommand }] }],
+    },
+  };
+}
+
+function removeSpecificHook(settings: ClaudeCodeSettings, command: string): ClaudeCodeSettings {
+  const hooks: Record<string, HookEntry[]> = {};
+  for (const [event, entries] of Object.entries(settings.hooks ?? {})) {
+    hooks[event] = entries
+      .map((entry) => ({
+        ...entry,
+        hooks: entry.hooks.filter((hook) => hook.command !== command),
+      }))
+      .filter((entry) => entry.hooks.length > 0);
+  }
   return { ...settings, hooks };
 }
 
@@ -222,6 +256,24 @@ export function setupCommand(): Command {
       console.log(`Updated ${opts.settings}`);
     });
 
+  setup
+    .command('claude-code-wait-on-stop')
+    .description('Install Claude Code Stop hook wait-on-stop mode')
+    .option('--settings <path>', 'Claude Code settings path', defaultClaudeSettingsPath())
+    .option('--command <command>', 'Hook command prefix', 'flock hook claude-code')
+    .option('--yes', 'Write settings after printing the target configuration')
+    .action((opts: { settings: string; command: string; yes?: boolean }) => {
+      const current = readSettings(opts.settings);
+      const next = setClaudeCodeWaitOnStop(buildClaudeCodeHookSettings(current, opts.command), true, opts.command);
+      console.log(formatSettingsDiff(current, next));
+      if (!opts.yes) {
+        console.log(`\nDry run only. Re-run with --yes to update ${opts.settings}.`);
+        return;
+      }
+      writeSettings(opts.settings, next);
+      console.log(`Updated ${opts.settings}`);
+    });
+
   return setup;
 }
 
@@ -285,7 +337,13 @@ export function hookCommand(): Command {
     .command('claude-code <event>')
     .description('Claude Code hook adapter. Sets agent online/offline via turn lifecycle and checks unread mentions.')
     .action((event: string) => {
-      if (event !== 'post-tool-use' && event !== 'stop') return;
+      if (event !== 'post-tool-use' && event !== 'stop' && event !== 'wait-on-stop') return;
+
+      // wait-on-stop: prompt agent to call flock_wait instead of stopping
+      if (event === 'wait-on-stop') {
+        console.error('Flock wait-on-stop mode is enabled. Do not stop this agent turn; call flock_wait instead and continue waiting for collaboration messages.');
+        process.exit(2);
+      }
 
       // Turn lifecycle: PostToolUse → online, Stop → offline
       if (event === 'post-tool-use') {
@@ -294,7 +352,7 @@ export function hookCommand(): Command {
         setAgentStatusViaDb('offline');
       }
 
-      // Check unread mentions (existing behavior)
+      // Check unread mentions
       const summary = summarizeUnreadMentions(readQueuedMentions());
       if (!summary) return;
       console.error(summary);

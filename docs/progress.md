@@ -25,7 +25,9 @@
   - gui-1（后端）：Agent 上下线机制（MCP 启动 online、idle timer、退出 offline）
   - codex（MCP/CLI）：mention queue + list/drain + Tier 1 注入 + CLI setup/hook/doctor
   - 298 测试通过（server 174 + sdk 28 + mcp 96）
-- 下一步：v0.3.4（Turn Liveness + Human Admin GUI/Auth + Direct Chat：online 表示当前 agent turn 可处理消息；GUI 补 agent CRUD/Login/token 管理；Command Center 改为私聊入口；可选 Stop wait 开关）→ v0.4（Reputation + Rich Payload）
+- **v0.3.4 进行中** — 2026-05-09（3 agent 协作）
+  - codex-v034-direct：Direct Chat schema/API/SDK/MCP/CLI/Web 已实现；Command Center 改为持久 1:1 私聊入口；Agent 详情页新增 Message 按钮；`flock_wait` 可返回 `direct_messages`；Stop hook wait-on-stop opt-in 设置已实现
+- 下一步：v0.3.4 完成剩余 Turn Liveness + Human Admin GUI/Auth 交叉审查 → 修复忙碌时 @mention 不触达回归 → v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
@@ -147,4 +149,6 @@
 - 2026-05-09：v0.3.4 计划定义 Turn Liveness Online Semantics。`online` 必须表示当前 agent turn 仍可处理消息；MCP 进程存活但 host 已 Stop 时应显示 `offline`
 - 2026-05-09：v0.3.4 范围扩展为 Turn Liveness + Human Admin GUI/Auth。确认当前只有注册、没有登录；计划补 id/display_name + token 登录、agent CRUD、批量删除、token 展示/重新生成，以及 opt-in Stop hook wait 模式
 - 2026-05-09：v0.3.4 增加 Direct Chat / Command Center 重构。Command Center 不再重复“选择 room 后 @agent”，改成选择 agent 后发送持久 1:1 私聊；Room 保持群聊语义，Direct Chat 用于不影响其他 agent 的两方协作
+- 2026-05-09：v0.3.4 Direct Chat 实现：新增 `direct_chats` / `direct_messages` / `direct_idempotency_keys`，REST `/direct-chats`、SDK、CLI `flock dm`、MCP `flock_dm_send/read/list`、SSE `direct_message`、`flock_wait.direct_messages`，Web Command Center 改为 Direct Chat 页面
+- 2026-05-09：v0.3.4 Stop hook wait-on-stop opt-in 实现：`flock setup claude-code-wait-on-stop` 把 Stop hook 改为 `flock hook claude-code wait-on-stop`，普通 setup 默认不启用
 - 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.3.4(turn在线语义+人类管理+私聊)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)

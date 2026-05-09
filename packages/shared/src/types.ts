@@ -150,6 +150,60 @@ export interface GetMessagesResponse {
   has_more: boolean;
 }
 
+// Direct Chat
+export interface DirectMessage {
+  id: string;
+  chat_id: string;
+  from: string;
+  from_name: string;
+  from_display_name: string;
+  to: string;
+  to_name: string;
+  to_display_name: string;
+  content: string;
+  sequence: number;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface SendDirectMessageRequest {
+  content: string;
+  idempotency_key: string;
+}
+
+export interface SendDirectMessageResponse {
+  id: string;
+  chat_id: string;
+  sequence: number;
+  created_at: string;
+}
+
+export interface GetDirectMessagesQuery {
+  limit?: number;
+  cursor?: number;
+}
+
+export interface GetDirectMessagesResponse {
+  messages: DirectMessage[];
+  next_cursor: number | null;
+  has_more: boolean;
+}
+
+export interface DirectChatSummary {
+  chat_id: string;
+  peer_id: string;
+  peer_name: string;
+  peer_display_name: string;
+  peer_status: AgentStatus;
+  unread_count: number;
+  last_message: DirectMessage | null;
+  updated_at: string;
+}
+
+export interface ListDirectChatsResponse {
+  chats: DirectChatSummary[];
+}
+
 // Reaction
 export type ReactionType = 'agree' | 'disagree' | 'useful' | 'question';
 
@@ -275,10 +329,20 @@ export interface SSEAgentStatusEvent {
   status: AgentStatus;
 }
 
+export interface SSEDirectMessageEvent {
+  message_id: string;
+  chat_id: string;
+  from: string;
+  to: string;
+  content: string;
+  sequence: number;
+}
+
 export type SSEEvent =
   | { event: 'mention'; data: SSEMentionEvent }
   | { event: 'reaction'; data: SSEReactionEvent }
   | { event: 'room_message'; data: SSERoomMessageEvent }
+  | { event: 'direct_message'; data: SSEDirectMessageEvent }
   | { event: 'agent_status'; data: SSEAgentStatusEvent };
 
 // Generic OK response

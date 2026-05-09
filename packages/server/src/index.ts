@@ -11,6 +11,7 @@ import { messagesRouter } from './routes/messages.js';
 import { reactionsRouter } from './routes/reactions.js';
 import { eventsRouter } from './routes/events.js';
 import { authRouter } from './routes/auth.js';
+import { directChatsRouter } from './routes/direct-chats.js';
 
 export function createApp(dbPath: string = ':memory:'): { app: express.Express; db: ReturnType<typeof createDatabase> } {
   const db = createDatabase(dbPath);
@@ -27,6 +28,7 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   app.use('/invites', invitesActionsRouter(db));
   app.use('/rooms', roomsRouter(db, eventBus));
   app.use('/messages', messagesRouter(db, eventBus));
+  app.use('/direct-chats', directChatsRouter(db, eventBus));
   app.use('/messages', reactionsRouter(db, eventBus));
   app.use('/events', eventsRouter(db, eventBus));
   app.use('/broadcast', broadcastRouter(db, eventBus));
