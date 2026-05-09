@@ -13,7 +13,7 @@ function deleteAgentCascade(db: Database.Database, agentId: string): void {
   db.prepare('DELETE FROM message_mentions WHERE agent_id = ?').run(agentId);
   db.prepare('DELETE FROM room_members WHERE agent_id = ?').run(agentId);
   db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').run(agentId, agentId);
-  db.prepare('DELETE FROM invites WHERE inviter_id = ? OR invitee_id = ?').run(agentId, agentId);
+  db.prepare('DELETE FROM room_invites WHERE inviter_id = ? OR invitee_id = ?').run(agentId, agentId);
   db.prepare("UPDATE messages SET from_agent = '[deleted]' WHERE from_agent = ?").run(agentId);
   db.prepare('DELETE FROM profiles WHERE id = ?').run(agentId);
 }
