@@ -1,14 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import type { DirectChatSummary, DirectMessage } from '@flock/shared';
 import { useAuth } from '../context/AuthContext';
+import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
-
-interface Room {
-  id: string;
-  name: string;
-  member_count: number;
-}
 
 interface Agent {
   id: string;
@@ -18,112 +15,236 @@ interface Agent {
   capabilities: string[];
 }
 
+interface DirectMessagesResponse {
+  messages: DirectMessage[];
+  next_cursor: number | null;
+  has_more: boolean;
+}
+
 export function CommandPage() {
-  const { token } = useAuth();
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const { token, agent: currentAgent } = useAuth();
+  const { subscribe } = useSSE();
+  const [searchParams] = useSearchParams();
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedRoom, setSelectedRoom] = useState('');
-  const [selectedAgent, setSelectedAgent] = useState('');
-  const [command, setCommand] = useState('');
+  const [chats, setChats] = useState<DirectChatSummary[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [messages, setMessages] = useState<DirectMessage[]>([]);
+  const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState('');
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [error, setError] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const selectedAgent = useMemo(
+    () => agents.find(a => a.id === selectedAgentId),
+    [agents, selectedAgentId],
+  );
+
+  const loadChats = async () => {
+    if (!token) return;
+    const result = await get<{ chats: DirectChatSummary[] }>('/direct-chats', token);
+    setChats(result.chats);
+  };
+
+  const loadMessages = async (agentId: string) => {
+    if (!token || !agentId) return;
+    setLoadingMessages(true);
+    try {
+      const result = await get<DirectMessagesResponse>(`/direct-chats/${agentId}/messages?limit=50`, token);
+      setMessages([...result.messages].reverse());
+      await loadChats();
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
-    get<{ rooms: Room[] }>('/rooms', token).then(r => setRooms(r.rooms)).catch(() => {});
-    get<{ agents: Agent[] }>('/agents', token).then(r => setAgents(r.agents)).catch(() => {});
-  }, [token]);
+    get<{ agents: Agent[] }>('/agents', token)
+      .then(r => setAgents(r.agents.filter(a => a.id !== currentAgent?.id)))
+      .catch(() => {});
+    loadChats().catch(() => {});
+  }, [token, currentAgent?.id]);
+
+  useEffect(() => {
+    const agentId = searchParams.get('agent');
+    if (agentId) setSelectedAgentId(agentId);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!selectedAgentId) {
+      setMessages([]);
+      return;
+    }
+    loadMessages(selectedAgentId).catch(() => {});
+  }, [selectedAgentId]);
+
+  useEffect(() => {
+    return subscribe(event => {
+      if (event.event !== 'direct_message') return;
+      const data = event.data as { from: string; to: string };
+      loadChats().catch(() => {});
+      if (data.from === selectedAgentId || data.to === selectedAgentId) {
+        loadMessages(selectedAgentId).catch(() => {});
+      }
+    });
+  }, [subscribe, selectedAgentId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleSend = async () => {
-    if (!token || !selectedRoom || !command.trim()) return;
+    if (!token || !selectedAgentId || !content.trim() || sending) return;
     setSending(true);
-    setResult('');
+    setError('');
     try {
-      const mentions = selectedAgent ? [selectedAgent] : undefined;
-      await post('/messages', token, {
-        room_id: selectedRoom,
-        content: command.trim(),
-        mentions,
+      await post(`/direct-chats/${selectedAgentId}/messages`, token, {
+        content: content.trim(),
         idempotency_key: crypto.randomUUID(),
       });
-      setResult('Command sent successfully!');
-      setCommand('');
+      setContent('');
+      await loadMessages(selectedAgentId);
     } catch (err) {
-      setResult(`Error: ${(err as Error).message}`);
+      setError(err instanceof Error ? err.message : 'Failed to send direct message');
     } finally {
       setSending(false);
     }
   };
 
+  const sortedAgents = [...agents].sort((a, b) => {
+    const aChat = chats.find(chat => chat.peer_id === a.id);
+    const bChat = chats.find(chat => chat.peer_id === b.id);
+    if (aChat && bChat) return bChat.updated_at.localeCompare(aChat.updated_at);
+    if (aChat) return -1;
+    if (bChat) return 1;
+    return (a.display_name || a.name).localeCompare(b.display_name || b.name);
+  });
+
   return (
-    <div className="h-full flex flex-col">
-      <header className="px-6 py-4 border-b border-border shrink-0">
-        <h2 className="text-lg font-semibold">🎯 Command Center</h2>
-        <p className="text-sm text-text-muted">Assign tasks to agents via @mention</p>
-      </header>
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-2xl mx-auto space-y-6">
-          <div>
-            <label className="block text-xs text-text-muted uppercase tracking-wider mb-2">Target Room</label>
-            <select
-              value={selectedRoom}
-              onChange={e => setSelectedRoom(e.target.value)}
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text outline-none focus:border-accent"
-            >
-              <option value="">Select a room...</option>
-              {rooms.map(r => (
-                <option key={r.id} value={r.id}>💬 {r.name} ({r.member_count} members)</option>
-              ))}
-            </select>
-          </div>
+    <div className="h-full flex">
+      <aside className="w-72 border-r border-border bg-surface flex flex-col">
+        <header className="px-4 py-3 border-b border-border shrink-0">
+          <h2 className="text-base font-semibold">Direct Chat</h2>
+          <p className="text-xs text-text-muted mt-0.5">Persistent 1:1 agent messages</p>
+        </header>
 
-          <div>
-            <label className="block text-xs text-text-muted uppercase tracking-wider mb-2">Target Agent (optional)</label>
-            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-              {agents.map(a => (
-                <button
-                  key={a.id}
-                  onClick={() => setSelectedAgent(selectedAgent === a.id ? '' : a.id)}
-                  className={`flex items-center gap-2 p-2 rounded-lg text-sm transition-colors ${
-                    selectedAgent === a.id
-                      ? 'bg-accent-muted border border-accent'
-                      : 'bg-surface-elevated border border-border hover:border-text-muted'
-                  }`}
-                >
-                  <AgentAvatar name={a.name} displayName={a.display_name} size="sm" />
-                  <span className="truncate">{a.display_name || a.name}</span>
-                  <StatusIndicator status={a.status as 'online' | 'busy' | 'idle' | 'offline'} />
-                </button>
-              ))}
+        <div className="flex-1 overflow-y-auto p-2">
+          {sortedAgents.map(a => {
+            const chat = chats.find(c => c.peer_id === a.id);
+            const name = a.display_name || a.name;
+            return (
+              <button
+                key={a.id}
+                onClick={() => setSelectedAgentId(a.id)}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${
+                  selectedAgentId === a.id
+                    ? 'bg-accent-muted text-accent'
+                    : 'text-text-muted hover:text-text hover:bg-surface-elevated'
+                }`}
+              >
+                <AgentAvatar name={a.name} displayName={a.display_name} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-medium">{name}</span>
+                    <StatusIndicator status={a.status as 'online' | 'busy' | 'idle' | 'offline'} />
+                  </div>
+                  {chat?.last_message && (
+                    <p className="truncate text-xs text-text-muted mt-0.5">{chat.last_message.content}</p>
+                  )}
+                </div>
+                {chat && chat.unread_count > 0 && (
+                  <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-accent text-white text-[11px] flex items-center justify-center">
+                    {chat.unread_count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      <section className="flex-1 flex flex-col min-w-0">
+        <header className="px-6 py-3 border-b border-border shrink-0 flex items-center gap-3">
+          {selectedAgent ? (
+            <>
+              <AgentAvatar name={selectedAgent.name} displayName={selectedAgent.display_name} />
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold truncate">{selectedAgent.display_name || selectedAgent.name}</h2>
+                <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <StatusIndicator status={selectedAgent.status as 'online' | 'busy' | 'idle' | 'offline'} />
+                  <span>{selectedAgent.status}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <h2 className="text-base font-semibold">Select an agent</h2>
+          )}
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          {!selectedAgentId ? (
+            <div className="h-full flex items-center justify-center text-sm text-text-muted">
+              Choose an agent to open a direct chat.
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-text-muted uppercase tracking-wider mb-2">Command</label>
-            <textarea
-              value={command}
-              onChange={e => setCommand(e.target.value)}
-              placeholder={selectedAgent ? `@${agents.find(a => a.id === selectedAgent)?.name ?? 'agent'} please...` : 'Type your command...'}
-              rows={4}
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text outline-none focus:border-accent resize-none"
-            />
-          </div>
-
-          <button
-            onClick={handleSend}
-            disabled={!selectedRoom || !command.trim() || sending}
-            className="w-full px-4 py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            {sending ? 'Sending...' : 'Send Command'}
-          </button>
-
-          {result && (
-            <p className={`text-sm ${result.startsWith('Error') ? 'text-error' : 'text-success'}`}>
-              {result}
-            </p>
+          ) : loadingMessages ? (
+            <div className="h-full flex items-center justify-center text-sm text-text-muted">Loading messages...</div>
+          ) : messages.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-sm text-text-muted">No direct messages yet.</div>
+          ) : (
+            <div className="divide-y divide-border">
+              {messages.map(msg => {
+                const isMine = msg.from === currentAgent?.id;
+                const sender = isMine ? currentAgent : selectedAgent;
+                return (
+                  <article key={msg.id} className="px-6 py-4 flex gap-3">
+                    <AgentAvatar name={sender?.name || msg.from_name} displayName={sender?.display_name || msg.from_display_name} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-semibold text-text">
+                          {sender?.display_name || sender?.name || msg.from_name || msg.from}
+                        </span>
+                        <span className="text-[11px] text-text-muted font-mono">
+                          {new Date(msg.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-text mt-1 whitespace-pre-wrap break-words">{msg.content}</p>
+                    </div>
+                  </article>
+                );
+              })}
+              <div ref={bottomRef} />
+            </div>
           )}
         </div>
-      </div>
+
+        <div className="border-t border-border p-3 bg-surface">
+          <div className="flex items-end gap-2 bg-surface-elevated rounded-xl px-3 py-2 border border-border focus-within:border-accent transition-colors">
+            <textarea
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              disabled={!selectedAgentId}
+              placeholder={selectedAgent ? `Message ${selectedAgent.display_name || selectedAgent.name}` : 'Select an agent first'}
+              rows={1}
+              className="flex-1 bg-transparent text-sm text-text resize-none outline-none placeholder:text-text-muted min-h-[20px] max-h-[120px] disabled:opacity-50"
+            />
+            <button
+              onClick={handleSend}
+              disabled={!selectedAgentId || !content.trim() || sending}
+              className="shrink-0 h-8 px-3 rounded-full bg-accent text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
+            >
+              Send
+            </button>
+          </div>
+          {error && <p className="mt-2 text-xs text-error">{error}</p>}
+        </div>
+      </section>
     </div>
   );
 }

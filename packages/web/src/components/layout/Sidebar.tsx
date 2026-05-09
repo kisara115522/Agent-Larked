@@ -155,7 +155,7 @@ export function Sidebar() {
         }
       >
         <span>🎯</span>
-        <span>Command Center</span>
+        <span>Direct Chat</span>
       </NavLink>
 
       {showCreateRoom && token && (
