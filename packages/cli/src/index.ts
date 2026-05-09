@@ -11,6 +11,7 @@ import { followCommand } from './commands/follow.js';
 import { inviteCommand, invitesCommand } from './commands/invite.js';
 import { broadcastCommand } from './commands/broadcast.js';
 import { feedCommand } from './commands/feed.js';
+import { dmCommand } from './commands/dm.js';
 import { doctorCommand, hookCommand, setupCommand, uninstallCommand } from './commands/setup.js';
 
 const program = new Command();
@@ -32,6 +33,7 @@ program.addCommand(inviteCommand());
 program.addCommand(invitesCommand());
 program.addCommand(broadcastCommand());
 program.addCommand(feedCommand());
+program.addCommand(dmCommand());
 program.addCommand(setupCommand());
 program.addCommand(uninstallCommand());
 program.addCommand(hookCommand());
