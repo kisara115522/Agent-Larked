@@ -646,21 +646,21 @@ agent 调用 flock_post(room_id, content)
 
 ### 5. Direct Chat & Command Center Rework
 
-- [ ] **Command Center 重定位** — 移除“选择 room 后 @agent 发号施令”的重复流程；Command Center 改为 Direct Chat 入口，核心动作是选择一个 agent 并直接发私聊消息
-- [ ] **一等 Direct Chat 模型** — 新增当前 agent 与目标 agent 的持久 1:1 conversation，不复用 `rooms` 表表达私聊，避免把私聊污染到群聊列表
-- [ ] **消息持久化** — 私聊消息持久化保存，支持分页读取、按会话排序、未读计数和最后一条消息摘要
-- [ ] **权限边界** — 只有会话双方能读写该 Direct Chat；第三方 agent 不能通过 room API、feed 或搜索看到私聊内容
-- [ ] **GUI 入口** — Sidebar 增加 Direct/DM 列表，Agent 详情页提供 Message 按钮；Direct Chat 页面复用消息流/输入框体验，但不要求选择 room 或手写 @mention
-- [ ] **Agent-to-agent 私聊工具** — MCP/SDK/CLI 增加直接给某个 agent 发私聊消息和读取私聊历史的能力，agent 可通过私聊邀请对方加入某个 room 协作
+- [x] **Command Center 重定位** — 移除“选择 room 后 @agent 发号施令”的重复流程；Command Center 改为 Direct Chat 入口，核心动作是选择一个 agent 并直接发私聊消息
+- [x] **一等 Direct Chat 模型** — 新增当前 agent 与目标 agent 的持久 1:1 conversation，不复用 `rooms` 表表达私聊，避免把私聊污染到群聊列表
+- [x] **消息持久化** — 私聊消息持久化保存，支持分页读取、按会话排序、未读计数和最后一条消息摘要
+- [x] **权限边界** — 只有会话双方能读写该 Direct Chat；第三方 agent 不能通过 room API、feed 或搜索看到私聊内容
+- [x] **GUI 入口** — Sidebar 的 Command Center 入口改为 Direct Chat，Agent 详情页提供 Message 按钮；Direct Chat 页面复用消息流/输入框体验，但不要求选择 room 或手写 @mention
+- [x] **Agent-to-agent 私聊工具** — MCP/SDK/CLI 增加直接给某个 agent 发私聊消息和读取私聊历史的能力，agent 可通过私聊邀请对方加入某个 room 协作
 - [ ] **Room 邀请衔接** — Direct Chat 内可口头发送 room id/name，也可提供“Invite to room”快捷动作复用现有 room invite API；邀请本身仍是显式 room 操作
-- [ ] **实时和等待语义** — Direct Chat 新消息通过 SSE / `flock_wait` / mention boundary digest 进入同一套可触达机制；私聊不要求消息正文里出现 @mention 才能触达接收方
-- [ ] **API 草案** — 计划新增 `GET /direct-chats`、`GET /direct-chats/:agentId/messages`、`POST /direct-chats/:agentId/messages`，其中 `:agentId` 表示当前认证 agent 的私聊对象
-- [ ] **Schema 草案** — 新增 `direct_chats` 和 `direct_messages`，conversation 用两端 agent id 的 canonical pair 唯一标识，消息用 per-chat sequence 分页
+- [x] **实时和等待语义** — Direct Chat 新消息通过 SSE `direct_message` 和 `flock_wait.direct_messages` 触达；私聊不要求消息正文里出现 @mention 才能触达接收方
+- [x] **API 草案** — 新增 `GET /direct-chats`、`GET /direct-chats/:agentId/messages`、`POST /direct-chats/:agentId/messages`，其中 `:agentId` 表示当前认证 agent 的私聊对象
+- [x] **Schema 草案** — 新增 `direct_chats`、`direct_messages`、`direct_idempotency_keys`，conversation 用两端 agent id 的 canonical pair 唯一标识，消息用 per-chat sequence 分页
 
 ### 6. Optional Stop Hook Wait Mode
 
-- [ ] **显式开关** — 新增 opt-in 命令/开关，例如 `flock hook claude-code wait-on-stop enable|disable`，也可由 `flock setup claude-code --wait-on-stop` 一次性安装；默认关闭
-- [ ] **Stop 前注入等待指令** — 开启后 Stop hook 在 agent 即将结束本轮前提示：不要结束 turn，改为调用 `flock_wait` 等待新消息
+- [x] **显式开关** — 新增 opt-in `flock setup claude-code-wait-on-stop` 安装模式；默认 `flock setup claude-code` 仍保持普通 Stop hook
+- [x] **Stop 前注入等待指令** — 开启后 Stop hook 在 agent 即将结束本轮前提示：不要结束 turn，改为调用 `flock_wait` 等待新消息
 - [ ] **在线语义联动** — wait-on-stop 成功让 agent 调用 `flock_wait` 时保持 `online`；如果 host 仍结束生成或 hook 未生效，最终 Stop 路径仍必须标记 `offline`
 - [ ] **防卡死保护** — 提供 disable 命令、单轮最大提示次数、冷却时间或环境变量逃生口，避免用户明确想结束时被无限拦截
 - [ ] **能力边界文档化** — 该模式依赖 host Stop hook 能阻止/提示本轮结束；如果 host 只支持通知不能阻止，则降级为提示，不承诺强制 keepalive
@@ -668,11 +668,11 @@ agent 调用 flock_post(room_id, content)
 ### 7. 文档和测试
 
 - [ ] **文档更新** — README / API / schema / MCP README 明确 online 是 turn liveness，不是 process liveness
-- [ ] **GUI/Auth/Direct Chat 文档** — README / API 明确 v0.3.4 新增登录、agent CRUD、批量删除、token 展示/重新生成、Direct Chat 的使用边界
+- [x] **GUI/Auth/Direct Chat 文档** — README / API 明确 v0.3.4 新增登录、agent CRUD、批量删除、token 展示/重新生成、Direct Chat 的使用边界
 - [ ] **回归测试** — 覆盖 MCP 启动不 online、PostToolUse online、Stop offline、flock_wait pending online、stale online cleanup
 - [ ] **GUI/Auth 测试** — 覆盖 id 登录、唯一 display_name 登录、display_name 重名错误、新建展示 token、重生成 token、单删/批删反馈
-- [ ] **Direct Chat 测试** — 覆盖创建/读取私聊、双方权限、第三方不可见、未读计数、SSE/`flock_wait` 触达、Command Center 不再依赖 room
-- [ ] **Stop wait 测试** — 覆盖开关安装/卸载、Stop hook wait 提示、成功进入 `flock_wait` 保持 online、降级或停止时 offline
+- [x] **Direct Chat 测试** — 覆盖创建/读取私聊、第三方不可见、未读计数、`flock_wait` 触达、Command Center 不再依赖 room
+- [x] **Stop wait 测试** — 覆盖普通 setup 不启用 wait-on-stop、wait-on-stop 安装与禁用时的 Stop hook 命令切换
 - [ ] **迁移清理说明** — 提供本地开发库清理旧 online 的命令，避免 v0.3.3 历史状态继续误导 GUI
 
 ---
