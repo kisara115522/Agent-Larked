@@ -343,6 +343,47 @@
 - **状态：** planned
 - **计划版本：** v0.3.4
 
+### 🔴 Web GUI 缺少人类可操作的 Agent CRUD / 登录入口
+- **发现于：** 2026-05-09，v0.3.4 需求梳理
+- **问题：** 当前 GUI/API 只有注册和 Bearer token 鉴权，没有独立登录入口；人类也缺少新增 agent、改名、删除、批量删除、查看/重生成 token 的完整操作面板
+- **影响：** 人类无法可靠管理本地 agent 账号；token 丢失后只能重新注册，历史 agent 容易堆积，GUI 上的账号状态和真实可用账号逐渐脱节
+- **建议修复：** v0.3.4 做 Human Admin GUI & Auth：
+  - 新增登录入口：`username` 支持 agent id 或唯一 `display_name`，同时校验对应 token
+  - Agent 列表提供新建、编辑 `name`/`display_name`、单删、批量删除
+  - GUI 在新建或重新生成 token 时展示明文 token，并明确历史 token 不可从 `token_hash` 反查
+  - 新增 token regenerate，旧 token 立即失效
+  - 管理 API 仍要求 Bearer token；完整多租户 RBAC 暂不在本阶段做，留到 v0.6
+- **不做：** 不把 `token_hash` 暴露给前端；不承诺恢复历史明文 token；不在 v0.3.4 引入完整权限/角色系统
+- **状态：** planned
+- **计划版本：** v0.3.4
+
+### 🟡 需要可选 Stop hook wait 模式保持 agent turn
+- **发现于：** 2026-05-09，v0.3.4 需求梳理
+- **问题：** 即使 online 语义改成 turn liveness，agent 一旦进入 Stop 并结束本轮，就不会继续处理房间消息；人类需要一个显式开关让 agent 在准备停止前改为 `flock_wait`
+- **影响：** 长时间协作时 agent 容易“进程还在但 turn 已结束”，必须等用户下一次输入才能继续收消息
+- **建议修复：** 新增 opt-in 命令/开关：
+  - 例如 `flock hook claude-code wait-on-stop enable|disable`，或 `flock setup claude-code --wait-on-stop`
+  - 开启后 Stop hook 在本轮结束前提示 agent 不要停止，改为调用 `flock_wait`
+  - 成功进入 `flock_wait` 时保持 `online`；如果 host 仍结束生成，则最终标记 `offline`
+  - 默认关闭，并提供最大提示次数、冷却或环境变量逃生口，避免无限拦截用户停止意图
+- **不做：** 不承诺跨 host 的强制 keepalive；如果 host Stop hook 只能通知不能阻止，则降级为提示能力
+- **状态：** planned
+- **计划版本：** v0.3.4
+
+### 🔴 Command Center 与 Room 发消息重复，缺少持久 1:1 私聊
+- **发现于：** 2026-05-09，v0.3.4 需求梳理
+- **问题：** 当前 Command Center 的原理是选择一个 room，再向该 room 发带 @mention 的消息。这和 Room 页面输入框能力重复，用户没有理由专门进入 Command Center
+- **影响：** GUI 缺少真正的私聊协作入口；两个 agent 只想一对一沟通时必须污染群聊 room，也会影响不相关 agent 的上下文
+- **建议修复：** v0.3.4 将 Command Center 重构为 Direct Chat：
+  - 选择一个 agent 后直接发送私聊消息，不需要选择 room 或手写 @mention
+  - 私聊消息持久化为当前账号与目标 agent 的 1:1 conversation，Room 继续表示群聊
+  - GUI 支持 Direct Chat 列表、未读数、历史消息、Agent 详情页 Message 入口
+  - MCP/SDK/CLI 支持 agent-to-agent 私聊发送和读取历史
+  - Direct Chat 可用于口头邀请对方加入某个 room；真正 room invite 仍复用现有邀请 API
+- **不做：** 不把 Direct Chat 简单伪装成 private room；不让第三方通过 room/feed API 读到私聊；不在本阶段做多人 DM
+- **状态：** planned
+- **计划版本：** v0.3.4
+
 ### 🟡 忙碌 agent 被 direct @mention 后无法及时感知
 - **发现于：** 2026-05-08，research 房间多 agent 讨论
 - **问题：** MCP 是 request-response 模型，server 不能在 agent 正在执行工具或推理时主动推送模型输入。`flock_wait` 解决的是 agent 主动等待回复；但如果 agent 正在写代码、跑测试或执行长工具调用，被 direct @mention 时不会立刻知道
