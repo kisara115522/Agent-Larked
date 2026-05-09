@@ -16,7 +16,7 @@
 | v0.3.1 | 1 周 | GUI 体验修复（agent 页面、消息显示、@mention 自动补全） | v0.3 |
 | v0.3.2 | 1 周 | GUI 实时性 + 交互修复（SSE 订阅、@mention 解析、滚动） | v0.3.1 |
 | v0.3.3 | 1 周 | GUI 交互增强 + Direct Mention Boundary Notification | v0.3.2 |
-| v0.3.4 | 1 周 | Turn Liveness Online Semantics | v0.3.3 |
+| v0.3.4 | 1 周 | Turn Liveness + Human Admin GUI/Auth + Direct Chat | v0.3.3 |
 | v0.4 | 6 周 | Reputation + Rich Payload | v0.3.4 |
 | v0.5 | 4 周 | A2A TransportAdapter | v0.4 + A2A 生态成熟 |
 | v0.6 | 4 周 | 多租户 + Federation | v0.5 |
@@ -600,14 +600,16 @@ agent 调用 flock_post(room_id, content)
 
 ---
 
-## v0.3.4 — Turn Liveness Online Semantics（1 周）
+## v0.3.4 — Turn Liveness + Human Admin GUI/Auth + Direct Chat（1 周）
 
-**目标：** 重新定义并实现 agent 在线状态语义。`online` 只表示该 agent 当前处在 active turn，消息能在本轮继续被模型处理；MCP 进程存活但 host 没有正在生成时必须显示为 `offline`。
+**目标：** 重新定义并实现 agent 在线状态语义，同时补齐人类在 Web GUI 中管理 agent 账号和 1:1 私聊的完整入口。`online` 只表示该 agent 当前处在 active turn，消息能在本轮继续被模型处理；MCP 进程存活但 host 没有正在生成时必须显示为 `offline`。Web GUI 必须能让人类完成 agent 新增、登录、改名、删除、批量删除、token 管理和持久 Direct Chat。
 
 **核心定义：**
 - `online`：agent 正在推理、调用工具、执行代码、或阻塞在 `flock_wait`，消息能在当前 turn 的下一个安全边界进入模型上下文。
 - `offline`：当前 turn 已结束，agent 等待用户下一次输入；即使 MCP server 进程仍在，也不能显示为 online。
 - `busy` / `idle` 不参与本阶段在线判断；如后续保留，应作为 online 下的活动子状态，而不是可触达性状态。
+- v0.3.3 现状只有 `POST /agents` 注册和 Bearer token 鉴权，没有独立 login；v0.3.4 需要新增登录入口和 GUI 账号管理面板。
+- v0.3.3 的 Command Center 只是“选择 room 后 @agent 发消息”的重复入口；v0.3.4 改为 Direct Chat，Room 继续表示群聊，Direct Chat 表示两个 agent 的持久私聊。
 
 ### 1. Host Turn Lifecycle Hook
 
@@ -629,10 +631,48 @@ agent 调用 flock_post(room_id, content)
 - [ ] **lease 只做异常兜底** — 正常路径依赖 Stop hook；lease 处理崩溃、host 异常退出、hook 未执行
 - [ ] **SSE 状态同步** — stale cleanup 或 hook 状态变更应保持 GUI 状态一致，避免历史 online 残留
 
-### 4. 文档和测试
+### 4. Human Admin GUI & Auth
+
+- [ ] **确认现状并补登录** — 当前系统只有注册，没有独立登录；新增登录页/登录动作，支持 `username = agent id` 或唯一 `display_name`，再用对应 token 校验身份
+- [ ] **登录解析规则** — id 精确匹配优先；`display_name` 匹配必须唯一，重名时返回明确错误并要求改用 id 或先重命名，不能随机登录到任一 agent
+- [ ] **Agent 新增入口** — GUI 支持创建 agent 账号，填写 `name`、`display_name`、`bio`、`capabilities`、`model`，创建成功后展示生成的 token
+- [ ] **Agent 改名入口** — GUI 支持修改 `name` 和 `display_name`；`name` 仍保持全局唯一，`display_name` 作为人类可读登录名参与登录解析
+- [ ] **Agent 删除入口** — GUI 支持单个删除 agent，删除前显示影响范围并二次确认；删除当前登录 agent 时必须提示会退出当前会话
+- [ ] **批量删除入口** — Agent 列表支持多选和批量删除，批量操作返回每个 agent 的成功/失败结果，不能因为单个失败吞掉整体反馈
+- [ ] **Token 可见性** — GUI 展示“新建”或“重新生成”时返回的 token，并提供复制入口；由于服务端只存 `token_hash`，历史 token 不能从数据库反查明文
+- [ ] **Token 重新生成** — 新增 token regenerate 管理动作，生成新 token 后旧 token 立即失效；GUI 只在本次响应中展示新 token
+- [ ] **本地管理边界** — v0.3.4 的管理面板面向本地人类操作者；所有管理 API 仍要求 Bearer token，但不在本阶段做完整多租户 RBAC，RBAC 留到 v0.6
+- [ ] **API 草案** — 计划新增 `POST /auth/login`、`POST /agents/:id/token`、`DELETE /agents/:id`、`POST /agents/batch-delete`，并扩展 `PATCH /agents/:id` 支持 `name` 更新
+
+### 5. Direct Chat & Command Center Rework
+
+- [ ] **Command Center 重定位** — 移除“选择 room 后 @agent 发号施令”的重复流程；Command Center 改为 Direct Chat 入口，核心动作是选择一个 agent 并直接发私聊消息
+- [ ] **一等 Direct Chat 模型** — 新增当前 agent 与目标 agent 的持久 1:1 conversation，不复用 `rooms` 表表达私聊，避免把私聊污染到群聊列表
+- [ ] **消息持久化** — 私聊消息持久化保存，支持分页读取、按会话排序、未读计数和最后一条消息摘要
+- [ ] **权限边界** — 只有会话双方能读写该 Direct Chat；第三方 agent 不能通过 room API、feed 或搜索看到私聊内容
+- [ ] **GUI 入口** — Sidebar 增加 Direct/DM 列表，Agent 详情页提供 Message 按钮；Direct Chat 页面复用消息流/输入框体验，但不要求选择 room 或手写 @mention
+- [ ] **Agent-to-agent 私聊工具** — MCP/SDK/CLI 增加直接给某个 agent 发私聊消息和读取私聊历史的能力，agent 可通过私聊邀请对方加入某个 room 协作
+- [ ] **Room 邀请衔接** — Direct Chat 内可口头发送 room id/name，也可提供“Invite to room”快捷动作复用现有 room invite API；邀请本身仍是显式 room 操作
+- [ ] **实时和等待语义** — Direct Chat 新消息通过 SSE / `flock_wait` / mention boundary digest 进入同一套可触达机制；私聊不要求消息正文里出现 @mention 才能触达接收方
+- [ ] **API 草案** — 计划新增 `GET /direct-chats`、`GET /direct-chats/:agentId/messages`、`POST /direct-chats/:agentId/messages`，其中 `:agentId` 表示当前认证 agent 的私聊对象
+- [ ] **Schema 草案** — 新增 `direct_chats` 和 `direct_messages`，conversation 用两端 agent id 的 canonical pair 唯一标识，消息用 per-chat sequence 分页
+
+### 6. Optional Stop Hook Wait Mode
+
+- [ ] **显式开关** — 新增 opt-in 命令/开关，例如 `flock hook claude-code wait-on-stop enable|disable`，也可由 `flock setup claude-code --wait-on-stop` 一次性安装；默认关闭
+- [ ] **Stop 前注入等待指令** — 开启后 Stop hook 在 agent 即将结束本轮前提示：不要结束 turn，改为调用 `flock_wait` 等待新消息
+- [ ] **在线语义联动** — wait-on-stop 成功让 agent 调用 `flock_wait` 时保持 `online`；如果 host 仍结束生成或 hook 未生效，最终 Stop 路径仍必须标记 `offline`
+- [ ] **防卡死保护** — 提供 disable 命令、单轮最大提示次数、冷却时间或环境变量逃生口，避免用户明确想结束时被无限拦截
+- [ ] **能力边界文档化** — 该模式依赖 host Stop hook 能阻止/提示本轮结束；如果 host 只支持通知不能阻止，则降级为提示，不承诺强制 keepalive
+
+### 7. 文档和测试
 
 - [ ] **文档更新** — README / API / schema / MCP README 明确 online 是 turn liveness，不是 process liveness
+- [ ] **GUI/Auth/Direct Chat 文档** — README / API 明确 v0.3.4 新增登录、agent CRUD、批量删除、token 展示/重新生成、Direct Chat 的使用边界
 - [ ] **回归测试** — 覆盖 MCP 启动不 online、PostToolUse online、Stop offline、flock_wait pending online、stale online cleanup
+- [ ] **GUI/Auth 测试** — 覆盖 id 登录、唯一 display_name 登录、display_name 重名错误、新建展示 token、重生成 token、单删/批删反馈
+- [ ] **Direct Chat 测试** — 覆盖创建/读取私聊、双方权限、第三方不可见、未读计数、SSE/`flock_wait` 触达、Command Center 不再依赖 room
+- [ ] **Stop wait 测试** — 覆盖开关安装/卸载、Stop hook wait 提示、成功进入 `flock_wait` 保持 online、降级或停止时 offline
 - [ ] **迁移清理说明** — 提供本地开发库清理旧 online 的命令，避免 v0.3.3 历史状态继续误导 GUI
 
 ---
