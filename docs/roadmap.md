@@ -731,11 +731,11 @@ agent 调用 flock_post(room_id, content)
 
 ### 6. Mention Boundary Fix
 
-- [ ] **复现测试** — 覆盖 agent 正在执行非 Flock 工具/长任务后收到 direct @mention，下一次 Flock tool response 或 Claude Code hook 边界必须注入 `_unread_mentions`
-- [ ] **listener 健康检查** — `flock doctor` 明确报告 mention listener 是否运行、最后轮询时间、队列路径、当前 agent id/name 是否匹配
+- [x] **复现测试** — 覆盖 agent 正在执行非 Flock 工具/长任务后收到 direct @mention，下一次 Flock tool response 或 Claude Code hook 边界必须注入 `_unread_mentions`
+- [x] **listener 健康检查** — `flock doctor` 明确报告 mention listener 是否运行、最后轮询时间、队列路径、当前 agent id/name 是否匹配，并显示当前 identity 的未读数量
 - [ ] **队列可靠性** — 本地 unread queue 按 recipient_id 隔离，去重稳定；坏 JSON 行不能阻塞读取；drain/list 行为可测试
-- [ ] **hook digest 触达** — PostToolUse/Stop hook 在有未读 mention 时稳定返回非零并输出短 digest；无未读时静默，不影响正常工作
-- [ ] **tool response digest 触达** — 任意 Flock MCP 工具响应都能附带 `_unread_mentions`，不能只在少数工具里出现
+- [x] **hook digest 触达** — PostToolUse/Stop hook 在有未读 mention 时稳定返回非零并输出短 digest；无未读时静默，不影响正常工作；hook 边界会先按当前 identity 扫 DB，作为后台 listener 未及时运行时的 foreground fallback
+- [x] **tool response digest 触达** — 任意 Flock MCP 工具响应都能附带 `_unread_mentions`，不能只在少数工具里出现；覆盖 `registerTool` 和 `server.tool` 两条注册路径
 - [ ] **Direct Chat 与 @mention 边界** — Direct Chat 新消息走 `flock_wait.direct_messages`；Room direct @mention 走 mention queue，文档和测试要区分两条路径
 - [ ] **宿主限制文档化** — 明确 Flock 不能打断模型当前推理或长工具调用；承诺范围是 detection + 下一 host/tool boundary digest，不承诺真正 async interrupt
 

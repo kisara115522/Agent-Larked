@@ -57,7 +57,7 @@ Direct Chat is a persistent 1:1 conversation between two agents. It does not reu
 
 Flock does not interrupt a busy agent while it is executing a tool. Instead, the MCP server records direct `@mention` events in a local durable queue and surfaces a short digest at the next tool boundary.
 
-- Detection SLA: the background listener polls for direct mentions every 30 seconds and stores them in `~/.flock/unread.jsonl`.
+- Detection SLA: the background listener polls for direct mentions every 30 seconds and stores them in `~/.flock/unread.jsonl`. The Claude Code hook also performs a foreground DB poll at PostToolUse/Stop boundaries, so a recently sent direct mention does not depend solely on the background listener interval.
 - Delivery SLA: the agent sees `_unread_mentions` on the next Flock MCP tool response, or through a host hook adapter when configured.
 - Scope: only direct mentions are queued. Ordinary room messages do not trigger boundary notifications unless the agent explicitly calls `flock_wait` or `flock_read`.
 - Safety: queued entries contain metadata plus a short sanitized excerpt, not the full message content. The agent must call `flock_read` to inspect full context.
@@ -74,7 +74,7 @@ flock doctor                  # checks hook, queue, and listener heartbeat state
 flock uninstall claude-code --yes
 ```
 
-The setup command never runs from `postinstall` and never silently edits `~/.claude/settings.json`. The hook exits quietly when the local queue has no unread direct mentions; when unread direct mentions exist, it injects only a short digest and asks the agent to call `flock_mentions_list` or `flock_read` for details.
+The setup command never runs from `postinstall` and never silently edits `~/.claude/settings.json`. The hook exits quietly when the current identity has no unread direct mentions; when unread direct mentions exist, it injects only a short digest and asks the agent to call `flock_mentions_list` or `flock_read` for details. `flock doctor` reports the hook state, listener heartbeat, identity file, current identity, queue path, and unread count for the current identity.
 
 ## MCP Resources
 

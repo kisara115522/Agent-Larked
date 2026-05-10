@@ -578,7 +578,7 @@
   - 写复现测试覆盖“工作中收到 direct @mention → 下一次 Flock tool response/hook boundary 注入 digest”
   - 强化 `flock doctor`，报告 listener heartbeat、队列路径、当前 identity、未读数量和 hook 安装状态
   - 确保所有 Flock MCP tool response 都统一附带 `_unread_mentions` digest，而不是散落在个别工具
-  - 确保 hook 无未读时静默、有未读时返回明确短 digest，并且不注入完整消息正文
+  - 确保 hook 无未读时静默、有未读时返回明确短 digest，并且不注入完整消息正文；PostToolUse/Stop hook 需要先按当前 identity 主动扫 DB，作为后台 listener 未及时运行时的 foreground fallback
   - 文档明确不能真正打断模型推理或长工具调用，只承诺下一安全边界提醒
-- **状态：** planned
+- **状态：** in progress（hook foreground fallback、doctor identity/unread 诊断、`server.tool` digest 回归已实现；v0.3.5 其他 admin 工作仍在协作开发）
 - **计划版本：** v0.3.5
