@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { post } from '../api/client';
+import { get, post } from '../api/client';
 
 interface AdminUser {
   id: string;
@@ -34,8 +34,8 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   const loadAdmin = useCallback(async (token: string) => {
     try {
-      const res = await post<{ user: AdminUser }>('/admin/verify', token);
-      setState({ adminToken: token, adminUser: res.user, adminLoading: false });
+      const user = await get<AdminUser>('/admin/me', token);
+      setState({ adminToken: token, adminUser: user, adminLoading: false });
     } catch {
       localStorage.removeItem(ADMIN_TOKEN_KEY);
       setState({ adminToken: null, adminUser: null, adminLoading: false });
