@@ -22,8 +22,9 @@ interface RoomMember {
   joined_at: string;
 }
 
-export function RoomManagePage() {
-  const { isAdmin, adminToken, adminUser, adminLogout } = useAdminAuth();
+function RoomManageContent() {
+  const { adminToken, adminUser, adminLogout } = useAdminAuth();
+  const token = adminToken!;
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -38,12 +39,6 @@ export function RoomManagePage() {
   const [detailRoom, setDetailRoom] = useState<Room | null>(null);
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
-
-  if (!isAdmin) {
-    return <AdminLoginPage />;
-  }
-
-  const token = adminToken!;
 
   const loadRooms = useCallback(async () => {
     setLoading(true);
@@ -116,7 +111,7 @@ export function RoomManagePage() {
     setDetailRoom(room);
     setDetailLoading(true);
     try {
-      const res = await get<{ members: RoomMember[] }>(`/admin/rooms/${room.id}/members`, token);
+      const res = await get<{ members: RoomMember[] }>(`/rooms/${room.id}/members`, token);
       setMembers(res.members);
     } catch {
       setMembers([]);
@@ -164,7 +159,6 @@ export function RoomManagePage() {
           </div>
         )}
 
-        {/* Create room modal */}
         {showCreate && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
             <div className="bg-surface rounded-lg border border-border p-4 w-96" onClick={e => e.stopPropagation()}>
@@ -205,7 +199,6 @@ export function RoomManagePage() {
           </div>
         )}
 
-        {/* Room detail panel */}
         {detailRoom && (
           <div className="mb-4 p-4 bg-surface rounded-lg border border-border">
             <div className="flex items-center justify-between mb-3">
@@ -241,7 +234,6 @@ export function RoomManagePage() {
           </div>
         )}
 
-        {/* Room list */}
         <div className="bg-surface rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead>
@@ -316,4 +308,14 @@ export function RoomManagePage() {
       </div>
     </div>
   );
+}
+
+export function RoomManagePage() {
+  const { isAdmin } = useAdminAuth();
+
+  if (!isAdmin) {
+    return <AdminLoginPage />;
+  }
+
+  return <RoomManageContent />;
 }

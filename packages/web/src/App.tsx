@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
+import { AdminAuthProvider } from './context/AdminAuthContext';
 import { SSEProvider } from './context/SSEContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { LoginPage } from './pages/LoginPage';
@@ -15,7 +15,6 @@ const ADMIN_PATHS = ['/admin', '/admin/rooms'];
 
 function AppLayout() {
   const { token, loading } = useAuth();
-  const { isAdmin } = useAdminAuth();
   const location = useLocation();
   const isAdminPath = ADMIN_PATHS.some(p => location.pathname.startsWith(p));
 

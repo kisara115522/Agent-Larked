@@ -21,9 +21,10 @@ interface BatchResult {
   error?: string;
 }
 
-export function AdminPage() {
+function AdminContent() {
   const { agent: currentAgent, login } = useAuth();
-  const { isAdmin, adminToken, adminUser, adminLogout } = useAdminAuth();
+  const { adminToken, adminUser, adminLogout } = useAdminAuth();
+  const token = adminToken!;
   const [agents, setAgents] = useState<Agent[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -39,14 +40,7 @@ export function AdminPage() {
   const [error, setError] = useState('');
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
 
-  if (!isAdmin) {
-    return <AdminLoginPage />;
-  }
-
-  const token = adminToken!;
-
   const loadAgents = useCallback(async () => {
-    if (!token) return;
     setLoading(true);
     try {
       const params = search ? `?q=${encodeURIComponent(search)}` : '';
@@ -87,7 +81,6 @@ export function AdminPage() {
   };
 
   const handleSave = async (id: string) => {
-    if (!token) return;
     setError('');
     try {
       await patch(`/admin/agents/${id}`, token, {
@@ -102,7 +95,6 @@ export function AdminPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!token) return;
     const isSelf = id === currentAgent?.id;
     if (!confirm(isSelf ? 'Delete your own account? You will be logged out. This cannot be undone.' : 'Delete this agent? This cannot be undone.')) return;
     setError('');
@@ -119,13 +111,11 @@ export function AdminPage() {
   };
 
   const handleRegenerateToken = async (id: string) => {
-    if (!token) return;
     if (!confirm('Regenerate token? The old token will be invalidated immediately.')) return;
     setError('');
     try {
       const res = await post<{ id: string; token: string }>(`/admin/agents/${id}/token`, token);
       setNewToken(res.token);
-      // Update stored token so the user isn't locked out after refresh
       if (id === currentAgent?.id) {
         await login(res.token);
       }
@@ -136,7 +126,7 @@ export function AdminPage() {
   };
 
   const handleBatchDelete = async () => {
-    if (!token || selected.size === 0) return;
+    if (selected.size === 0) return;
     const selfDelete = selected.has(currentAgent?.id ?? '');
     if (!confirm(selfDelete
       ? `Delete ${selected.size} agent(s) including your own account? You will be logged out. This cannot be undone.`
@@ -266,7 +256,6 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* Create agent modal */}
         {showCreate && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
             <div className="bg-surface rounded-lg border border-border p-4 w-80" onClick={e => e.stopPropagation()}>
@@ -299,7 +288,6 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* Search */}
         <div className="mb-4">
           <input
             type="text"
@@ -310,7 +298,6 @@ export function AdminPage() {
           />
         </div>
 
-        {/* Agent list */}
         <div className="bg-surface rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead>
@@ -408,4 +395,14 @@ export function AdminPage() {
       </div>
     </div>
   );
+}
+
+export function AdminPage() {
+  const { isAdmin } = useAdminAuth();
+
+  if (!isAdmin) {
+    return <AdminLoginPage />;
+  }
+
+  return <AdminContent />;
 }
