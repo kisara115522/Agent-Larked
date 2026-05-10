@@ -31,7 +31,18 @@ export async function request<T>(
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new ApiError(res.status, text);
+    let message = text;
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed.error?.message || parsed.message || text;
+    } catch { /* use raw text */ }
+
+    if (res.status === 401) {
+      message = message || 'Authentication failed. Please check your credentials.';
+    } else if (res.status === 403) {
+      message = message || 'Permission denied. This action requires admin access.';
+    }
+    throw new ApiError(res.status, message);
   }
 
   return res.json() as Promise<T>;

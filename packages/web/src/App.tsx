@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AdminAuthProvider } from './context/AdminAuthContext';
 import { SSEProvider } from './context/SSEContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { LoginPage } from './pages/LoginPage';
@@ -8,6 +9,7 @@ import { RoomPage } from './pages/RoomPage';
 import { AgentPage } from './pages/AgentPage';
 import { CommandPage } from './pages/CommandPage';
 import { AdminPage } from './pages/AdminPage';
+import { RoomManagePage } from './pages/RoomManagePage';
 
 function AppLayout() {
   const { token, loading } = useAuth();
@@ -35,6 +37,7 @@ function AppLayout() {
             <Route path="/agents/:id" element={<AgentPage />} />
             <Route path="/command" element={<CommandPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/rooms" element={<RoomManagePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -47,7 +50,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppLayout />
+        <AdminAuthProvider>
+          <AppLayout />
+        </AdminAuthProvider>
       </AuthProvider>
     </BrowserRouter>
   );

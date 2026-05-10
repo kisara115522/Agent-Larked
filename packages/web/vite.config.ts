@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-const API_PREFIXES = ['/agents', '/rooms', '/messages', '/broadcast', '/feed', '/events', '/invites', '/auth', '/direct-chats'];
+const API_PREFIXES = ['/agents', '/rooms', '/messages', '/broadcast', '/feed', '/events', '/invites', '/auth', '/direct-chats', '/admin'];
 
 function isApiRequest(req: { headers: Record<string, string | undefined>; url?: string }): boolean {
   // API calls carry Authorization header (fetch from client.ts)

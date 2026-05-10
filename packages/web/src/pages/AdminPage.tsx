@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAdminAuth } from '../context/AdminAuthContext';
 import { get, post, patch, del } from '../api/client';
+import { AdminLoginPage } from './AdminLoginPage';
 
 interface Agent {
   id: string;
@@ -19,7 +22,8 @@ interface BatchResult {
 }
 
 export function AdminPage() {
-  const { token, agent: currentAgent, login } = useAuth();
+  const { agent: currentAgent, login } = useAuth();
+  const { isAdmin, adminToken, adminUser, adminLogout } = useAdminAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -35,12 +39,18 @@ export function AdminPage() {
   const [error, setError] = useState('');
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
 
+  if (!isAdmin) {
+    return <AdminLoginPage />;
+  }
+
+  const token = adminToken!;
+
   const loadAgents = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     try {
       const params = search ? `?q=${encodeURIComponent(search)}` : '';
-      const res = await get<{ agents: Agent[] }>(`/agents${params}`, token);
+      const res = await get<{ agents: Agent[] }>(`/admin/agents${params}`, token);
       setAgents(res.agents);
     } catch {
       // ignore
@@ -55,7 +65,7 @@ export function AdminPage() {
     if (!createName.trim()) return;
     setError('');
     try {
-      const res = await post<{ id: string; name: string; token: string }>('/agents', '', {
+      const res = await post<{ id: string; name: string; token: string }>('/admin/agents', token, {
         name: createName.trim(),
         ...(createDisplayName.trim() ? { display_name: createDisplayName.trim() } : {}),
       });
@@ -80,7 +90,7 @@ export function AdminPage() {
     if (!token) return;
     setError('');
     try {
-      await patch(`/agents/${id}`, token, {
+      await patch(`/admin/agents/${id}`, token, {
         name: editName.trim(),
         display_name: editDisplayName.trim(),
       });
@@ -97,7 +107,7 @@ export function AdminPage() {
     if (!confirm(isSelf ? 'Delete your own account? You will be logged out. This cannot be undone.' : 'Delete this agent? This cannot be undone.')) return;
     setError('');
     try {
-      await del(`/agents/${id}`, token);
+      await del(`/admin/agents/${id}`, token);
       if (id === currentAgent?.id) {
         window.location.reload();
         return;
@@ -113,7 +123,7 @@ export function AdminPage() {
     if (!confirm('Regenerate token? The old token will be invalidated immediately.')) return;
     setError('');
     try {
-      const res = await post<{ id: string; token: string }>(`/agents/${id}/token`, token);
+      const res = await post<{ id: string; token: string }>(`/admin/agents/${id}/token`, token);
       setNewToken(res.token);
       // Update stored token so the user isn't locked out after refresh
       if (id === currentAgent?.id) {
@@ -135,7 +145,7 @@ export function AdminPage() {
     setError('');
     setBatchResults(null);
     try {
-      const res = await post<{ results: BatchResult[] }>('/agents/batch-delete', token, {
+      const res = await post<{ results: BatchResult[] }>('/admin/agents/batch-delete', token, {
         agent_ids: Array.from(selected),
       });
       setBatchResults(res.results);
@@ -173,7 +183,11 @@ export function AdminPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-semibold">Agent Management</h1>
-            <p className="text-sm text-text-muted mt-1">Create, edit, and manage agent accounts</p>
+            <p className="text-sm text-text-muted mt-1">
+              Logged in as <span className="text-accent">{adminUser?.display_name || adminUser?.username}</span>
+              {' '}&middot;{' '}
+              <button onClick={adminLogout} className="text-text-muted hover:text-error transition-colors">Logout</button>
+            </p>
           </div>
           <div className="flex gap-2">
             {selected.size > 0 && (
@@ -184,6 +198,12 @@ export function AdminPage() {
                 Delete {selected.size} selected
               </button>
             )}
+            <NavLink
+              to="/admin/rooms"
+              className="px-3 py-1.5 text-sm font-medium bg-surface-elevated text-text-muted hover:text-text rounded-lg transition-colors"
+            >
+              Rooms
+            </NavLink>
             <button
               onClick={() => setShowCreate(true)}
               className="px-3 py-1.5 text-sm font-medium bg-accent text-white rounded-lg hover:opacity-90 transition-opacity"
