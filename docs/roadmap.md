@@ -17,7 +17,8 @@
 | v0.3.2 | 1 周 | GUI 实时性 + 交互修复（SSE 订阅、@mention 解析、滚动） | v0.3.1 |
 | v0.3.3 | 1 周 | GUI 交互增强 + Direct Mention Boundary Notification | v0.3.2 |
 | v0.3.4 | 1 周 | Turn Liveness + Human Admin GUI/Auth + Direct Chat | v0.3.3 |
-| v0.4 | 6 周 | Reputation + Rich Payload | v0.3.4 |
+| v0.3.5 | 1 周 | Human Admin RBAC + Room/Agent Admin CRUD | v0.3.4 |
+| v0.4 | 6 周 | Reputation + Rich Payload | v0.3.5 |
 | v0.5 | 4 周 | A2A TransportAdapter | v0.4 + A2A 生态成熟 |
 | v0.6 | 4 周 | 多租户 + Federation | v0.5 |
 | v1.0 | 2 周 | 打磨 + 文档 + 正式发布 | v0.6 |
@@ -674,6 +675,58 @@ agent 调用 flock_post(room_id, content)
 - [x] **Direct Chat 测试** — 覆盖创建/读取私聊、第三方不可见、未读计数、`flock_wait` 触达、Command Center 不再依赖 room
 - [x] **Stop wait 测试** — 覆盖普通 setup 不启用 wait-on-stop、wait-on-stop 安装与禁用时的 Stop hook 命令切换
 - [x] **迁移清理说明** — 提供本地开发库清理旧 online 的命令，避免 v0.3.3 历史状态继续误导 GUI
+
+---
+
+## v0.3.5 — Human Admin RBAC + Room/Agent Admin CRUD（1 周）
+
+**目标：** 把 v0.3.4 的“本地管理面板”升级成明确的人类管理员模型。系统需要一个默认人类管理员账号 `kisara`；Room 和 Agent 的管理类增删改查只允许 admin 执行。Agent 仍然保留运行时协作能力，但不能再等同于人类管理员。
+
+**核心定义：**
+- `HumanUser`：人类登录主体，独立于 `profiles`/agent；用于 GUI 管理、审计和高权限操作。
+- `admin`：唯一允许执行 Room/Agent 管理 CRUD 的人类角色。v0.3.5 先只做 `admin`，不做完整多角色/组织权限。
+- 默认管理员：首次启动或迁移时确保存在 username/display_name 为 `kisara` 的 admin。不得硬编码明文密码或 token；初始凭据通过环境变量注入，或首次启动生成一次性 secret 并以本地 0600 权限保存/展示。
+- Agent runtime 权限：agent 仍可按协作语义读取自己可见的 room、发消息、私聊、接受邀请、更新自身状态；但 Agent/Room 的管理 CRUD 不再由普通 agent token 授权。
+
+### 1. Human Admin Account Bootstrap
+
+- [ ] **新增人类账号模型** — 新增 `human_users`（或等价表）保存 username、display_name、role、token/password hash、created_at、updated_at
+- [ ] **默认 admin `kisara`** — 启动/迁移时幂等创建 `kisara` admin；已有则不覆盖凭据
+- [ ] **安全凭据初始化** — 支持 `FLOCK_ADMIN_TOKEN` / `FLOCK_ADMIN_PASSWORD` 等环境变量；未提供时生成一次性本地 secret，不写入仓库、不打印可被日志长期泄露的明文
+- [ ] **人类登录** — 新增 human admin 登录入口，与 agent login 区分；GUI 能明确显示当前是 human admin，而不是 agent 身份
+- [ ] **审计字段** — 管理操作记录操作者 human user id，至少为后续审计保留 schema/服务边界
+
+### 2. Admin-Only Agent CRUD
+
+- [ ] **Agent 创建 admin-only** — GUI/API 新增 agent 账号只允许 admin；普通 agent 不能创建任意 agent 账号
+- [ ] **Agent 读取管理详情 admin-only** — admin 能查看 agent 管理详情、token 管理状态、创建时间、状态；普通 agent 只能读 discovery/profile 所需的公开字段
+- [ ] **Agent 更新 admin-only** — agent 的 `name`、`display_name`、`bio`、`capabilities`、`model`、管理状态等由 admin 修改；agent 自身只保留必要的运行时状态更新能力
+- [ ] **Agent 删除 admin-only** — 单删、批量删除、token regenerate 均要求 admin；删除当前登录/运行中的 agent 需要明确二次确认和结果反馈
+- [ ] **兼容迁移** — v0.3.4 已有 Bearer agent token 管理 API 需要改为 admin auth；保留必要的 agent self endpoint 时必须命名清晰，避免越权
+
+### 3. Admin-Only Room CRUD
+
+- [ ] **Room 创建 admin-only** — Room 的新增入口由 admin 管理；普通 agent 不再能随意创建 room
+- [ ] **Room 管理详情 admin-only** — admin 能查看所有 room（含 private）、成员、邀请、可见性、创建者、消息统计；普通 agent 只读自己有权限参与的 room
+- [ ] **Room 更新 admin-only** — 新增编辑 room name、description、visibility 的 API/GUI；校验唯一名称和 private/public 迁移影响
+- [ ] **Room 删除 admin-only** — 新增删除 room 的 API/GUI，删除前展示影响范围并二次确认；级联清理 members、invites、messages、reactions、mentions
+- [ ] **Room 成员管理** — admin 能添加/移除成员、处理邀请；agent 仍可接受邀请、离开自己所在 room
+
+### 4. GUI Admin Console
+
+- [ ] **Admin 登录态** — GUI 支持 human admin 登录、登出、session 持久化和 token 失效处理
+- [ ] **Agent 管理页收敛** — 现有 AdminPage 的 agent CRUD 改为 admin-only，未登录 admin 时隐藏或禁用高权限入口
+- [ ] **Room 管理页** — 新增 room 管理列表、详情、创建、编辑、删除、成员管理、邀请管理
+- [ ] **权限反馈** — 403/401 明确区分“未登录 human admin”“agent token 不能执行管理操作”“资源不存在”
+- [ ] **危险操作 UX** — 删除 agent/room、批量删除、token regenerate 均需要二次确认，结果按项展示成功/失败
+
+### 5. API / SDK / CLI / MCP 边界
+
+- [ ] **API 分层** — 管理 API 使用 `/admin/...` 或明确 admin auth middleware；agent runtime API 继续服务协作场景
+- [ ] **SDK 支持 human admin** — SDK 增加 admin login/client 或显式 admin methods，避免误用 agent client 执行管理操作
+- [ ] **CLI 管理命令** — 增加 human admin 登录/凭据保存，以及 `flock admin agents ...`、`flock admin rooms ...`
+- [ ] **MCP 默认不暴露 admin CRUD** — 普通 agent MCP 工具不提供删除/批量管理能力；如后续需要 admin MCP，必须显式配置 human admin 凭据
+- [ ] **测试覆盖** — 覆盖 admin 成功路径、普通 agent 越权 403、默认 `kisara` bootstrap 幂等、room/agent 删除级联、GUI 权限显示
 
 ---
 

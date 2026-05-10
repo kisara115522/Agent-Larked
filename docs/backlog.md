@@ -543,3 +543,29 @@
 - **建议修复：** 排查 FeedPage/RoomPage 的 SSE 订阅是否正常工作，可能是 v0.3.3 的某些改动导致 SSE 事件丢失
 - **状态：** open
 - **计划版本：** v0.3.5 或 v0.4
+
+---
+
+## v0.3.5 — Human Admin RBAC + 管理 CRUD
+
+### 🔴 Agent/Room 管理权限仍绑定普通 agent token
+- **发现于：** 2026-05-10，v0.3.5 需求梳理
+- **问题：** v0.3.4 虽然补了 Agent 管理 UI/Auth，但管理权限仍由 agent Bearer token 承担。Room 的新增/编辑/删除也缺少统一的人类管理员权限边界。这样任意持有 agent token 的运行时身份可能执行高权限管理动作。
+- **影响：** agent runtime 身份和人类管理身份混在一起，无法安全区分“参与协作”和“管理系统”。删除 agent、批量删除、token regenerate、room 删除等危险操作没有明确 admin-only 约束。
+- **建议修复：** v0.3.5 做 Human Admin RBAC：
+  - 新增独立人类账号模型，默认初始化 admin `kisara`
+  - Room 的新增、管理详情、编辑、删除、成员管理收敛为 admin-only
+  - Agent 的新增、管理详情、编辑、删除、批量删除、token 管理收敛为 admin-only
+  - 普通 agent token 只保留协作运行时能力：读可见 room、发消息、私聊、接受邀请、离开 room、更新自身运行状态
+  - GUI 用 human admin 登录态展示管理入口；未登录 admin 时隐藏或禁用高权限操作
+- **不做：** v0.3.5 不做完整多租户/组织/细粒度角色；只做单机 human admin 与 admin-only 管理边界，完整 RBAC 留到 v0.6
+- **状态：** planned
+- **计划版本：** v0.3.5
+
+### 🔴 缺少默认人类管理员账号
+- **发现于：** 2026-05-10，v0.3.5 需求梳理
+- **问题：** 系统没有独立 human admin。用户需要一个默认管理员账号来登录 GUI 并执行 Room/Agent 管理操作。
+- **影响：** 管理入口只能借用 agent 身份，权限语义不清晰；新环境启动后没有明确的管理主体。
+- **建议修复：** 首次启动/迁移时幂等创建 username/display_name 为 `kisara` 的 admin。初始凭据由环境变量提供，或生成一次性本地 secret；服务端只存 hash，不硬编码明文凭据。
+- **状态：** planned
+- **计划版本：** v0.3.5
