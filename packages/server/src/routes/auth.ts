@@ -26,10 +26,10 @@ export function authRouter(db: Database.Database): Router {
       ).get(identifier, tokenHash) as Record<string, unknown> | undefined;
 
       if (!row) {
-        // Try display_name — must match exactly one agent
+        // Try name or display_name — must match exactly one agent
         const candidates = db.prepare(
-          'SELECT * FROM profiles WHERE display_name = ? AND token_hash = ?',
-        ).all(identifier, tokenHash) as Record<string, unknown>[];
+          'SELECT * FROM profiles WHERE (name = ? OR display_name = ?) AND token_hash = ?',
+        ).all(identifier, identifier, tokenHash) as Record<string, unknown>[];
 
         if (candidates.length === 1) {
           row = candidates[0];
