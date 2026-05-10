@@ -111,7 +111,7 @@ function RoomManageContent() {
     setDetailRoom(room);
     setDetailLoading(true);
     try {
-      const res = await get<{ members: RoomMember[] }>(`/rooms/${room.id}/members`, token);
+      const res = await get<{ members: RoomMember[] }>(`/admin/rooms/${room.id}/members`, token);
       setMembers(res.members);
     } catch {
       setMembers([]);
