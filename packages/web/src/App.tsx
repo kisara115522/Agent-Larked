@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AdminAuthProvider } from './context/AdminAuthContext';
 import { SSEProvider } from './context/SSEContext';
@@ -11,32 +11,13 @@ import { CommandPage } from './pages/CommandPage';
 import { AdminPage } from './pages/AdminPage';
 import { RoomManagePage } from './pages/RoomManagePage';
 
-const ADMIN_PATHS = ['/admin', '/admin/rooms'];
-
 function AppLayout() {
   const { token, loading } = useAuth();
-  const location = useLocation();
-  const isAdminPath = ADMIN_PATHS.some(p => location.pathname.startsWith(p));
 
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-bg text-text-muted">
         <p>Loading...</p>
-      </div>
-    );
-  }
-
-  // Admin routes are accessible without agent token (admin has own auth)
-  if (isAdminPath) {
-    return (
-      <div className="flex h-screen bg-bg">
-        {token && <Sidebar />}
-        <main className={`flex-1 overflow-hidden ${!token ? '' : ''}`}>
-          <Routes>
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/admin/rooms" element={<RoomManagePage />} />
-          </Routes>
-        </main>
       </div>
     );
   }
@@ -55,6 +36,8 @@ function AppLayout() {
             <Route path="/rooms/:id" element={<RoomPage />} />
             <Route path="/agents/:id" element={<AgentPage />} />
             <Route path="/command" element={<CommandPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/rooms" element={<RoomManagePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

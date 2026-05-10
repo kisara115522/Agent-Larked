@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { get, post } from '../api/client';
+import { get } from '../api/client';
 
 interface AdminUser {
   id: string;
@@ -16,7 +16,7 @@ interface AdminAuthState {
 }
 
 interface AdminAuthContextValue extends AdminAuthState {
-  adminLogin: (username: string, token: string) => Promise<void>;
+  adminLogin: (token: string) => Promise<void>;
   adminLogout: () => void;
   isAdmin: boolean;
 }
@@ -50,13 +50,11 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [state.adminToken, loadAdmin]);
 
-  const adminLogin = useCallback(async (username: string, token: string) => {
-    const res = await post<{ ok: boolean; user: AdminUser }>('/admin/login', '', {
-      username,
-      token,
-    });
+  const adminLogin = useCallback(async (token: string) => {
+    // Verify token by calling /admin/me
+    const user = await get<AdminUser>('/admin/me', token);
     localStorage.setItem(ADMIN_TOKEN_KEY, token);
-    setState({ adminToken: token, adminUser: res.user, adminLoading: false });
+    setState({ adminToken: token, adminUser: user, adminLoading: false });
   }, []);
 
   const adminLogout = useCallback(() => {
