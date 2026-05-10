@@ -31,12 +31,14 @@
   - codex-v034-direct（全栈）：模块 5+6 — Direct Chat（persistent 1:1 私聊模型）、MCP flock_dm_send/read/list、CLI flock dm、Command Center 改为 Direct Chat、Stop hook wait-on-stop opt-in
   - 327 测试通过（server 189 + sdk 34 + mcp 104）
   - 交叉审查通过，3 个阻断问题已修复
-- **v0.3.5 已规划** — Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix
-  - 新增独立人类账号模型，默认初始化管理员 `kisara`
-  - Room 的新增、查看管理详情、编辑、删除，以及 Agent 的新增、查看管理详情、编辑、删除、批量删除、token 管理，都收敛为 admin-only
-  - Agent 运行时协作能力（读已加入房间、发消息、私聊、接受邀请等）与人类管理员管理能力分离
-  - 补修 v0.3.3 遗留：agent 工作中 direct @mention 仍不能可靠进入下一次模型上下文，需要重新验证 mention listener、local queue、hook digest、tool response digest 和 `flock_wait` 的联动
-- 下一步：v0.3.5（Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix）→ v0.4（Reputation + Rich Payload）
+- **v0.3.5 已完成** — 2026-05-10（Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix，3 agent 协作）
+  - kisara-claude（后端）：模块 B — human_users 表 + bootstrap、admin-auth middleware、admin routes（12 端点）、agents.ts/rooms.ts 改造为 admin-only、admin room members 端点、ESM 兼容修复
+  - gui-2（前端）：模块 C — AdminAuthContext、AdminPage 收敛为 admin-only、RoomManagePage（CRUD + 成员管理）、SSE 重连 + 状态指示、API 错误处理、admin 独立入口 + 登录契约修复 + hooks 顺序修复
+  - codex（MCP/CLI）：模块 A — mention boundary foreground fallback（hook 边界扫 DB → 写 queue → 输出 digest）、原子写 + try/catch 防护、doctor 诊断增强
+  - 352 测试通过（server 213 + sdk 34 + mcp 105）
+  - 交叉审查通过，所有阻断问题已修复
+  - kisara 同时注册为 agent + admin，从 agent 登录页进入，Admin 按钮跳转管理面板
+- 下一步：v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
