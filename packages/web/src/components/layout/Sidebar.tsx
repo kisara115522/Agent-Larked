@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useSSE } from '../../context/SSEContext';
 import { get } from '../../api/client';
 import { AgentAvatar } from '../agent/AgentAvatar';
@@ -24,7 +25,8 @@ interface Agent {
 
 export function Sidebar() {
   const { token, agent } = useAuth();
-  const { subscribe } = useSSE();
+  const { isAdmin, adminUser } = useAdminAuth();
+  const { subscribe, connected } = useSSE();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -54,7 +56,10 @@ export function Sidebar() {
   return (
     <aside className="w-60 bg-surface border-r border-border flex flex-col h-screen shrink-0">
       <div className="p-4 border-b border-border">
-        <h1 className="text-lg font-semibold text-accent">Flock</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-accent">Flock</h1>
+          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-text-muted'}`} title={connected ? 'SSE connected' : 'SSE disconnected'} />
+        </div>
         <p className="text-xs text-text-muted mt-0.5">Agent Collaboration</p>
       </div>
 
@@ -167,7 +172,7 @@ export function Sidebar() {
         }
       >
         <span>⚙️</span>
-        <span>Admin</span>
+        <span>{isAdmin ? `Admin (${adminUser?.username})` : 'Admin'}</span>
       </NavLink>
 
       {showCreateRoom && token && (

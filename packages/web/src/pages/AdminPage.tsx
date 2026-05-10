@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAdminAuth } from '../context/AdminAuthContext';
 import { get, post, patch, del } from '../api/client';
+import { AdminLoginPage } from './AdminLoginPage';
 
 interface Agent {
   id: string;
@@ -19,7 +22,8 @@ interface BatchResult {
 }
 
 export function AdminPage() {
-  const { token, agent: currentAgent, login } = useAuth();
+  const { agent: currentAgent, login } = useAuth();
+  const { isAdmin, adminToken, adminUser, adminLogout } = useAdminAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -34,6 +38,12 @@ export function AdminPage() {
   const [createDisplayName, setCreateDisplayName] = useState('');
   const [error, setError] = useState('');
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
+
+  if (!isAdmin) {
+    return <AdminLoginPage />;
+  }
+
+  const token = adminToken!;
 
   const loadAgents = useCallback(async () => {
     if (!token) return;
@@ -173,7 +183,11 @@ export function AdminPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-semibold">Agent Management</h1>
-            <p className="text-sm text-text-muted mt-1">Create, edit, and manage agent accounts</p>
+            <p className="text-sm text-text-muted mt-1">
+              Logged in as <span className="text-accent">{adminUser?.display_name || adminUser?.username}</span>
+              {' '}&middot;{' '}
+              <button onClick={adminLogout} className="text-text-muted hover:text-error transition-colors">Logout</button>
+            </p>
           </div>
           <div className="flex gap-2">
             {selected.size > 0 && (
@@ -184,6 +198,12 @@ export function AdminPage() {
                 Delete {selected.size} selected
               </button>
             )}
+            <NavLink
+              to="/admin/rooms"
+              className="px-3 py-1.5 text-sm font-medium bg-surface-elevated text-text-muted hover:text-text rounded-lg transition-colors"
+            >
+              Rooms
+            </NavLink>
             <button
               onClick={() => setShowCreate(true)}
               className="px-3 py-1.5 text-sm font-medium bg-accent text-white rounded-lg hover:opacity-90 transition-opacity"
