@@ -20,7 +20,6 @@ export function LoginPage() {
     try {
       const res = await post<{ id: string; name: string; token: string }>('/agents', '', { name: identifier.trim() });
       setRegisteredToken(res.token);
-      await login(res.token);
     } catch (err) {
       setError((err as Error).message || 'Registration failed');
     } finally {
@@ -113,7 +112,21 @@ export function LoginPage() {
             {registeredToken && (
               <div className="mt-2 p-2 bg-surface-elevated rounded-lg border border-border">
                 <p className="text-xs text-text-muted mb-1">Your token (save this!):</p>
-                <p className="text-xs font-mono text-accent break-all">{registeredToken}</p>
+                <p className="text-xs font-mono text-accent break-all mb-2">{registeredToken}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => navigator.clipboard.writeText(registeredToken)}
+                    className="flex-1 px-2 py-1 text-xs bg-surface border border-border rounded text-text-muted hover:text-text"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    onClick={async () => { await login(registeredToken); }}
+                    className="flex-1 px-2 py-1 text-xs bg-accent text-white rounded hover:opacity-90"
+                  >
+                    Login
+                  </button>
+                </div>
               </div>
             )}
             <button
