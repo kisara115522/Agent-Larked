@@ -24,7 +24,7 @@ interface Agent {
 }
 
 export function Sidebar() {
-  const { token, agent } = useAuth();
+  const { token, agent, logout } = useAuth();
   const { isAdmin, adminUser } = useAdminAuth();
   const { subscribe, connected } = useSSE();
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -73,6 +73,13 @@ export function Sidebar() {
               <span className="text-xs text-text-muted">{agent.status}</span>
             </div>
           </div>
+          <button
+            onClick={logout}
+            className="text-xs text-text-muted hover:text-error transition-colors shrink-0"
+            title="Logout"
+          >
+            ↗
+          </button>
         </div>
       )}
 

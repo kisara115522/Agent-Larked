@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { get } from '../api/client';
+import { get, patch } from '../api/client';
 
 interface Agent {
   id: string;
@@ -54,6 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
     await loadAgent(token);
+    // Set agent status to online on web login
+    try {
+      const agent = await get<Agent>('/agents/me', token);
+      if (agent.id) {
+        await patch(`/agents/${agent.id}`, token, { status: 'online' });
+      }
+    } catch { /* ignore */ }
   }, [loadAgent]);
 
   const logout = useCallback(() => {
