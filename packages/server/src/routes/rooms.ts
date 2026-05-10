@@ -1,19 +1,49 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { createRoom, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, inviteToRoom, acceptInvite, rejectInvite, requireRoomAccess } from '../services/room.js';
+import { joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, inviteToRoom, acceptInvite, rejectInvite, requireRoomAccess } from '../services/room.js';
 import { getMessages } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import { adminAuthMiddleware, type AdminRequest } from '../middleware/admin-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
+import { ErrorCode } from '@flock/shared';
+import { ServerError } from '../middleware/error.js';
 
 export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
+  const adminAuth = adminAuthMiddleware(db);
 
-  // POST /rooms — create room
-  router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
+  // POST /rooms — create room (admin-only)
+  router.post('/', adminAuth, (req: AdminRequest, res, next) => {
     try {
-      const result = createRoom(db, req.agentId!, req.body);
-      res.status(201).json(result);
+      const { randomUUID } = require('node:crypto');
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      const name = String(req.body.name || '').trim();
+      if (!name || name.length > 64) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Room name must be 1-64 characters', false, 400);
+      }
+      const visibility = req.body.visibility ?? 'public';
+
+      // Check uniqueness
+      const dup = db.prepare('SELECT id FROM rooms WHERE name = ?').get(name);
+      if (dup) {
+        throw new ServerError(ErrorCode.ROOM_ALREADY_EXISTS, `Room '${name}' already exists`, false, 409);
+      }
+
+      // Admin creates room — use 'system' for created_by
+      db.prepare(
+        "INSERT INTO rooms (id, name, description, visibility, created_by, created_at) VALUES (?, ?, ?, ?, 'system', ?)",
+      ).run(id, name, req.body.description ?? '', visibility, now);
+
+      res.status(201).json({
+        id,
+        name,
+        description: req.body.description ?? '',
+        visibility,
+        created_by: 'system',
+        created_at: now,
+      });
     } catch (err) {
       next(err);
     }

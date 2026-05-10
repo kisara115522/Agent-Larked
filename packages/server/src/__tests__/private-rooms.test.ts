@@ -1,12 +1,18 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
+import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
+import { bootstrapDefaultAdmin } from '../db.js';
+import { hashToken } from '../middleware/auth.js';
 
 let app: Express;
+let db: Database.Database;
+let adminToken: string;
 
 beforeAll(() => {
-  ({ app } = createApp()); // in-memory SQLite
+  ({ app, db } = createApp()); // in-memory SQLite
+  adminToken = bootstrapDefaultAdmin(db, hashToken)!;
 });
 
 describe('Private Rooms', () => {
@@ -44,8 +50,8 @@ describe('Private Rooms', () => {
   describe('Room visibility', () => {
     it('creates a public room by default', async () => {
       const res = await request(app)
-        .post('/rooms')
-        .set('Authorization', `Bearer ${ownerToken}`)
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({ name: 'public-room' })
         .expect(201);
 
@@ -54,9 +60,9 @@ describe('Private Rooms', () => {
 
     it('creates a private room with visibility=private', async () => {
       const res = await request(app)
-        .post('/rooms')
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ name: 'private-room', visibility: 'private' })
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'private-room', visibility: 'private', agent_id: ownerId })
         .expect(201);
 
       expect(res.body.visibility).toBe('private');
@@ -79,9 +85,9 @@ describe('Private Rooms', () => {
 
     beforeAll(async () => {
       const res = await request(app)
-        .post('/rooms')
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ name: 'private-join-test', visibility: 'private' })
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'private-join-test', visibility: 'private', agent_id: ownerId })
         .expect(201);
       privateRoomId = res.body.id;
     });
@@ -124,9 +130,9 @@ describe('Private Rooms', () => {
 
     beforeAll(async () => {
       const res = await request(app)
-        .post('/rooms')
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ name: 'invite-test-room', visibility: 'private' })
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'invite-test-room', visibility: 'private', agent_id: ownerId })
         .expect(201);
       roomId = res.body.id;
     });
@@ -234,9 +240,9 @@ describe('Private Rooms', () => {
     beforeAll(async () => {
       // Create a new private room
       const res = await request(app)
-        .post('/rooms')
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ name: 'reject-test-room', visibility: 'private' })
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'reject-test-room', visibility: 'private', agent_id: ownerId })
         .expect(201);
       roomId = res.body.id;
 
@@ -270,8 +276,8 @@ describe('Private Rooms', () => {
     it('non-members do not see private rooms in listing', async () => {
       // Create a private room
       await request(app)
-        .post('/rooms')
-        .set('Authorization', `Bearer ${ownerToken}`)
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({ name: 'hidden-private-room', visibility: 'private' })
         .expect(201);
 
@@ -288,9 +294,9 @@ describe('Private Rooms', () => {
     it('members see private rooms in listing', async () => {
       // Create a private room and invite other agent
       const roomRes = await request(app)
-        .post('/rooms')
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ name: 'visible-private-room', visibility: 'private' })
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'visible-private-room', visibility: 'private', agent_id: ownerId })
         .expect(201);
 
       await request(app)
@@ -319,9 +325,9 @@ describe('Private Rooms', () => {
   describe('Invite to already-member', () => {
     it('rejects invite to agent already in room', async () => {
       const roomRes = await request(app)
-        .post('/rooms')
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ name: 'already-member-room', visibility: 'private' })
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'already-member-room', visibility: 'private', agent_id: ownerId })
         .expect(201);
 
       // Invite and accept

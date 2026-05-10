@@ -1,15 +1,21 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
+import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
+import { bootstrapDefaultAdmin } from '../db.js';
+import { hashToken } from '../middleware/auth.js';
 import http from 'node:http';
 
 let app: Express;
+let db: Database.Database;
+let adminToken: string;
 let server: http.Server;
 let baseUrl: string;
 
 beforeAll(async () => {
-  ({ app } = createApp());
+  ({ app, db } = createApp());
+  adminToken = bootstrapDefaultAdmin(db, hashToken)!;
   server = app.listen(0);
   const addr = server.address() as { port: number };
   baseUrl = `http://127.0.0.1:${addr.port}`;
@@ -40,8 +46,8 @@ describe('SSE Events', () => {
   it('POST /rooms/:id/subscribe returns ok', async () => {
     const reg = await request(app).post('/agents').send({ name: 'SSEBot2' }).expect(201);
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${reg.body.token}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'sse-room' })
       .expect(201);
 
@@ -56,8 +62,8 @@ describe('SSE Events', () => {
   it('POST /rooms/:id/unsubscribe returns ok', async () => {
     const reg = await request(app).post('/agents').send({ name: 'SSEBot3' }).expect(201);
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${reg.body.token}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'sse-room-2' })
       .expect(201);
 

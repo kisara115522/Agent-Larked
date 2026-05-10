@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
+import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
+import { bootstrapDefaultAdmin } from '../db.js';
+import { hashToken } from '../middleware/auth.js';
 
 let app: Express;
+let db: Database.Database;
+let adminToken: string;
 
 describe('Direct Chat', () => {
   let aliceToken: string;
@@ -13,7 +18,8 @@ describe('Direct Chat', () => {
   let thirdToken: string;
 
   beforeAll(async () => {
-    ({ app } = createApp());
+    ({ app, db } = createApp());
+    adminToken = bootstrapDefaultAdmin(db, hashToken)!;
 
     const alice = await request(app).post('/agents').send({ name: 'DirectAlice' }).expect(201);
     aliceToken = alice.body.token;
@@ -93,8 +99,8 @@ describe('Direct Chat', () => {
 
   it('does not expose direct chats through room messages', async () => {
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${aliceToken}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'direct-chat-not-a-room' })
       .expect(201);
 

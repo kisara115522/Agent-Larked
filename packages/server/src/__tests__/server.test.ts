@@ -1,12 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
+import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
+import { bootstrapDefaultAdmin } from '../db.js';
+import { hashToken } from '../middleware/auth.js';
 
 let app: Express;
+let db: Database.Database;
+let adminToken: string;
 
 beforeAll(() => {
-  ({ app } = createApp()); // in-memory SQLite
+  ({ app, db } = createApp()); // in-memory SQLite
+  adminToken = bootstrapDefaultAdmin(db, hashToken)!;
 });
 
 describe('Agent Registration', () => {
@@ -62,13 +68,13 @@ describe('Room Operations', () => {
 
   it('POST /rooms creates a room', async () => {
     const res = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${agentToken}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'test-room', description: 'A test room' })
       .expect(201);
 
     expect(res.body.name).toBe('test-room');
-    expect(res.body.created_by).toBe(agentId);
+    expect(res.body.created_by).toBe('system');
   });
 
   it('POST /rooms/:id/join joins a room', async () => {
@@ -80,8 +86,8 @@ describe('Room Operations', () => {
 
     // Create room
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${agentToken}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'join-test' })
       .expect(201);
 
@@ -107,9 +113,9 @@ describe('Messaging', () => {
     agentId = reg.body.id;
 
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${agentToken}`)
-      .send({ name: 'msg-room' })
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'msg-room', agent_id: agentId })
       .expect(201);
     roomId = room.body.id;
   });
@@ -190,9 +196,9 @@ describe('Thread', () => {
       .expect(201);
 
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${reg.body.token}`)
-      .send({ name: 'thread-room' })
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'thread-room', agent_id: reg.body.id })
       .expect(201);
 
     // Send parent
@@ -238,9 +244,9 @@ describe('Reaction', () => {
       .expect(201);
 
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${reg.body.token}`)
-      .send({ name: 'react-room' })
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'react-room', agent_id: reg.body.id })
       .expect(201);
 
     const msg = await request(app)
@@ -308,14 +314,14 @@ describe('GET /rooms', () => {
 
     // Create a few rooms
     await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${reg.body.token}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'list-room-1', description: 'First' })
       .expect(201);
 
     await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${reg.body.token}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'list-room-2', description: 'Second' })
       .expect(201);
 
@@ -355,10 +361,16 @@ describe('GET /rooms/:id', () => {
       .expect(201);
 
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${reg.body.token}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'detail-room', description: 'Detail test' })
       .expect(201);
+
+    // Agent must join since admin-created rooms don't auto-join
+    await request(app)
+      .post(`/rooms/${room.body.id}/join`)
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .expect(200);
 
     const res = await request(app)
       .get(`/rooms/${room.body.id}`)
@@ -367,7 +379,7 @@ describe('GET /rooms/:id', () => {
 
     expect(res.body.name).toBe('detail-room');
     expect(res.body.description).toBe('Detail test');
-    expect(res.body.member_count).toBe(1); // creator auto-joins
+    expect(res.body.member_count).toBe(1); // agent joined
   });
 
   it('returns 404 for non-existent room', async () => {
@@ -396,12 +408,17 @@ describe('GET /rooms/:id/members', () => {
       .expect(201);
 
     const room = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${reg1.body.token}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'member-room' })
       .expect(201);
 
-    // Second agent joins
+    // Both agents join
+    await request(app)
+      .post(`/rooms/${room.body.id}/join`)
+      .set('Authorization', `Bearer ${reg1.body.token}`)
+      .expect(200);
+
     await request(app)
       .post(`/rooms/${room.body.id}/join`)
       .set('Authorization', `Bearer ${reg2.body.token}`)

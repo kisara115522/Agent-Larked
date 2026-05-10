@@ -140,6 +140,16 @@ CREATE INDEX IF NOT EXISTS idx_direct_messages_chat_seq ON direct_messages(chat_
 CREATE INDEX IF NOT EXISTS idx_direct_messages_to_agent ON direct_messages(to_agent, created_order);
 CREATE INDEX IF NOT EXISTS idx_direct_messages_from_agent ON direct_messages(from_agent, created_order);
 CREATE INDEX IF NOT EXISTS idx_direct_idempotency_expiry ON direct_idempotency_keys(expires_at);
+
+CREATE TABLE IF NOT EXISTS human_users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'admin',
+  token_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 `;
 
 export function createDatabase(path: string = ':memory:'): Database.Database {
@@ -176,4 +186,30 @@ export function cleanupIdempotencyKeys(db: Database.Database): number {
   const roomResult = db.prepare("DELETE FROM idempotency_keys WHERE expires_at < datetime('now')").run();
   const directResult = db.prepare("DELETE FROM direct_idempotency_keys WHERE expires_at < datetime('now')").run();
   return roomResult.changes + directResult.changes;
+}
+
+/** Bootstrap default admin 'kisara' if no human_users exist. Returns the admin token if newly created. */
+export function bootstrapDefaultAdmin(db: Database.Database, hashToken: (token: string) => string): string | null {
+  const existing = db.prepare('SELECT id FROM human_users LIMIT 1').get();
+  if (existing) return null; // already bootstrapped
+
+  const { randomBytes } = require('node:crypto');
+  const id = randomBytes(16).toString('hex');
+  const token = randomBytes(32).toString('hex');
+  const tokenHash = hashToken(token);
+  const now = new Date().toISOString();
+
+  db.prepare(
+    'INSERT INTO human_users (id, username, display_name, role, token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, 'kisara', 'kisara', 'admin', tokenHash, now, now);
+
+  // Create a system profile so admin-created rooms can reference it via FK
+  const systemExists = db.prepare('SELECT id FROM profiles WHERE id = ?').get('system');
+  if (!systemExists) {
+    db.prepare(
+      'INSERT INTO profiles (id, name, display_name, token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run('system', 'system', 'System', 'no-login', now, now);
+  }
+
+  return token;
 }

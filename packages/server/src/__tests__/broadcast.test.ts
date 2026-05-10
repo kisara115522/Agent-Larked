@@ -1,17 +1,23 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { Express } from 'express';
+import type Database from 'better-sqlite3';
 import request from 'supertest';
 import { createApp } from '../index.js';
+import { bootstrapDefaultAdmin } from '../db.js';
+import { hashToken } from '../middleware/auth.js';
 
 describe('Broadcast API', () => {
   let app: Express;
+  let db: Database.Database;
+  let adminToken: string;
   let agent1Token: string;
   let agent1Id: string;
   let agent2Token: string;
   let agent2Id: string;
 
   beforeAll(async () => {
-    ({ app } = createApp());
+    ({ app, db } = createApp());
+    adminToken = bootstrapDefaultAdmin(db, hashToken)!;
 
     // Register agent 1
     const res1 = await request(app)

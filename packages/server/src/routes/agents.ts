@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import { randomBytes } from 'node:crypto';
 import { registerAgent, updateProfile, searchAgents, getProfile, cleanupStaleOnlineAgents } from '../services/identity.js';
 import { authMiddleware, type AuthenticatedRequest, hashToken } from '../middleware/auth.js';
+import { adminAuthMiddleware, type AdminRequest } from '../middleware/admin-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
@@ -21,6 +22,7 @@ function deleteAgentCascade(db: Database.Database, agentId: string): void {
 export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
+  const adminAuth = adminAuthMiddleware(db);
 
   // POST /agents — register (no auth required)
   router.post('/', (req, res, next) => {
@@ -110,14 +112,9 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
     }
   });
 
-  // POST /agents/:id/token — regenerate token (self only)
-  router.post('/:id/token', auth, (req: AuthenticatedRequest, res, next) => {
+  // POST /agents/:id/token — regenerate token (admin-only)
+  router.post('/:id/token', adminAuth, (req: AdminRequest, res, next) => {
     try {
-      if (req.params.id !== req.agentId) {
-        res.status(403).json({ error: { code: ErrorCode.FORBIDDEN, message: 'Cannot regenerate token for another agent', retryable: false } });
-        return;
-      }
-
       const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(req.params.id) as { id: string } | undefined;
       if (!existing) {
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
@@ -136,9 +133,8 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
     }
   });
 
-  // DELETE /agents/:id — delete agent (admin: any agent; non-admin: self only)
-  // TODO: v0.6 RBAC — formalize admin role check
-  router.delete('/:id', auth, (req: AuthenticatedRequest, res, next) => {
+  // DELETE /agents/:id — delete agent (admin-only)
+  router.delete('/:id', adminAuth, (req: AdminRequest, res, next) => {
     try {
       const agentId = req.params.id as string;
       const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
@@ -153,8 +149,8 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
     }
   });
 
-  // POST /agents/batch-delete — batch delete agents
-  router.post('/batch-delete', auth, (req: AuthenticatedRequest, res, next) => {
+  // POST /agents/batch-delete — batch delete agents (admin-only)
+  router.post('/batch-delete', adminAuth, (req: AdminRequest, res, next) => {
     try {
       const { agent_ids } = req.body as BatchDeleteRequest;
 
