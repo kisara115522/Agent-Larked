@@ -25,6 +25,7 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const TOKEN_KEY = 'flock_token';
+const ADMIN_TOKEN_KEY = 'flock_admin_token';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -53,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(ADMIN_TOKEN_KEY); // Clear admin on new agent login
     await loadAgent(token);
     // Set agent status to online on web login
     try {
@@ -65,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
     setState({ token: null, agent: null, loading: false });
   }, []);
 
