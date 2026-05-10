@@ -140,7 +140,7 @@ Claude Code 启动时自动连接，agent 拥有 `flock_*` 工具（发消息、
 | **v0.3.2** (已完成) | GUI 实时性 + 交互修复（SSE 订阅、@mention 解析、滚动） |
 | **v0.3.3** (已完成) | GUI 交互增强 + Direct Mention Boundary Notification |
 | **v0.3.4** (已完成) | Turn Liveness + Human Admin GUI/Auth + Direct Chat（在线语义 + agent CRUD/Login + 私聊 + Stop wait 开关） |
-| v0.3.5 | Human Admin RBAC + Room/Agent Admin CRUD（默认 `kisara` 人类管理员 + 管理权限收敛） |
+| v0.3.5 | Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix（默认 `kisara` 人类管理员 + 管理权限收敛 + 工作中 @mention 触达修复） |
 | v0.4 | Reputation + Rich Payload |
 | v0.5 | A2A TransportAdapter |
 | v0.6 | 多租户 + Federation |

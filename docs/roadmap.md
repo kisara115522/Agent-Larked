@@ -17,7 +17,7 @@
 | v0.3.2 | 1 周 | GUI 实时性 + 交互修复（SSE 订阅、@mention 解析、滚动） | v0.3.1 |
 | v0.3.3 | 1 周 | GUI 交互增强 + Direct Mention Boundary Notification | v0.3.2 |
 | v0.3.4 | 1 周 | Turn Liveness + Human Admin GUI/Auth + Direct Chat | v0.3.3 |
-| v0.3.5 | 1 周 | Human Admin RBAC + Room/Agent Admin CRUD | v0.3.4 |
+| v0.3.5 | 1 周 | Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix | v0.3.4 |
 | v0.4 | 6 周 | Reputation + Rich Payload | v0.3.5 |
 | v0.5 | 4 周 | A2A TransportAdapter | v0.4 + A2A 生态成熟 |
 | v0.6 | 4 周 | 多租户 + Federation | v0.5 |
@@ -678,15 +678,16 @@ agent 调用 flock_post(room_id, content)
 
 ---
 
-## v0.3.5 — Human Admin RBAC + Room/Agent Admin CRUD（1 周）
+## v0.3.5 — Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix（1 周）
 
-**目标：** 把 v0.3.4 的“本地管理面板”升级成明确的人类管理员模型。系统需要一个默认人类管理员账号 `kisara`；Room 和 Agent 的管理类增删改查只允许 admin 执行。Agent 仍然保留运行时协作能力，但不能再等同于人类管理员。
+**目标：** 把 v0.3.4 的“本地管理面板”升级成明确的人类管理员模型，同时补修 v0.3.3 遗留的工作中 @mention 触达问题。系统需要一个默认人类管理员账号 `kisara`；Room 和 Agent 的管理类增删改查只允许 admin 执行。Agent 仍然保留运行时协作能力，但不能再等同于人类管理员。被 direct @mention 的 agent 即使正在工作，也必须在下一次安全边界可靠看到短 digest。
 
 **核心定义：**
 - `HumanUser`：人类登录主体，独立于 `profiles`/agent；用于 GUI 管理、审计和高权限操作。
 - `admin`：唯一允许执行 Room/Agent 管理 CRUD 的人类角色。v0.3.5 先只做 `admin`，不做完整多角色/组织权限。
 - 默认管理员：首次启动或迁移时确保存在 username/display_name 为 `kisara` 的 admin。不得硬编码明文密码或 token；初始凭据通过环境变量注入，或首次启动生成一次性 secret 并以本地 0600 权限保存/展示。
 - Agent runtime 权限：agent 仍可按协作语义读取自己可见的 room、发消息、私聊、接受邀请、更新自身状态；但 Agent/Room 的管理 CRUD 不再由普通 agent token 授权。
+- Mention boundary：v0.3.3 已有 listener/queue/hook/digest 设计，但实测 agent 工作中仍可能收不到 direct @mention；v0.3.5 必须补齐复现测试、诊断命令和可靠投递路径。
 
 ### 1. Human Admin Account Bootstrap
 
@@ -727,6 +728,16 @@ agent 调用 flock_post(room_id, content)
 - [ ] **CLI 管理命令** — 增加 human admin 登录/凭据保存，以及 `flock admin agents ...`、`flock admin rooms ...`
 - [ ] **MCP 默认不暴露 admin CRUD** — 普通 agent MCP 工具不提供删除/批量管理能力；如后续需要 admin MCP，必须显式配置 human admin 凭据
 - [ ] **测试覆盖** — 覆盖 admin 成功路径、普通 agent 越权 403、默认 `kisara` bootstrap 幂等、room/agent 删除级联、GUI 权限显示
+
+### 6. Mention Boundary Fix
+
+- [ ] **复现测试** — 覆盖 agent 正在执行非 Flock 工具/长任务后收到 direct @mention，下一次 Flock tool response 或 Claude Code hook 边界必须注入 `_unread_mentions`
+- [ ] **listener 健康检查** — `flock doctor` 明确报告 mention listener 是否运行、最后轮询时间、队列路径、当前 agent id/name 是否匹配
+- [ ] **队列可靠性** — 本地 unread queue 按 recipient_id 隔离，去重稳定；坏 JSON 行不能阻塞读取；drain/list 行为可测试
+- [ ] **hook digest 触达** — PostToolUse/Stop hook 在有未读 mention 时稳定返回非零并输出短 digest；无未读时静默，不影响正常工作
+- [ ] **tool response digest 触达** — 任意 Flock MCP 工具响应都能附带 `_unread_mentions`，不能只在少数工具里出现
+- [ ] **Direct Chat 与 @mention 边界** — Direct Chat 新消息走 `flock_wait.direct_messages`；Room direct @mention 走 mention queue，文档和测试要区分两条路径
+- [ ] **宿主限制文档化** — 明确 Flock 不能打断模型当前推理或长工具调用；承诺范围是 detection + 下一 host/tool boundary digest，不承诺真正 async interrupt
 
 ---
 

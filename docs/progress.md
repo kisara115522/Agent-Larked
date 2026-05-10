@@ -31,11 +31,12 @@
   - codex-v034-direct（全栈）：模块 5+6 — Direct Chat（persistent 1:1 私聊模型）、MCP flock_dm_send/read/list、CLI flock dm、Command Center 改为 Direct Chat、Stop hook wait-on-stop opt-in
   - 327 测试通过（server 189 + sdk 34 + mcp 104）
   - 交叉审查通过，3 个阻断问题已修复
-- **v0.3.5 已规划** — Human Admin RBAC + Room/Agent Admin CRUD
+- **v0.3.5 已规划** — Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix
   - 新增独立人类账号模型，默认初始化管理员 `kisara`
   - Room 的新增、查看管理详情、编辑、删除，以及 Agent 的新增、查看管理详情、编辑、删除、批量删除、token 管理，都收敛为 admin-only
   - Agent 运行时协作能力（读已加入房间、发消息、私聊、接受邀请等）与人类管理员管理能力分离
-- 下一步：v0.3.5（Human Admin RBAC + Room/Agent Admin CRUD）→ v0.4（Reputation + Rich Payload）
+  - 补修 v0.3.3 遗留：agent 工作中 direct @mention 仍不能可靠进入下一次模型上下文，需要重新验证 mention listener、local queue、hook digest、tool response digest 和 `flock_wait` 的联动
+- 下一步：v0.3.5（Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix）→ v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
@@ -160,4 +161,5 @@
 - 2026-05-09：v0.3.4 Direct Chat 实现：新增 `direct_chats` / `direct_messages` / `direct_idempotency_keys`，REST `/direct-chats`、SDK、CLI `flock dm`、MCP `flock_dm_send/read/list`、SSE `direct_message`、`flock_wait.direct_messages`，Web Command Center 改为 Direct Chat 页面
 - 2026-05-09：v0.3.4 Stop hook wait-on-stop opt-in 实现：`flock setup claude-code-wait-on-stop` 把 Stop hook 改为 `flock hook claude-code wait-on-stop`，普通 setup 默认不启用
 - 2026-05-10：v0.3.5 计划定义 Human Admin RBAC。新增默认人类管理员 `kisara`，Room/Agent 的管理 CRUD 收敛为 admin-only，agent runtime 协作权限和人类管理权限分离
-- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.3.4(turn在线语义+人类管理+私聊)→v0.3.5(人类admin+RBAC+管理CRUD)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)
+- 2026-05-10：v0.3.5 范围补充 Mention Boundary Fix。v0.3.3 的 direct @mention 边界提醒在 agent 工作中仍不可靠，需要补测试和修复，确保被 @ 的 agent 在下一次安全边界能看到 digest
+- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.3.4(turn在线语义+人类管理+私聊)→v0.3.5(人类admin+RBAC+管理CRUD+mention边界修复)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)

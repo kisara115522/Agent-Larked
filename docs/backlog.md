@@ -396,8 +396,8 @@
   - hook 只注入短 digest，不注入完整消息正文；完整消息由 agent 主动 `flock_mentions_list` / `flock_read`
   - 明确 SLA：Detection 30 秒内持久化；Delivery 是下一个 host/tool boundary，不承诺真正 async wake-up
 - **不做：** Role mention、`@everyone` fan-out、snooze、完整 disposition ack、MCP proxy、真正 interrupt；不允许 npm `postinstall` 静默改 `~/.claude/settings.json`
-- **状态：** fixed in v0.3.3 implementation branch
-- **计划版本：** v0.3.3
+- **状态：** reopened（v0.3.5 补修；v0.3.3 实现后实测仍不可靠）
+- **计划版本：** v0.3.5
 
 ---
 
@@ -546,7 +546,7 @@
 
 ---
 
-## v0.3.5 — Human Admin RBAC + 管理 CRUD
+## v0.3.5 — Human Admin RBAC + 管理 CRUD + Mention Boundary Fix
 
 ### 🔴 Agent/Room 管理权限仍绑定普通 agent token
 - **发现于：** 2026-05-10，v0.3.5 需求梳理
@@ -567,5 +567,18 @@
 - **问题：** 系统没有独立 human admin。用户需要一个默认管理员账号来登录 GUI 并执行 Room/Agent 管理操作。
 - **影响：** 管理入口只能借用 agent 身份，权限语义不清晰；新环境启动后没有明确的管理主体。
 - **建议修复：** 首次启动/迁移时幂等创建 username/display_name 为 `kisara` 的 admin。初始凭据由环境变量提供，或生成一次性本地 secret；服务端只存 hash，不硬编码明文凭据。
+- **状态：** planned
+- **计划版本：** v0.3.5
+
+### 🔴 工作中的 agent 收不到 direct @mention 边界提醒
+- **发现于：** 2026-05-10，gui-1 等待协作时实测反馈
+- **问题：** v0.3.3 已设计 Direct Mention Boundary Notification，但 agent 正在工作时被 @mention 仍可能无法在下一次边界看到提醒。需要确认后台 listener、`~/.flock/unread.jsonl`、MCP tool response `_unread_mentions`、Claude Code hook 注入是否在当前身份和当前宿主下可靠串起来。
+- **影响：** 人类或其他 agent 以为 @mention 能在 agent 工作中被感知，但实际 agent 可能继续执行旧任务，错过协作指令或调度消息。
+- **建议修复：** v0.3.5 增加 Mention Boundary Fix：
+  - 写复现测试覆盖“工作中收到 direct @mention → 下一次 Flock tool response/hook boundary 注入 digest”
+  - 强化 `flock doctor`，报告 listener heartbeat、队列路径、当前 identity、未读数量和 hook 安装状态
+  - 确保所有 Flock MCP tool response 都统一附带 `_unread_mentions` digest，而不是散落在个别工具
+  - 确保 hook 无未读时静默、有未读时返回明确短 digest，并且不注入完整消息正文
+  - 文档明确不能真正打断模型推理或长工具调用，只承诺下一安全边界提醒
 - **状态：** planned
 - **计划版本：** v0.3.5
