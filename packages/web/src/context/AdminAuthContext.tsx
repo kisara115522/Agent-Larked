@@ -16,7 +16,7 @@ interface AdminAuthState {
 }
 
 interface AdminAuthContextValue extends AdminAuthState {
-  adminLogin: (username: string, password: string) => Promise<void>;
+  adminLogin: (username: string, token: string) => Promise<void>;
   adminLogout: () => void;
   isAdmin: boolean;
 }
@@ -50,13 +50,13 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [state.adminToken, loadAdmin]);
 
-  const adminLogin = useCallback(async (username: string, password: string) => {
-    const res = await post<{ token: string; user: AdminUser }>('/admin/login', '', {
+  const adminLogin = useCallback(async (username: string, token: string) => {
+    const res = await post<{ ok: boolean; user: AdminUser }>('/admin/login', '', {
       username,
-      password,
+      token,
     });
-    localStorage.setItem(ADMIN_TOKEN_KEY, res.token);
-    setState({ adminToken: res.token, adminUser: res.user, adminLoading: false });
+    localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    setState({ adminToken: token, adminUser: res.user, adminLoading: false });
   }, []);
 
   const adminLogout = useCallback(() => {

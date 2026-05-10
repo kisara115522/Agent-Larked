@@ -343,5 +343,66 @@ export function adminRouter(db: Database.Database, eventBus?: EventBus): Router 
     }
   });
 
+  // GET /admin/rooms/:id/members — list room members (admin-only)
+  router.get('/rooms/:id/members', adminAuth, (req: AdminRequest, res, next) => {
+    try {
+      const roomId = req.params.id as string;
+      const existing = db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId) as { id: string } | undefined;
+      if (!existing) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Room not found', false, 404);
+      }
+      const members = db.prepare(
+        'SELECT p.id, p.name, p.display_name, p.status, rm.joined_at FROM room_members rm JOIN profiles p ON p.id = rm.agent_id WHERE rm.room_id = ? ORDER BY rm.joined_at ASC',
+      ).all(roomId);
+      res.json({ members });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // DELETE /admin/rooms/:id/members/:agentId — remove member from room (admin-only)
+  router.delete('/rooms/:id/members/:agentId', adminAuth, (req: AdminRequest, res, next) => {
+    try {
+      const roomId = req.params.id as string;
+      const agentId = req.params.agentId as string;
+      const existing = db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId) as { id: string } | undefined;
+      if (!existing) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Room not found', false, 404);
+      }
+      const member = db.prepare('SELECT 1 FROM room_members WHERE room_id = ? AND agent_id = ?').get(roomId, agentId);
+      if (!member) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Agent is not a member of this room', false, 404);
+      }
+      db.prepare('DELETE FROM room_members WHERE room_id = ? AND agent_id = ?').run(roomId, agentId);
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /admin/rooms/:id/members — add member to room (admin-only)
+  router.post('/rooms/:id/members', adminAuth, (req: AdminRequest, res, next) => {
+    try {
+      const roomId = req.params.id as string;
+      const { agent_id } = req.body as { agent_id?: string };
+      if (!agent_id) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'agent_id is required', false, 400);
+      }
+      const existing = db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId) as { id: string } | undefined;
+      if (!existing) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Room not found', false, 404);
+      }
+      const agent = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agent_id) as { id: string } | undefined;
+      if (!agent) {
+        throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
+      }
+      const now = new Date().toISOString();
+      db.prepare('INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at) VALUES (?, ?, ?)').run(roomId, agent_id, now);
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }

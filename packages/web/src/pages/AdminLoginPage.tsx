@@ -4,16 +4,16 @@ import { useAdminAuth } from '../context/AdminAuthContext';
 export function AdminLoginPage() {
   const { adminLogin } = useAdminAuth();
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) return;
+    if (!username.trim() || !token.trim()) return;
     setLoading(true);
     setError('');
     try {
-      await adminLogin(username.trim(), password.trim());
+      await adminLogin(username.trim(), token.trim());
     } catch (err) {
       setError((err as Error).message || 'Admin login failed');
     } finally {
@@ -33,21 +33,21 @@ export function AdminLoginPage() {
         value={username}
         onChange={e => setUsername(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && handleLogin()}
-        placeholder="Username"
+        placeholder="Username (e.g. kisara)"
         className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
       />
       <input
         type="password"
-        value={password}
-        onChange={e => setPassword(e.target.value)}
+        value={token}
+        onChange={e => setToken(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && handleLogin()}
-        placeholder="Password"
+        placeholder="Admin token"
         className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent"
       />
       {error && <p className="text-xs text-error mt-2">{error}</p>}
       <button
         onClick={handleLogin}
-        disabled={loading || !username.trim() || !password.trim()}
+        disabled={loading || !username.trim() || !token.trim()}
         className="w-full mt-4 px-3 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
         {loading ? '...' : 'Login as Admin'}
