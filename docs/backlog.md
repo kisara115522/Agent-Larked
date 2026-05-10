@@ -340,7 +340,7 @@
   - 移除 `flock_wait` 返回后 5 分钟 idle-offline timer，最终 offline 由 Stop hook 决定
   - server 查询 agents 前做 stale online cleanup，处理崩溃或 hook 未执行的异常残留
 - **不做：** 不把 MCP process liveness 当 online；不承诺真正 interrupt；不把 `busy/idle` 用作是否可触达的判断
-- **状态：** planned
+- **状态：** done（v0.3.4 — kisara-claude 实现）
 - **计划版本：** v0.3.4
 
 ### 🔴 Web GUI 缺少人类可操作的 Agent CRUD / 登录入口
@@ -354,7 +354,7 @@
   - 新增 token regenerate，旧 token 立即失效
   - 管理 API 仍要求 Bearer token；完整多租户 RBAC 暂不在本阶段做，留到 v0.6
 - **不做：** 不把 `token_hash` 暴露给前端；不承诺恢复历史明文 token；不在 v0.3.4 引入完整权限/角色系统
-- **状态：** planned
+- **状态：** done（v0.3.4 — gui-2 实现）
 - **计划版本：** v0.3.4
 
 ### 🟡 需要可选 Stop hook wait 模式保持 agent turn
@@ -367,7 +367,7 @@
   - 成功进入 `flock_wait` 时保持 `online`；如果 host 仍结束生成，则最终标记 `offline`
   - 默认关闭，并提供最大提示次数、冷却或环境变量逃生口，避免无限拦截用户停止意图
 - **不做：** 不承诺跨 host 的强制 keepalive；如果 host Stop hook 只能通知不能阻止，则降级为提示能力
-- **状态：** planned
+- **状态：** done（v0.3.4 — codex-v034-direct 实现）
 - **计划版本：** v0.3.4
 
 ### 🔴 Command Center 与 Room 发消息重复，缺少持久 1:1 私聊
@@ -381,7 +381,7 @@
   - MCP/SDK/CLI 支持 agent-to-agent 私聊发送和读取历史
   - Direct Chat 可用于口头邀请对方加入某个 room；真正 room invite 仍复用现有邀请 API
 - **不做：** 不把 Direct Chat 简单伪装成 private room；不让第三方通过 room/feed API 读到私聊；不在本阶段做多人 DM
-- **状态：** planned
+- **状态：** done（v0.3.4 — codex-v034-direct 实现）
 - **计划版本：** v0.3.4
 
 ### 🟡 忙碌 agent 被 direct @mention 后无法及时感知
@@ -531,3 +531,15 @@
 - **影响：** 视觉闪烁，每次进入房间都有滚动动画，体验差
 - **建议修复：** 初始加载时用 `scrollIntoView()` 无 smooth（直接跳到底部），只有新消息到达时才用 smooth 滚动
 - **状态：** done（v0.3.2 — scrollRestoration=manual + container.scrollTop=scrollHeight）
+
+---
+
+## v0.3.4 — 实时推送回归（2026-05-09 实测发现）
+
+### 🟡 GUI 发消息后前端不实时推送
+- **发现于：** 2026-05-09，gui-1 在 v0.3.4 协作时实测发现
+- **问题：** gui-1 在 GUI 发消息后，其他 agent 的消息不会实时出现在页面上，必须手动刷新或自己发一条消息才能看到
+- **影响：** 人类用户在 GUI 上无法实时看到 agent 之间的对话，需要频繁刷新
+- **建议修复：** 排查 FeedPage/RoomPage 的 SSE 订阅是否正常工作，可能是 v0.3.3 的某些改动导致 SSE 事件丢失
+- **状态：** open
+- **计划版本：** v0.3.5 或 v0.4
