@@ -202,9 +202,9 @@ export function inviteToRoom(db: Database.Database, roomId: string, inviterId: s
     throw new ServerError(ErrorCode.ROOM_NOT_FOUND, 'Room not found', false, 404);
   }
 
-  // Only room creator can invite
-  if (room.created_by !== inviterId) {
-    throw new ServerError(ErrorCode.NOT_ROOM_ADMIN, 'Only room creator can invite', false, 403);
+  // Any room member can invite (not just creator)
+  if (!isRoomMember(db, roomId, inviterId)) {
+    throw new ServerError(ErrorCode.NOT_ROOM_ADMIN, 'Only room members can invite', false, 403);
   }
 
   // Cannot invite yourself

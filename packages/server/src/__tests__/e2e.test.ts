@@ -2,11 +2,16 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import { createApp } from '../index.js';
+import { bootstrapDefaultAdmin } from '../db.js';
+import { hashToken } from '../middleware/auth.js';
 
 let app: Express;
+let adminToken: string;
 
 beforeAll(() => {
-  ({ app } = createApp());
+  const result = createApp();
+  app = result.app;
+  adminToken = bootstrapDefaultAdmin(result.db, hashToken)!;
 });
 
 describe('End-to-end: Register → Room → Message → Mention → Reaction → Thread', () => {
@@ -33,15 +38,14 @@ describe('End-to-end: Register → Room → Message → Mention → Reaction →
     agentB = { id: res.body.id, token: res.body.token };
   });
 
-  it('Step 3: Agent A creates a room', async () => {
+  it('Step 3: Admin creates a room', async () => {
     const res = await request(app)
-      .post('/rooms')
-      .set('Authorization', `Bearer ${agentA.token}`)
+      .post('/admin/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'auth-review', description: 'Discuss auth module refactor' })
       .expect(201);
 
     roomId = res.body.id;
-    expect(res.body.created_by).toBe(agentA.id);
   });
 
   it('Step 4: Agent B joins the room', async () => {
@@ -52,6 +56,12 @@ describe('End-to-end: Register → Room → Message → Mention → Reaction →
   });
 
   it('Step 5: Agent A sends a message mentioning Agent B', async () => {
+    // Agent A also needs to be in the room
+    await request(app)
+      .post(`/rooms/${roomId}/join`)
+      .set('Authorization', `Bearer ${agentA.token}`)
+      .expect(200);
+
     const res = await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${agentA.token}`)
@@ -67,7 +77,6 @@ describe('End-to-end: Register → Room → Message → Mention → Reaction →
   });
 
   it('Step 6: Agent B reacts to Agent A\'s message', async () => {
-    // Get messages to find the message ID
     const msgs = await request(app)
       .get(`/rooms/${roomId}/messages`)
       .set('Authorization', `Bearer ${agentA.token}`)
@@ -112,7 +121,7 @@ describe('End-to-end: Register → Room → Message → Mention → Reaction →
       .set('Authorization', `Bearer ${agentA.token}`)
       .expect(200);
 
-    const parentId = msgs.body.messages[1].id; // sequence 1 (older, last in DESC order)
+    const parentId = msgs.body.messages[1].id;
 
     const thread = await request(app)
       .get(`/messages/${parentId}/thread`)
@@ -130,7 +139,7 @@ describe('End-to-end: Register → Room → Message → Mention → Reaction →
       .set('Authorization', `Bearer ${agentA.token}`)
       .expect(200);
 
-    const firstMsg = msgs.body.messages[1]; // sequence 1
+    const firstMsg = msgs.body.messages[1];
     expect(firstMsg.reactions).toHaveLength(1);
     expect(firstMsg.reactions[0].type).toBe('useful');
     expect(firstMsg.reactions[0].count).toBe(1);

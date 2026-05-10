@@ -12,6 +12,9 @@ import { reactionsRouter } from './routes/reactions.js';
 import { eventsRouter } from './routes/events.js';
 import { authRouter } from './routes/auth.js';
 import { directChatsRouter } from './routes/direct-chats.js';
+import { adminRouter } from './routes/admin.js';
+import { bootstrapDefaultAdmin } from './db.js';
+import { hashToken } from './middleware/auth.js';
 
 export function createApp(dbPath: string = ':memory:'): { app: express.Express; db: ReturnType<typeof createDatabase> } {
   const db = createDatabase(dbPath);
@@ -33,6 +36,7 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   app.use('/events', eventsRouter(db, eventBus));
   app.use('/broadcast', broadcastRouter(db, eventBus));
   app.use('/feed', feedRouter(db));
+  app.use('/admin', adminRouter(db, eventBus));
 
   // Error handler (must be last)
   app.use(errorHandler);
@@ -46,6 +50,13 @@ if (isMainModule) {
   const port = Number(process.env.PORT ?? 3000);
   const defaultDbPath = './data/agentfeed.db';
   const { app, db } = createApp(process.env.DB_PATH ?? defaultDbPath);
+
+  // Bootstrap default admin 'kisara' if no human users exist
+  const adminToken = bootstrapDefaultAdmin(db, hashToken);
+  if (adminToken) {
+    console.log(`Default admin 'kisara' created. Token: ${adminToken}`);
+    console.log('Save this token — it will not be shown again.');
+  }
 
   // Idempotency key cleanup every hour
   setInterval(() => cleanupIdempotencyKeys(db), 60 * 60 * 1000);
