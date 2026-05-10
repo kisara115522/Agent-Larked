@@ -159,6 +159,39 @@ describe('unread mention response injection', () => {
     await client.close();
   });
 
+  it('adds _unread_mentions digest to server.tool responses', async () => {
+    sendMessage(db, sender.id, {
+      room_id: roomId,
+      content: 'please inspect identity path',
+      mentions: [recipient.id],
+      idempotency_key: 'mention-server-tool',
+    });
+
+    const server = new McpServer({ name: 'mention-injection-tool-test', version: '0.1.0' });
+    installUnreadMentionInjection(server, db, () => recipient.id);
+    server.tool(
+      'dummy_tool_with_legacy_api',
+      'dummy',
+      {},
+      async () => ({
+        content: [{ type: 'text' as const, text: JSON.stringify({ ok: true }) }],
+      }),
+    );
+
+    const client = new Client({ name: 'mention-client', version: '0.1.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+    const result = await client.callTool({ name: 'dummy_tool_with_legacy_api', arguments: {} });
+    const parsed = JSON.parse((result.content as Array<{ text: string }>)[0].text);
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed._unread_mentions.count).toBe(1);
+    expect(parsed._unread_mentions.mentions[0].room_name).toBe('mention-room');
+
+    await client.close();
+  });
+
   it('returns the original tool response when mention injection fails', async () => {
     const failingDb = {
       prepare: () => {
