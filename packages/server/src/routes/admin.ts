@@ -15,25 +15,7 @@ import { hashToken } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
-
-function deleteAgentCascade(db: Database.Database, agentId: string): void {
-  db.prepare('DELETE FROM reactions WHERE agent_id = ?').run(agentId);
-  db.prepare('DELETE FROM message_mentions WHERE agent_id = ?').run(agentId);
-  db.prepare('DELETE FROM room_members WHERE agent_id = ?').run(agentId);
-  db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').run(agentId, agentId);
-  db.prepare('DELETE FROM room_invites WHERE inviter_id = ? OR invitee_id = ?').run(agentId, agentId);
-  db.prepare("UPDATE messages SET from_agent = '[deleted]' WHERE from_agent = ?").run(agentId);
-  db.prepare('DELETE FROM profiles WHERE id = ?').run(agentId);
-}
-
-function deleteRoomCascade(db: Database.Database, roomId: string): void {
-  db.prepare('DELETE FROM reactions WHERE message_id IN (SELECT id FROM messages WHERE room_id = ?)').run(roomId);
-  db.prepare('DELETE FROM message_mentions WHERE message_id IN (SELECT id FROM messages WHERE room_id = ?)').run(roomId);
-  db.prepare('DELETE FROM messages WHERE room_id = ?').run(roomId);
-  db.prepare('DELETE FROM room_invites WHERE room_id = ?').run(roomId);
-  db.prepare('DELETE FROM room_members WHERE room_id = ?').run(roomId);
-  db.prepare('DELETE FROM rooms WHERE id = ?').run(roomId);
-}
+import { deleteAgentCascade, deleteRoomCascade } from '../services/cleanup.js';
 
 export function adminRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();

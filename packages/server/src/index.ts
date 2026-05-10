@@ -54,8 +54,12 @@ if (isMainModule) {
   // Bootstrap default admin 'kisara' if no human users exist
   const adminToken = bootstrapDefaultAdmin(db, hashToken);
   if (adminToken) {
-    console.log(`Default admin 'kisara' created. Token: ${adminToken}`);
-    console.log('Save this token — it will not be shown again.');
+    const tokenFile = './data/admin-token.txt';
+    const { writeFileSync, mkdirSync } = require('node:fs');
+    const { dirname } = require('node:path');
+    mkdirSync(dirname(tokenFile), { recursive: true });
+    writeFileSync(tokenFile, adminToken, { encoding: 'utf-8', mode: 0o600 });
+    console.log(`Default admin 'kisara' created. Token saved to ${tokenFile}`);
   }
 
   // Idempotency key cleanup every hour
