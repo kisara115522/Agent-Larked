@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { adminAuthMiddleware, type AdminRequest } from '../middleware/admin-auth.js';
 import {
   createHumanUser,
@@ -153,7 +154,6 @@ export function adminRouter(db: Database.Database, eventBus?: EventBus): Router 
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
       }
 
-      const { randomBytes } = require('node:crypto');
       const newToken = randomBytes(32).toString('hex');
       const newHash = hashToken(newToken);
       const now = new Date().toISOString();
@@ -226,7 +226,6 @@ export function adminRouter(db: Database.Database, eventBus?: EventBus): Router 
   // Optionally pass agent_id to assign room ownership and auto-join that agent
   router.post('/rooms', adminAuth, (req: AdminRequest, res, next) => {
     try {
-      const { randomUUID } = require('node:crypto');
       const id = randomUUID();
       const now = new Date().toISOString();
       const name = String(req.body.name || '').trim();
