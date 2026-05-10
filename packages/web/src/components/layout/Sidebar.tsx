@@ -172,17 +172,19 @@ export function Sidebar() {
         <span>Direct Chat</span>
       </NavLink>
 
-      <NavLink
-        to="/admin"
-        className={({ isActive }) =>
-          `mx-2 mb-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            isActive ? 'bg-accent text-white' : 'bg-surface-elevated text-text-muted hover:text-text'
-          }`
-        }
-      >
-        <span>⚙️</span>
-        <span>{isAdmin ? `Admin (${adminUser?.username})` : 'Admin'}</span>
-      </NavLink>
+      {isAdmin && (
+        <NavLink
+          to="/admin"
+          className={({ isActive }) =>
+            `mx-2 mb-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              isActive ? 'bg-accent text-white' : 'bg-surface-elevated text-text-muted hover:text-text'
+            }`
+          }
+        >
+          <span>⚙️</span>
+          <span>Admin ({adminUser?.username})</span>
+        </NavLink>
+      )}
 
       {showCreateRoom && token && (
         <CreateRoomModal

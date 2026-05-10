@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Navigate } from 'react-router-dom';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { get, post, patch, del } from '../api/client';
-import { AdminLoginPage } from './AdminLoginPage';
 
 interface Room {
   id: string;
@@ -314,7 +313,7 @@ export function RoomManagePage() {
   const { isAdmin } = useAdminAuth();
 
   if (!isAdmin) {
-    return <AdminLoginPage />;
+    return <Navigate to="/" replace />;
   }
 
   return <RoomManageContent />;

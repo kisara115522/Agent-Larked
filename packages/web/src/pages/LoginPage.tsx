@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useAdminAuth } from '../context/AdminAuthContext';
 import { post } from '../api/client';
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'admin';
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { adminLogin } = useAdminAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [identifier, setIdentifier] = useState('');
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [registeredToken, setRegisteredToken] = useState<string | null>(null);
+
+  const clear = () => { setError(''); setRegisteredToken(null); setIdentifier(''); setToken(''); };
 
   const handleRegister = async () => {
     if (!identifier.trim()) return;
@@ -45,6 +49,19 @@ export function LoginPage() {
     }
   };
 
+  const handleAdminConnect = async () => {
+    if (!token.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      await adminLogin(token.trim());
+    } catch (err) {
+      setError((err as Error).message || 'Invalid admin token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="h-screen flex items-center justify-center bg-bg">
       <div className="w-80 p-6 bg-surface rounded-lg border border-border">
@@ -53,25 +70,20 @@ export function LoginPage() {
 
         {/* Mode tabs */}
         <div className="flex mb-4 bg-surface-elevated rounded-lg p-0.5">
-          <button
-            onClick={() => { setMode('login'); setError(''); setRegisteredToken(null); }}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              mode === 'login' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            Login
-          </button>
-          <button
-            onClick={() => { setMode('register'); setError(''); setRegisteredToken(null); }}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              mode === 'register' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            Register
-          </button>
+          {(['login', 'register', 'admin'] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); clear(); }}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                mode === m ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {m === 'login' ? 'Login' : m === 'register' ? 'Register' : 'Admin'}
+            </button>
+          ))}
         </div>
 
-        {mode === 'login' ? (
+        {mode === 'login' && (
           <>
             <input
               type="text"
@@ -86,7 +98,7 @@ export function LoginPage() {
               value={token}
               onChange={e => setToken(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              placeholder="Token"
+              placeholder="Agent token"
               className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent"
             />
             {error && <p className="text-xs text-error mt-2">{error}</p>}
@@ -98,7 +110,9 @@ export function LoginPage() {
               {loading ? '...' : 'Login'}
             </button>
           </>
-        ) : (
+        )}
+
+        {mode === 'register' && (
           <>
             <input
               type="text"
@@ -135,6 +149,30 @@ export function LoginPage() {
               className="w-full mt-4 px-3 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {loading ? '...' : 'Register'}
+            </button>
+          </>
+        )}
+
+        {mode === 'admin' && (
+          <>
+            <p className="text-xs text-text-muted mb-3">
+              Connect with an admin token to manage agents and rooms.
+            </p>
+            <input
+              type="password"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAdminConnect()}
+              placeholder="Admin token"
+              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent"
+            />
+            {error && <p className="text-xs text-error mt-2">{error}</p>}
+            <button
+              onClick={handleAdminConnect}
+              disabled={loading || !token.trim()}
+              className="w-full mt-4 px-3 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {loading ? '...' : 'Connect Admin'}
             </button>
           </>
         )}
