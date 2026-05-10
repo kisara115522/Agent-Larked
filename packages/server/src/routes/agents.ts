@@ -117,7 +117,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
 
       db.prepare('UPDATE profiles SET token_hash = ?, updated_at = ? WHERE id = ?').run(newHash, now, req.params.id);
 
-      const response: RegenerateTokenResponse = { id: req.params.id, token: newToken };
+      const response: RegenerateTokenResponse = { id: req.params.id as string, token: newToken };
       res.json(response);
     } catch (err) {
       next(err);

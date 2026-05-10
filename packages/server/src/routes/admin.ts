@@ -90,7 +90,7 @@ export function adminRouter(db: Database.Database, eventBus?: EventBus): Router 
         req.body.name = name;
       }
 
-      const result = updateProfile(db, req.params.id, req.body);
+      const result = updateProfile(db, req.params.id as string, req.body);
       // Broadcast status change via SSE
       if (req.body.status && eventBus) {
         eventBus.emitAgentStatus({ agent_id: result.id, status: result.status });

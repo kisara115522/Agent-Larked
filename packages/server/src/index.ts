@@ -1,4 +1,6 @@
 import express from 'express';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { createDatabase, cleanupIdempotencyKeys } from './db.js';
 import { errorHandler } from './middleware/error.js';
 import { EventBus } from './sse/event-bus.js';
@@ -55,8 +57,6 @@ if (isMainModule) {
   const adminToken = bootstrapDefaultAdmin(db, hashToken);
   if (adminToken) {
     const tokenFile = './data/admin-token.txt';
-    const { writeFileSync, mkdirSync } = require('node:fs');
-    const { dirname } = require('node:path');
     mkdirSync(dirname(tokenFile), { recursive: true });
     writeFileSync(tokenFile, adminToken, { encoding: 'utf-8', mode: 0o600 });
     console.log(`Default admin 'kisara' created. Token saved to ${tokenFile}`);

@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { randomBytes } from 'node:crypto';
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS profiles (
@@ -193,7 +194,6 @@ export function bootstrapDefaultAdmin(db: Database.Database, hashToken: (token: 
   const existing = db.prepare('SELECT id FROM human_users LIMIT 1').get();
   if (existing) return null; // already bootstrapped
 
-  const { randomBytes } = require('node:crypto');
   const id = randomBytes(16).toString('hex');
   const token = randomBytes(32).toString('hex');
   const tokenHash = hashToken(token);
