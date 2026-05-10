@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createDatabase } from '@flock/server/db';
@@ -15,6 +15,8 @@ import {
   summarizeUnreadMentions,
   setClaudeCodeWaitOnStop,
   type QueuedMentionDigest,
+  writeQueuedMentions,
+  writeSeenMentions,
 } from './setup.js';
 
 const originalFlockHome = process.env.FLOCK_HOME;
@@ -180,6 +182,67 @@ describe('hook digest', () => {
       expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('please switch task now'));
     } finally {
       db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not crash the Claude Code hook when queue files cannot be written', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'flock-cli-hook-io-'));
+    const dbPath = join(tempDir, 'agentfeed.db');
+    const db = createDatabase(dbPath);
+    try {
+      const recipient = registerAgent(db, { name: 'codex-v034-direct' });
+      const sender = registerAgent(db, { name: 'gui-1' });
+      const room = createRoom(db, sender.id, { name: 'v0.3.5' });
+      joinRoom(db, room.id, recipient.id);
+      sendMessage(db, sender.id, {
+        room_id: room.id,
+        content: 'queued while disk is unavailable',
+        mentions: [recipient.id],
+        idempotency_key: 'hook-boundary-mention-io',
+      });
+
+      writeFileSync(
+        join(tempDir, 'identity.json'),
+        JSON.stringify({ id: recipient.id, name: recipient.name }),
+        'utf-8',
+      );
+      mkdirSync(join(tempDir, 'unread.jsonl'));
+      process.env.FLOCK_HOME = tempDir;
+      process.env.DB_PATH = dbPath;
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      await expect(
+        hookCommand().parseAsync(['node', 'test', 'claude-code', 'post-tool-use']),
+      ).resolves.toBeDefined();
+
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(exitSpy).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('writes queued mentions and seen keys atomically', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'flock-cli-atomic-'));
+    try {
+      const queuePath = join(tempDir, 'unread.jsonl');
+      const seenPath = join(tempDir, 'mentions-seen.json');
+
+      writeQueuedMentions(queuePath, [
+        { recipient_id: 'agent-1', room_name: 'v0.3.5', sender_name: 'gui-1' },
+      ]);
+      writeSeenMentions(seenPath, new Set(['message-1:agent-1']));
+
+      expect(readFileSync(queuePath, 'utf-8')).toContain('"recipient_id":"agent-1"');
+      expect(JSON.parse(readFileSync(seenPath, 'utf-8'))).toEqual(['message-1:agent-1']);
+      expect(existsSync(`${queuePath}.tmp`)).toBe(false);
+      expect(existsSync(`${seenPath}.tmp`)).toBe(false);
+    } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });

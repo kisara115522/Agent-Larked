@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createDatabase } from '@flock/server/db';
@@ -211,9 +211,14 @@ function writeSettings(path: string, settings: ClaudeCodeSettings): void {
 }
 
 function readQueue(path: string): QueuedMentionDigest[] {
-  if (!existsSync(path)) return [];
-  const raw = readFileSync(path, 'utf-8').trim();
-  if (!raw) return [];
+  let raw: string;
+  try {
+    if (!existsSync(path)) return [];
+    raw = readFileSync(path, 'utf-8').trim();
+    if (!raw) return [];
+  } catch {
+    return [];
+  }
 
   const queue: QueuedMentionDigest[] = [];
   for (const line of raw.split('\n').filter(Boolean)) {
@@ -226,10 +231,16 @@ function readQueue(path: string): QueuedMentionDigest[] {
   return queue;
 }
 
-function writeQueue(path: string, mentions: QueuedMentionDigest[]): void {
+function writeJsonAtomic(path: string, body: string): void {
   mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.tmp`;
+  writeFileSync(tmp, body, { encoding: 'utf-8', mode: 0o600 });
+  renameSync(tmp, path);
+}
+
+export function writeQueuedMentions(path: string, mentions: QueuedMentionDigest[]): void {
   const body = mentions.map((mention) => JSON.stringify(mention)).join('\n');
-  writeFileSync(path, body ? `${body}\n` : '', { encoding: 'utf-8', mode: 0o600 });
+  writeJsonAtomic(path, body ? `${body}\n` : '');
 }
 
 function readSeen(path: string): Set<string> {
@@ -243,9 +254,8 @@ function readSeen(path: string): Set<string> {
   }
 }
 
-function writeSeen(path: string, seen: Set<string>): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify([...seen], null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
+export function writeSeenMentions(path: string, seen: Set<string>): void {
+  writeJsonAtomic(path, `${JSON.stringify([...seen], null, 2)}\n`);
 }
 
 function sanitizeExcerpt(content: string): string {
@@ -296,9 +306,15 @@ function pollDirectMentionsAtBoundary(home = flockHome()): void {
 
   const queuePath = join(home, 'unread.jsonl');
   const seenPath = join(home, 'mentions-seen.json');
-  const existing = readQueue(queuePath);
+  let existing: QueuedMentionDigest[];
+  let seen: Set<string>;
+  try {
+    existing = readQueue(queuePath);
+    seen = readSeen(seenPath);
+  } catch {
+    return;
+  }
   const existingKeys = new Set(existing.map((mention) => mention.dedupe_key).filter(Boolean));
-  const seen = readSeen(seenPath);
   const queued: QueuedMentionDigest[] = [];
 
   for (const row of rows) {
@@ -324,8 +340,12 @@ function pollDirectMentionsAtBoundary(home = flockHome()): void {
   }
 
   if (queued.length === 0) return;
-  writeQueue(queuePath, [...existing, ...queued]);
-  writeSeen(seenPath, seen);
+  try {
+    writeQueuedMentions(queuePath, [...existing, ...queued]);
+    writeSeenMentions(seenPath, seen);
+  } catch {
+    // Hook adapters must not crash or block the host if local queue files cannot be updated.
+  }
 }
 
 export function buildDoctorStatus(
