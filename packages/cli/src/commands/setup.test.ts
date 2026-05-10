@@ -1,16 +1,40 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createDatabase } from '@flock/server/db';
+import { registerAgent } from '@flock/server/services/identity';
+import { createRoom, joinRoom } from '@flock/server/services/room';
+import { sendMessage } from '@flock/server/services/messaging';
 import {
   buildDoctorStatus,
   buildClaudeCodeHookSettings,
   formatSettingsDiff,
+  hookCommand,
   removeClaudeCodeHookSettings,
   summarizeUnreadMentions,
   setClaudeCodeWaitOnStop,
   type QueuedMentionDigest,
 } from './setup.js';
+
+const originalFlockHome = process.env.FLOCK_HOME;
+const originalDbPath = process.env.DB_PATH;
+
+afterEach(() => {
+  if (originalFlockHome === undefined) {
+    delete process.env.FLOCK_HOME;
+  } else {
+    process.env.FLOCK_HOME = originalFlockHome;
+  }
+
+  if (originalDbPath === undefined) {
+    delete process.env.DB_PATH;
+  } else {
+    process.env.DB_PATH = originalDbPath;
+  }
+
+  vi.restoreAllMocks();
+});
 
 describe('Claude Code hook settings', () => {
   it('adds PostToolUse and Stop hooks without deleting existing settings', () => {
@@ -117,6 +141,48 @@ describe('hook digest', () => {
     expect(summary).toContain('flock_mentions_list');
     expect(summary).not.toContain('please review');
   });
+
+  it('polls direct mentions from the database at the Claude Code tool boundary', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'flock-cli-hook-mention-'));
+    const dbPath = join(tempDir, 'agentfeed.db');
+    const db = createDatabase(dbPath);
+    try {
+      const recipient = registerAgent(db, { name: 'codex-v034-direct' });
+      const sender = registerAgent(db, { name: 'gui-1' });
+      const room = createRoom(db, sender.id, { name: 'v0.3.5' });
+      joinRoom(db, room.id, recipient.id);
+      sendMessage(db, sender.id, {
+        room_id: room.id,
+        content: 'please switch task now',
+        mentions: [recipient.id],
+        idempotency_key: 'hook-boundary-mention',
+      });
+
+      writeFileSync(
+        join(tempDir, 'identity.json'),
+        JSON.stringify({ id: recipient.id, name: recipient.name }),
+        'utf-8',
+      );
+      process.env.FLOCK_HOME = tempDir;
+      process.env.DB_PATH = dbPath;
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
+        throw new Error(`exit:${code}`);
+      });
+
+      await expect(
+        hookCommand().parseAsync(['node', 'test', 'claude-code', 'post-tool-use']),
+      ).rejects.toThrow('exit:2');
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Flock: 1 unread direct mention'));
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('v0.3.5'));
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('flock_mentions_list'));
+      expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('please switch task now'));
+    } finally {
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('doctor status', () => {
@@ -142,6 +208,39 @@ describe('doctor status', () => {
         status: 'running',
         checked_at: '2026-05-08T00:00:00.000Z',
       });
+      expect(status.current_identity).toBeNull();
+      expect(status.unread_count).toBe(0);
+      expect(status.unread_for_current_identity).toBe(false);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports current identity and unread mention count for that identity', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'flock-cli-doctor-identity-'));
+    try {
+      writeFileSync(
+        join(tempDir, 'identity.json'),
+        JSON.stringify({ id: 'agent-1', name: 'codex-v034-direct' }),
+        'utf-8',
+      );
+      writeFileSync(
+        join(tempDir, 'unread.jsonl'),
+        [
+          JSON.stringify({ recipient_id: 'agent-1', room_name: 'v0.3.5', sender_name: 'gui-1' }),
+          JSON.stringify({ recipient_id: 'other-agent', room_name: 'v0.3.5', sender_name: 'gui-2' }),
+          '{bad json}',
+        ].join('\n'),
+        'utf-8',
+      );
+
+      const status = buildDoctorStatus({}, '/tmp/settings.json', 'flock hook claude-code', tempDir);
+
+      expect(status.identity_file).toBe(join(tempDir, 'identity.json'));
+      expect(status.identity_exists).toBe(true);
+      expect(status.current_identity).toEqual({ id: 'agent-1', name: 'codex-v034-direct' });
+      expect(status.unread_count).toBe(1);
+      expect(status.unread_for_current_identity).toBe(true);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

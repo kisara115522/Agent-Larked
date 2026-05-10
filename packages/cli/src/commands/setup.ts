@@ -21,22 +21,47 @@ export interface ClaudeCodeSettings {
 }
 
 export interface QueuedMentionDigest {
+  mention_id?: string;
+  message_id?: string;
+  room_id?: string;
   room_name: string;
+  sender_id?: string;
   sender_name: string;
   sender_display_name?: string;
   excerpt?: string;
   recipient_id?: string;
+  created_at?: string;
+  queued_at?: string;
+  priority?: 'direct';
+  dedupe_key?: string;
 }
 
 export interface DoctorStatus {
   claude_code_settings: string;
   post_tool_use_hook: boolean;
   stop_hook: boolean;
+  identity_file: string;
+  identity_exists: boolean;
+  current_identity: { id: string; name: string } | null;
   unread_queue: string;
   unread_queue_exists: boolean;
+  unread_count: number;
+  unread_for_current_identity: boolean;
   mention_listener_status_file: string;
   mention_listener_status_exists: boolean;
   mention_listener_status: unknown | null;
+}
+
+interface MentionRow {
+  message_id: string;
+  room_id: string;
+  room_name: string;
+  sender_id: string;
+  sender_name: string;
+  sender_display_name: string | null;
+  recipient_id: string;
+  content: string;
+  created_at: string;
 }
 
 function flockHome(): string {
@@ -185,32 +210,122 @@ function writeSettings(path: string, settings: ClaudeCodeSettings): void {
   writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
 }
 
-function readQueuedMentions(): QueuedMentionDigest[] {
-  const identityPath = join(flockHome(), 'identity.json');
-  const queuePath = join(flockHome(), 'unread.jsonl');
-  if (!existsSync(identityPath) || !existsSync(queuePath)) return [];
-
-  let identity: { id?: string };
-  try {
-    identity = JSON.parse(readFileSync(identityPath, 'utf-8')) as { id?: string };
-    if (!identity.id) return [];
-  } catch {
-    return [];
-  }
-
-  const raw = readFileSync(queuePath, 'utf-8').trim();
+function readQueue(path: string): QueuedMentionDigest[] {
+  if (!existsSync(path)) return [];
+  const raw = readFileSync(path, 'utf-8').trim();
   if (!raw) return [];
 
-  const mentions: QueuedMentionDigest[] = [];
+  const queue: QueuedMentionDigest[] = [];
   for (const line of raw.split('\n').filter(Boolean)) {
     try {
-      const mention = JSON.parse(line) as QueuedMentionDigest;
-      if (mention.recipient_id === identity.id) mentions.push(mention);
+      queue.push(JSON.parse(line) as QueuedMentionDigest);
     } catch {
       // Ignore malformed queue entries; the hook must never block normal tool use.
     }
   }
-  return mentions;
+  return queue;
+}
+
+function writeQueue(path: string, mentions: QueuedMentionDigest[]): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const body = mentions.map((mention) => JSON.stringify(mention)).join('\n');
+  writeFileSync(path, body ? `${body}\n` : '', { encoding: 'utf-8', mode: 0o600 });
+}
+
+function readSeen(path: string): Set<string> {
+  if (!existsSync(path)) return new Set();
+  try {
+    const raw = readFileSync(path, 'utf-8').trim();
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw) as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSeen(path: string, seen: Set<string>): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify([...seen], null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
+}
+
+function sanitizeExcerpt(content: string): string {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= 16) return normalized;
+  return `${normalized.slice(0, 16)}...`;
+}
+
+function readQueuedMentions(home = flockHome()): QueuedMentionDigest[] {
+  const identity = readIdentity(home);
+  const queuePath = join(home, 'unread.jsonl');
+  if (!identity || !existsSync(queuePath)) return [];
+  return readQueue(queuePath).filter((mention) => mention.recipient_id === identity.id);
+}
+
+function pollDirectMentionsAtBoundary(home = flockHome()): void {
+  const identity = readIdentity(home);
+  if (!identity) return;
+
+  let db: ReturnType<typeof createDatabase> | null = null;
+  let rows: MentionRow[];
+  try {
+    db = createDatabase(getDbPath());
+    rows = db.prepare(`
+      SELECT
+        mm.message_id,
+        mm.agent_id AS recipient_id,
+        m.room_id,
+        r.name AS room_name,
+        m.from_agent AS sender_id,
+        p.name AS sender_name,
+        p.display_name AS sender_display_name,
+        m.content,
+        m.created_at
+      FROM message_mentions mm
+      INNER JOIN messages m ON m.id = mm.message_id
+      INNER JOIN rooms r ON r.id = m.room_id
+      INNER JOIN profiles p ON p.id = m.from_agent
+      INNER JOIN room_members rm ON rm.room_id = m.room_id AND rm.agent_id = mm.agent_id
+      WHERE mm.agent_id = ?
+      ORDER BY m.created_order ASC
+    `).all(identity.id) as MentionRow[];
+  } catch {
+    return;
+  } finally {
+    db?.close();
+  }
+
+  const queuePath = join(home, 'unread.jsonl');
+  const seenPath = join(home, 'mentions-seen.json');
+  const existing = readQueue(queuePath);
+  const existingKeys = new Set(existing.map((mention) => mention.dedupe_key).filter(Boolean));
+  const seen = readSeen(seenPath);
+  const queued: QueuedMentionDigest[] = [];
+
+  for (const row of rows) {
+    const dedupeKey = `${row.message_id}:${row.recipient_id}`;
+    if (existingKeys.has(dedupeKey) || seen.has(dedupeKey)) continue;
+    queued.push({
+      mention_id: dedupeKey,
+      message_id: row.message_id,
+      room_id: row.room_id,
+      room_name: row.room_name,
+      sender_id: row.sender_id,
+      sender_name: row.sender_name,
+      sender_display_name: row.sender_display_name ?? '',
+      recipient_id: row.recipient_id,
+      created_at: row.created_at,
+      queued_at: new Date().toISOString(),
+      priority: 'direct',
+      dedupe_key: dedupeKey,
+      excerpt: sanitizeExcerpt(row.content),
+    });
+    existingKeys.add(dedupeKey);
+    seen.add(dedupeKey);
+  }
+
+  if (queued.length === 0) return;
+  writeQueue(queuePath, [...existing, ...queued]);
+  writeSeen(seenPath, seen);
 }
 
 export function buildDoctorStatus(
@@ -220,15 +335,23 @@ export function buildDoctorStatus(
   home = flockHome(),
 ): DoctorStatus {
   const commands = hookCommands(commandPrefix);
+  const identityPath = join(home, 'identity.json');
   const queuePath = join(home, 'unread.jsonl');
   const listenerStatusPath = join(home, 'mentions-listener.json');
+  const identity = readIdentity(home);
+  const unreadMentions = identity ? readQueuedMentions(home) : [];
 
   return {
     claude_code_settings: settingsPath,
     post_tool_use_hook: hasHook(settings.hooks?.PostToolUse ?? [], commands.postToolUse),
     stop_hook: hasHook(settings.hooks?.Stop ?? [], commands.stop),
+    identity_file: identityPath,
+    identity_exists: existsSync(identityPath),
+    current_identity: identity,
     unread_queue: queuePath,
     unread_queue_exists: existsSync(queuePath),
+    unread_count: unreadMentions.length,
+    unread_for_current_identity: unreadMentions.length > 0,
     mention_listener_status_file: listenerStatusPath,
     mention_listener_status_exists: existsSync(listenerStatusPath),
     mention_listener_status: readJsonFile(listenerStatusPath),
@@ -306,9 +429,9 @@ function getDbPath(): string {
   return resolve(rawPath);
 }
 
-function readIdentity(): { id: string; name: string } | null {
+function readIdentity(home = flockHome()): { id: string; name: string } | null {
   try {
-    const raw = readFileSync(join(flockHome(), 'identity.json'), 'utf-8').trim();
+    const raw = readFileSync(join(home, 'identity.json'), 'utf-8').trim();
     const identity = JSON.parse(raw) as { id?: string; name?: string };
     if (identity.id && identity.name) return { id: identity.id, name: identity.name };
   } catch { /* ignore */ }
@@ -352,7 +475,9 @@ export function hookCommand(): Command {
         setAgentStatusViaDb('offline');
       }
 
-      // Check unread mentions
+      // Check unread mentions. This DB poll is the foreground fallback when the
+      // background listener has not run before the next host boundary.
+      pollDirectMentionsAtBoundary();
       const summary = summarizeUnreadMentions(readQueuedMentions());
       if (!summary) return;
       console.error(summary);
