@@ -2,8 +2,11 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import type Database from 'better-sqlite3';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createApp } from '../index.js';
-import { bootstrapDefaultAdmin } from '../db.js';
+import { bootstrapDefaultAdmin, createDatabase } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
 
 describe('Agent Admin RBAC', () => {
@@ -28,6 +31,29 @@ describe('Agent Admin RBAC', () => {
     it('does not keep the legacy human admin table', () => {
       const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'human_users'").get();
       expect(row).toBeUndefined();
+    });
+
+    it('drops legacy human admin tables when opening an existing database', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'flock-admin-'));
+      const dbPath = join(dir, 'legacy.db');
+
+      const legacy = createDatabase(dbPath);
+      legacy.exec(`
+        CREATE TABLE IF NOT EXISTS human_users (id TEXT PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS admin_audit_log (id TEXT PRIMARY KEY);
+      `);
+      legacy.close();
+
+      const migrated = createDatabase(dbPath);
+      try {
+        const humanUsers = migrated.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'human_users'").get();
+        const adminAuditLog = migrated.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'admin_audit_log'").get();
+        expect(humanUsers).toBeUndefined();
+        expect(adminAuditLog).toBeUndefined();
+      } finally {
+        migrated.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
 
     it('default admin kisara logs in through the normal agent login endpoint', async () => {
@@ -153,7 +179,7 @@ describe('Agent Admin RBAC', () => {
         .set('Authorization', `Bearer ${agentToken}`)
         .expect(403);
 
-      // Admin token should work
+      // Admin agent token should work
       await request(app)
         .delete(`/agents/${agentId}`)
         .set('Authorization', `Bearer ${adminToken}`)

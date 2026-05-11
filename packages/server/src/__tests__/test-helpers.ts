@@ -18,7 +18,7 @@ export function createTestContext(): TestContext {
   return { app, adminToken, adminId: adminRow.id };
 }
 
-/** Create a room using admin token. Returns room id. */
+/** Create a room using admin agent token. Returns room id. */
 export async function createRoomAsAdmin(app: Express, adminToken: string, name: string, visibility = 'public'): Promise<string> {
   const res = await request(app)
     .post('/admin/rooms')

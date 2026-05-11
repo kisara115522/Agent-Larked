@@ -163,6 +163,12 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'profiles', 'is_admin', 'INTEGER DEFAULT 0');
   migrateColumn(db, 'direct_messages', 'read_at', 'TEXT DEFAULT NULL');
 
+  // v0.3.5 stores admin privileges on agent profiles, so remove the legacy separate human admin model.
+  db.exec(`
+    DROP TABLE IF EXISTS admin_audit_log;
+    DROP TABLE IF EXISTS human_users;
+  `);
+
   // Index for broadcast queries
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_broadcast ON messages(broadcast, created_order)');
 
