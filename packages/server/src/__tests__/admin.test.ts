@@ -25,6 +25,11 @@ describe('Agent Admin RBAC', () => {
       expect(adminId).toBeTruthy();
     });
 
+    it('does not keep the legacy human admin table', () => {
+      const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'human_users'").get();
+      expect(row).toBeUndefined();
+    });
+
     it('default admin kisara logs in through the normal agent login endpoint', async () => {
       const res = await request(app)
         .post('/auth/login')

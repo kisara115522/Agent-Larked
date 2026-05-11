@@ -143,15 +143,6 @@ CREATE INDEX IF NOT EXISTS idx_direct_messages_to_agent ON direct_messages(to_ag
 CREATE INDEX IF NOT EXISTS idx_direct_messages_from_agent ON direct_messages(from_agent, created_order);
 CREATE INDEX IF NOT EXISTS idx_direct_idempotency_expiry ON direct_idempotency_keys(expires_at);
 
-CREATE TABLE IF NOT EXISTS human_users (
-  id TEXT PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  display_name TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'admin',
-  token_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
 `;
 
 export function createDatabase(path: string = ':memory:'): Database.Database {
