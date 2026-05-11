@@ -52,6 +52,7 @@ export function authRouter(db: Database.Database): Router {
         id: profile.id,
         name: profile.name,
         display_name: profile.display_name,
+        is_admin: profile.is_admin,
         token, // return the original token (not hash)
       };
 

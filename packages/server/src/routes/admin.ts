@@ -2,14 +2,6 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { adminAuthMiddleware, type AdminRequest } from '../middleware/admin-auth.js';
-import {
-  createHumanUser,
-  authenticateHumanUser,
-  getHumanUser,
-  listHumanUsers,
-  deleteHumanUser,
-  regenerateHumanUserToken,
-} from '../services/human-user.js';
 import { registerAgent, updateProfile, getProfile, searchAgents } from '../services/identity.js';
 import { getRoom } from '../services/room.js';
 import { hashToken } from '../middleware/auth.js';
@@ -22,25 +14,11 @@ export function adminRouter(db: Database.Database, eventBus?: EventBus): Router 
   const router = Router();
   const adminAuth = adminAuthMiddleware(db);
 
-  // POST /admin/login — human admin login
-  router.post('/login', (req, res, next) => {
-    try {
-      const { username, token } = req.body as { username?: string; token?: string };
-      if (!username || !token) {
-        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'username and token are required', false, 400);
-      }
-      const user = authenticateHumanUser(db, { username, token });
-      res.json({ ok: true, user });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // GET /admin/me — current admin profile
+  // GET /admin/me — current admin agent profile
   router.get('/me', adminAuth, (req: AdminRequest, res, next) => {
     try {
-      const user = getHumanUser(db, req.adminUserId!);
-      res.json(user);
+      const profile = getProfile(db, req.adminAgentId!);
+      res.json(profile);
     } catch (err) {
       next(err);
     }

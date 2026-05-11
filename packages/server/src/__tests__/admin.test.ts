@@ -6,7 +6,7 @@ import { createApp } from '../index.js';
 import { bootstrapDefaultAdmin } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
 
-describe('Human Admin RBAC', () => {
+describe('Agent Admin RBAC', () => {
   let app: Express;
   let db: Database.Database;
   let adminToken: string;
@@ -15,14 +15,24 @@ describe('Human Admin RBAC', () => {
   beforeAll(() => {
     ({ app, db } = createApp());
     adminToken = bootstrapDefaultAdmin(db, hashToken)!;
-    const row = db.prepare('SELECT id FROM human_users WHERE username = ?').get('kisara') as { id: string };
+    const row = db.prepare('SELECT id FROM profiles WHERE name = ? AND is_admin = 1').get('kisara') as { id: string };
     adminId = row.id;
   });
 
   describe('Admin bootstrap', () => {
-    it('default admin kisara is created', () => {
+    it('default admin kisara is created as an agent admin', () => {
       expect(adminToken).toBeTruthy();
       expect(adminId).toBeTruthy();
+    });
+
+    it('default admin kisara logs in through the normal agent login endpoint', async () => {
+      const res = await request(app)
+        .post('/auth/login')
+        .send({ identifier: 'kisara', token: adminToken })
+        .expect(200);
+
+      expect(res.body.name).toBe('kisara');
+      expect(res.body.is_admin).toBe(true);
     });
 
     it('bootstrap is idempotent — second call returns null', () => {
@@ -31,47 +41,20 @@ describe('Human Admin RBAC', () => {
     });
   });
 
-  describe('POST /admin/login', () => {
-    it('login with correct credentials returns user', async () => {
-      const res = await request(app)
-        .post('/admin/login')
-        .send({ username: 'kisara', token: adminToken })
-        .expect(200);
-
-      expect(res.body.ok).toBe(true);
-      expect(res.body.user.username).toBe('kisara');
-      expect(res.body.user.role).toBe('admin');
-    });
-
-    it('login with wrong token returns 401', async () => {
-      await request(app)
-        .post('/admin/login')
-        .send({ username: 'kisara', token: 'wrong-token' })
-        .expect(401);
-    });
-
-    it('login with missing fields returns 400', async () => {
-      await request(app)
-        .post('/admin/login')
-        .send({ username: 'kisara' })
-        .expect(400);
-    });
-  });
-
   describe('GET /admin/me', () => {
-    it('returns admin profile', async () => {
+    it('returns the current admin agent profile', async () => {
       const res = await request(app)
         .get('/admin/me')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      expect(res.body.username).toBe('kisara');
-      expect(res.body.role).toBe('admin');
+      expect(res.body.name).toBe('kisara');
+      expect(res.body.is_admin).toBe(true);
       // Should NOT return token_hash
       expect(res.body.token_hash).toBeUndefined();
     });
 
-    it('rejects agent token', async () => {
+    it('rejects a non-admin agent token', async () => {
       // Register an agent
       const reg = await request(app)
         .post('/agents')

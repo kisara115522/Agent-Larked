@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   token_hash TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  last_active_at TEXT
+  last_active_at TEXT,
+  is_admin INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS rooms (
@@ -168,6 +169,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'rooms', 'visibility', "TEXT DEFAULT 'public'");
   migrateColumn(db, 'messages', 'broadcast', 'INTEGER DEFAULT 0');
   migrateColumn(db, 'profiles', 'last_active_at', 'TEXT');
+  migrateColumn(db, 'profiles', 'is_admin', 'INTEGER DEFAULT 0');
   migrateColumn(db, 'direct_messages', 'read_at', 'TEXT DEFAULT NULL');
 
   // Index for broadcast queries
@@ -189,20 +191,40 @@ export function cleanupIdempotencyKeys(db: Database.Database): number {
   return roomResult.changes + directResult.changes;
 }
 
-/** Bootstrap default admin 'kisara' if no human_users exist. Returns the admin token if newly created. */
+/** Bootstrap default admin agent 'kisara'. Returns the agent token if newly created. */
 export function bootstrapDefaultAdmin(db: Database.Database, hashToken: (token: string) => string): string | null {
-  const existing = db.prepare('SELECT id FROM human_users LIMIT 1').get();
-  if (existing) return null; // already bootstrapped
+  const now = new Date().toISOString();
+  const existingAdmin = db.prepare('SELECT id FROM profiles WHERE name = ?').get('kisara') as { id: string } | undefined;
+
+  if (existingAdmin) {
+    db.prepare('UPDATE profiles SET is_admin = 1, updated_at = ? WHERE id = ?').run(now, existingAdmin.id);
+    ensureSystemProfile(db, now);
+    return null;
+  }
 
   const id = randomBytes(16).toString('hex');
   const token = randomBytes(32).toString('hex');
   const tokenHash = hashToken(token);
-  const now = new Date().toISOString();
 
-  db.prepare(
-    'INSERT INTO human_users (id, username, display_name, role, token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, 'kisara', 'kisara', 'admin', tokenHash, now, now);
+  db.prepare(`
+    INSERT INTO profiles (
+      id,
+      name,
+      display_name,
+      token_hash,
+      status,
+      is_admin,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, 'offline', 1, ?, ?)
+  `).run(id, 'kisara', 'kisara', tokenHash, now, now);
 
+  ensureSystemProfile(db, now);
+
+  return token;
+}
+
+function ensureSystemProfile(db: Database.Database, now: string): void {
   // Create a system profile so admin-created rooms can reference it via FK
   const systemExists = db.prepare('SELECT id FROM profiles WHERE id = ?').get('system');
   if (!systemExists) {
@@ -210,6 +232,4 @@ export function bootstrapDefaultAdmin(db: Database.Database, hashToken: (token: 
       'INSERT INTO profiles (id, name, display_name, token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
     ).run('system', 'system', 'System', 'no-login', now, now);
   }
-
-  return token;
 }

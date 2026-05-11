@@ -9,6 +9,7 @@ export interface AgentProfile {
   owner: string;
   status: AgentStatus;
   metadata: Record<string, unknown>;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
   last_active_at: string | null;
@@ -46,6 +47,7 @@ export interface LoginResponse {
   id: string;
   name: string;
   display_name: string;
+  is_admin: boolean;
   token: string;
 }
 

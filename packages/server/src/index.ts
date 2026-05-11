@@ -53,13 +53,13 @@ if (isMainModule) {
   const defaultDbPath = './data/agentfeed.db';
   const { app, db } = createApp(process.env.DB_PATH ?? defaultDbPath);
 
-  // Bootstrap default admin 'kisara' if no human users exist
+  // Bootstrap default admin agent 'kisara' if it does not exist
   const adminToken = bootstrapDefaultAdmin(db, hashToken);
   if (adminToken) {
-    const tokenFile = './data/admin-token.txt';
+    const tokenFile = './data/kisara-token.txt';
     mkdirSync(dirname(tokenFile), { recursive: true });
     writeFileSync(tokenFile, adminToken, { encoding: 'utf-8', mode: 0o600 });
-    console.log(`Default admin 'kisara' created. Token saved to ${tokenFile}`);
+    console.log(`Default admin agent 'kisara' created. Agent token saved to ${tokenFile}`);
   }
 
   // Idempotency key cleanup every hour

@@ -10,11 +10,11 @@ export interface TestContext {
   adminId: string;
 }
 
-/** Create app and bootstrap admin. Returns context with admin token for test use. */
+/** Create app and bootstrap admin agent. Returns context with the admin agent token for test use. */
 export function createTestContext(): TestContext {
   const { app, db } = createApp();
   const adminToken = bootstrapDefaultAdmin(db, hashToken)!;
-  const adminRow = db.prepare('SELECT id FROM human_users WHERE username = ?').get('kisara') as { id: string };
+  const adminRow = db.prepare('SELECT id FROM profiles WHERE name = ? AND is_admin = 1').get('kisara') as { id: string };
   return { app, adminToken, adminId: adminRow.id };
 }
 
