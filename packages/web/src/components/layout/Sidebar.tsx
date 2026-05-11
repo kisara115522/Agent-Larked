@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useSSE } from '../../context/SSEContext';
 import { get } from '../../api/client';
 import { AgentAvatar } from '../agent/AgentAvatar';
@@ -25,7 +24,7 @@ interface Agent {
 
 export function Sidebar() {
   const { token, agent, logout } = useAuth();
-  const { isAdmin, adminUser } = useAdminAuth();
+  const isAdmin = Boolean(agent?.is_admin);
   const { subscribe, connected } = useSSE();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -182,7 +181,7 @@ export function Sidebar() {
           }
         >
           <span>⚙️</span>
-          <span>Admin ({adminUser?.username})</span>
+          <span>Admin ({agent?.display_name || agent?.name})</span>
         </NavLink>
       )}
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NavLink, Navigate } from 'react-router-dom';
-import { useAdminAuth } from '../context/AdminAuthContext';
+import { useAuth } from '../context/AuthContext';
 import { get, post, patch, del } from '../api/client';
 
 interface Room {
@@ -22,8 +22,8 @@ interface RoomMember {
 }
 
 function RoomManageContent() {
-  const { adminToken, adminUser, adminLogout } = useAdminAuth();
-  const token = adminToken!;
+  const { agent, token, logout } = useAuth();
+  const authToken = token!;
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,14 +42,14 @@ function RoomManageContent() {
   const loadRooms = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await get<{ rooms: Room[] }>('/admin/rooms', token);
+      const res = await get<{ rooms: Room[] }>('/admin/rooms', authToken);
       setRooms(res.rooms);
     } catch (err) {
       setError((err as Error).message || 'Failed to load rooms');
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [authToken]);
 
   useEffect(() => { loadRooms(); }, [loadRooms]);
 
@@ -57,7 +57,7 @@ function RoomManageContent() {
     if (!createName.trim()) return;
     setError('');
     try {
-      await post('/admin/rooms', token, {
+      await post('/admin/rooms', authToken, {
         name: createName.trim(),
         description: createDesc.trim(),
         visibility: createVisibility,
@@ -82,7 +82,7 @@ function RoomManageContent() {
   const handleSave = async (id: string) => {
     setError('');
     try {
-      await patch(`/admin/rooms/${id}`, token, {
+      await patch(`/admin/rooms/${id}`, authToken, {
         name: editName.trim(),
         description: editDesc.trim(),
         visibility: editVisibility,
@@ -98,7 +98,7 @@ function RoomManageContent() {
     if (!confirm(`Delete room "${name}"? All messages, members, and invites will be permanently removed. This cannot be undone.`)) return;
     setError('');
     try {
-      await del(`/admin/rooms/${id}`, token);
+      await del(`/admin/rooms/${id}`, authToken);
       if (detailRoom?.id === id) setDetailRoom(null);
       loadRooms();
     } catch (err) {
@@ -110,7 +110,7 @@ function RoomManageContent() {
     setDetailRoom(room);
     setDetailLoading(true);
     try {
-      const res = await get<{ members: RoomMember[] }>(`/admin/rooms/${room.id}/members`, token);
+      const res = await get<{ members: RoomMember[] }>(`/admin/rooms/${room.id}/members`, authToken);
       setMembers(res.members);
     } catch {
       setMembers([]);
@@ -122,7 +122,7 @@ function RoomManageContent() {
   const handleRemoveMember = async (roomId: string, agentId: string) => {
     setError('');
     try {
-      await del(`/admin/rooms/${roomId}/members/${agentId}`, token);
+      await del(`/admin/rooms/${roomId}/members/${agentId}`, authToken);
       setMembers(prev => prev.filter(m => m.agent_id !== agentId));
     } catch (err) {
       setError((err as Error).message || 'Remove member failed');
@@ -138,9 +138,9 @@ function RoomManageContent() {
             <p className="text-sm text-text-muted mt-1">
               <NavLink to="/admin" className="text-accent hover:underline">Agent Management</NavLink>
               {' '}&middot;{' '}
-              Logged in as <span className="text-accent">{adminUser?.display_name || adminUser?.username}</span>
+              Logged in as <span className="text-accent">{agent?.display_name || agent?.name}</span>
               {' '}&middot;{' '}
-              <button onClick={adminLogout} className="text-text-muted hover:text-error transition-colors">Logout</button>
+              <button onClick={logout} className="text-text-muted hover:text-error transition-colors">Logout</button>
             </p>
           </div>
           <button
@@ -310,9 +310,9 @@ function RoomManageContent() {
 }
 
 export function RoomManagePage() {
-  const { isAdmin } = useAdminAuth();
+  const { agent } = useAuth();
 
-  if (!isAdmin) {
+  if (!agent?.is_admin) {
     return <Navigate to="/" replace />;
   }
 

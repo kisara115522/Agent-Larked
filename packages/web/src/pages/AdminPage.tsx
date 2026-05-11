@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NavLink, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useAdminAuth } from '../context/AdminAuthContext';
 import { get, post, patch, del } from '../api/client';
 
 interface Agent {
@@ -21,9 +20,8 @@ interface BatchResult {
 }
 
 function AdminContent() {
-  const { agent: currentAgent, login } = useAuth();
-  const { adminToken, adminUser, adminLogout } = useAdminAuth();
-  const token = adminToken!;
+  const { agent: currentAgent, token, login, logout } = useAuth();
+  const authToken = token!;
   const [agents, setAgents] = useState<Agent[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -43,14 +41,14 @@ function AdminContent() {
     setLoading(true);
     try {
       const params = search ? `?q=${encodeURIComponent(search)}` : '';
-      const res = await get<{ agents: Agent[] }>(`/admin/agents${params}`, token);
+      const res = await get<{ agents: Agent[] }>(`/admin/agents${params}`, authToken);
       setAgents(res.agents);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [token, search]);
+  }, [authToken, search]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
 
@@ -58,7 +56,7 @@ function AdminContent() {
     if (!createName.trim()) return;
     setError('');
     try {
-      const res = await post<{ id: string; name: string; token: string }>('/admin/agents', token, {
+      const res = await post<{ id: string; name: string; token: string }>('/admin/agents', authToken, {
         name: createName.trim(),
         ...(createDisplayName.trim() ? { display_name: createDisplayName.trim() } : {}),
       });
@@ -82,7 +80,7 @@ function AdminContent() {
   const handleSave = async (id: string) => {
     setError('');
     try {
-      await patch(`/admin/agents/${id}`, token, {
+      await patch(`/admin/agents/${id}`, authToken, {
         name: editName.trim(),
         display_name: editDisplayName.trim(),
       });
@@ -98,7 +96,7 @@ function AdminContent() {
     if (!confirm(isSelf ? 'Delete your own account? You will be logged out. This cannot be undone.' : 'Delete this agent? This cannot be undone.')) return;
     setError('');
     try {
-      await del(`/admin/agents/${id}`, token);
+      await del(`/admin/agents/${id}`, authToken);
       if (id === currentAgent?.id) {
         window.location.reload();
         return;
@@ -113,7 +111,7 @@ function AdminContent() {
     if (!confirm('Regenerate token? The old token will be invalidated immediately.')) return;
     setError('');
     try {
-      const res = await post<{ id: string; token: string }>(`/admin/agents/${id}/token`, token);
+      const res = await post<{ id: string; token: string }>(`/admin/agents/${id}/token`, authToken);
       setNewToken(res.token);
       if (id === currentAgent?.id) {
         await login(res.token);
@@ -134,7 +132,7 @@ function AdminContent() {
     setError('');
     setBatchResults(null);
     try {
-      const res = await post<{ results: BatchResult[] }>('/admin/agents/batch-delete', token, {
+      const res = await post<{ results: BatchResult[] }>('/admin/agents/batch-delete', authToken, {
         agent_ids: Array.from(selected),
       });
       setBatchResults(res.results);
@@ -173,9 +171,9 @@ function AdminContent() {
           <div>
             <h1 className="text-xl font-semibold">Agent Management</h1>
             <p className="text-sm text-text-muted mt-1">
-              Logged in as <span className="text-accent">{adminUser?.display_name || adminUser?.username}</span>
+              Logged in as <span className="text-accent">{currentAgent?.display_name || currentAgent?.name}</span>
               {' '}&middot;{' '}
-              <button onClick={adminLogout} className="text-text-muted hover:text-error transition-colors">Logout</button>
+              <button onClick={logout} className="text-text-muted hover:text-error transition-colors">Logout</button>
             </p>
           </div>
           <div className="flex gap-2">
@@ -397,9 +395,9 @@ function AdminContent() {
 }
 
 export function AdminPage() {
-  const { isAdmin } = useAdminAuth();
+  const { agent } = useAuth();
 
-  if (!isAdmin) {
+  if (!agent?.is_admin) {
     return <Navigate to="/" replace />;
   }
 

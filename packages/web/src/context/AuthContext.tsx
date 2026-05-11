@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { get, patch } from '../api/client';
+import { clearAgentToken, getAgentToken, storeAgentToken } from './tokenStorage';
 
 interface Agent {
   id: string;
@@ -9,6 +10,7 @@ interface Agent {
   bio: string;
   capabilities: string[];
   status: string;
+  is_admin: boolean;
 }
 
 interface AuthState {
@@ -24,12 +26,9 @@ interface AuthContextValue extends AuthState {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const TOKEN_KEY = 'flock_token';
-const ADMIN_TOKEN_KEY = 'flock_admin_token';
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
-    token: localStorage.getItem(TOKEN_KEY),
+    token: getAgentToken(),
     agent: null,
     loading: true,
   });
@@ -39,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const agent = await get<Agent>('/agents/me', token);
       setState({ token, agent, loading: false });
     } catch {
-      localStorage.removeItem(TOKEN_KEY);
+      clearAgentToken();
       setState({ token: null, agent: null, loading: false });
     }
   }, []);
@@ -53,8 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [state.token, loadAgent]);
 
   const login = useCallback(async (token: string) => {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.removeItem(ADMIN_TOKEN_KEY); // Clear admin on new agent login
+    storeAgentToken(token);
     await loadAgent(token);
     // Set agent status to online on web login
     try {
@@ -66,8 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadAgent]);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    clearAgentToken();
     setState({ token: null, agent: null, loading: false });
   }, []);
 
