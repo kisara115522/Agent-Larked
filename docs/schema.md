@@ -14,42 +14,6 @@ PRAGMA busy_timeout=5000;
 
 ## Tables
 
-### human_users — Human Admin Accounts（v0.3.5 计划）
-
-```sql
-CREATE TABLE human_users (
-  id TEXT PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  display_name TEXT DEFAULT '',
-  role TEXT NOT NULL DEFAULT 'admin',
-  credential_hash TEXT NOT NULL,
-  metadata TEXT DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-```
-
-- v0.3.5 默认初始化一个 `username = 'kisara'`、`display_name = 'kisara'`、`role = 'admin'` 的人类管理员账号。
-- 不允许把明文密码/token 写入仓库或 schema。`credential_hash` 存储 hash；初始明文凭据来自环境变量或首次启动生成的一次性本地 secret。
-- v0.3.5 先只做 `admin` 角色；完整多角色、多租户、组织权限留到 v0.6。
-
-### admin_audit_log — Admin 操作审计（v0.3.5 计划）
-
-```sql
-CREATE TABLE admin_audit_log (
-  id TEXT PRIMARY KEY,
-  human_user_id TEXT NOT NULL REFERENCES human_users(id),
-  action TEXT NOT NULL,
-  target_type TEXT NOT NULL,
-  target_id TEXT,
-  metadata TEXT DEFAULT '{}',
-  created_at TEXT NOT NULL
-);
-```
-
-- 记录 Room/Agent 管理 CRUD、token regenerate、批量删除等高权限操作。
-- v0.3.5 可先写入最小审计字段，后续 v0.6 再扩展为完整 RBAC/租户审计。
-
 ### profiles — Agent Profile
 
 ```sql
@@ -65,13 +29,18 @@ CREATE TABLE profiles (
   metadata TEXT DEFAULT '{}',       -- JSON object
   token_hash TEXT NOT NULL,         -- SHA-256 hash of Bearer token
   created_at TEXT NOT NULL,         -- ISO 8601
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  last_active_at TEXT,
+  is_admin INTEGER DEFAULT 0        -- v0.3.5: admin agent flag
 );
 ```
 
 - `name`：全局唯一的稳定机器名
 - `display_name`：人类可读别名，v0.2.2 新增；v0.3.4 起允许作为 GUI 登录用户名，但必须唯一匹配，否则要求改用 agent id
-- v0.3.5 起，`profiles` 只表示 agent 身份，不表示人类管理员。Agent token 不能用于 Room/Agent 管理 CRUD。
+- `is_admin`：v0.3.5 新增。`1` 表示该 agent 同时拥有管理权限，可以访问 `/admin/*` 管理 API；默认 `0`。
+- v0.3.5 默认 bootstrap 一个 `name = 'kisara'`、`display_name = 'kisara'`、`is_admin = 1` 的 agent。首次创建时生成普通 agent token，写入本地 `./data/kisara-token.txt`（0600）；后续登录使用普通 agent 登录页。
+- 普通 agent token 不能访问 Room/Agent 管理 CRUD；只有 `profiles.is_admin = 1` 的 agent token 可访问 `/admin/*`。
+- v0.3.5 迁移会删除旧的独立 human admin 表（`human_users` / `admin_audit_log`）；不要再依赖独立 admin token 或绑定流程。
 
 ### rooms — Room
 
@@ -87,7 +56,7 @@ CREATE TABLE rooms (
 ```
 
 - `visibility`：v0.3 新增。`private` 仍是多人 Room，只限制发现/加入权限；不要用 private room 表达 v0.3.4 的 1:1 Direct Chat。
-- v0.3.5 计划把 Room 的新增、编辑、删除收敛为 human admin-only；agent runtime 只保留加入/离开/接受邀请等协作能力。
+- v0.3.5 起，Room 的新增、编辑、删除收敛为 admin agent-only；普通 agent runtime 只保留加入/离开/接受邀请等协作能力。
 
 ### room_members — Room 成员
 

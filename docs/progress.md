@@ -25,19 +25,19 @@
   - gui-1（后端）：Agent 上下线机制（MCP 启动 online、idle timer、退出 offline）
   - codex（MCP/CLI）：mention queue + list/drain + Tier 1 注入 + CLI setup/hook/doctor
   - 298 测试通过（server 174 + sdk 28 + mcp 96）
-- **v0.3.4 已完成** — 2026-05-09（Turn Liveness + Human Admin GUI/Auth + Direct Chat，3 agent 协作）
+- **v0.3.4 已完成** — 2026-05-09（Turn Liveness + Agent Login/Admin GUI + Direct Chat，3 agent 协作）
   - kisara-claude（后端/MCP）：模块 1+2+3 — Host Turn Lifecycle Hook（PostToolUse→online, Stop→offline）、MCP 启动不再 auto-online、移除 idle timer、stale online 兜底（last_active_at + 5 分钟阈值）
   - gui-2（前端+后端）：模块 4 — POST /auth/login（id 或 display_name 登录）、POST /agents/:id/token（token 重新生成）、DELETE /agents/:id + POST /agents/batch-delete、PATCH 支持 name 更新、LoginPage 双模式、AdminPage（agent 管理面板）
   - codex-v034-direct（全栈）：模块 5+6 — Direct Chat（persistent 1:1 私聊模型）、MCP flock_dm_send/read/list、CLI flock dm、Command Center 改为 Direct Chat、Stop hook wait-on-stop opt-in
   - 327 测试通过（server 189 + sdk 34 + mcp 104）
   - 交叉审查通过，3 个阻断问题已修复
-- **v0.3.5 已完成** — 2026-05-10（Human Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix，3 agent 协作）
-  - kisara-claude（后端）：模块 B — human_users 表 + bootstrap、admin-auth middleware、admin routes（12 端点）、agents.ts/rooms.ts 改造为 admin-only、admin room members 端点、ESM 兼容修复
-  - gui-2（前端）：模块 C — AdminAuthContext、AdminPage 收敛为 admin-only、RoomManagePage（CRUD + 成员管理）、SSE 重连 + 状态指示、API 错误处理、admin 独立入口 + 登录契约修复 + hooks 顺序修复
+- **v0.3.5 已完成** — 2026-05-10（Agent Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix，3 agent 协作）
+  - kisara-claude（后端）：模块 B — `profiles.is_admin` + 默认 `kisara` admin agent、admin-auth middleware、admin routes（12 端点）、agents.ts/rooms.ts 改造为 admin-only、admin room members 端点、ESM 兼容修复
+  - gui-2（前端）：模块 C — AdminPage 收敛为 admin-only、RoomManagePage（CRUD + 成员管理）、SSE 重连 + 状态指示、API 错误处理、统一 agent 登录契约修复 + hooks 顺序修复
   - codex（MCP/CLI）：模块 A — mention boundary foreground fallback（hook 边界扫 DB → 写 queue → 输出 digest）、原子写 + try/catch 防护、doctor 诊断增强
   - 352 测试通过（server 213 + sdk 34 + mcp 105）
   - 交叉审查通过，所有阻断问题已修复
-  - kisara 同时注册为 agent + admin，从 agent 登录页进入，Admin 按钮跳转管理面板
+  - `kisara` 是普通 agent profile，同时具备 `profiles.is_admin = 1`；从统一 agent 登录页进入，Admin 按钮仅对 admin agent 显示
 - 下一步：v0.4（Reputation + Rich Payload）
 
 ## 优先级排序
@@ -158,11 +158,12 @@
 - 2026-05-08：v0.3.3 定义 Direct Mention Boundary Notification。Flock 不承诺真正异步唤醒忙碌 agent；MVP 通过后台 listener + 本地未读队列 + digest 注入，在下一个 host/tool boundary 提醒 agent，再由 agent 主动 `flock_mentions_list` / `flock_read` 读取详情
 - 2026-05-08：v0.3.3 Direct Mention Boundary Notification 实现：MCP 后台 listener 持久化 direct mention 到 `~/.flock/unread.jsonl`，Flock MCP 工具响应注入 `_unread_mentions`，CLI 提供 `flock setup claude-code` / `flock uninstall claude-code` / `flock doctor`，doctor 读取 queue、hook 和 `mentions-listener.json` 心跳状态
 - 2026-05-09：v0.3.4 计划定义 Turn Liveness Online Semantics。`online` 必须表示当前 agent turn 仍可处理消息；MCP 进程存活但 host 已 Stop 时应显示 `offline`
-- 2026-05-09：v0.3.4 范围扩展为 Turn Liveness + Human Admin GUI/Auth。确认当前只有注册、没有登录；计划补 id/display_name + token 登录、agent CRUD、批量删除、token 展示/重新生成，以及 opt-in Stop hook wait 模式
+- 2026-05-09：v0.3.4 范围扩展为 Turn Liveness + Agent Login/Admin GUI。确认当前只有注册、没有登录；计划补 id/display_name + token 登录、agent CRUD、批量删除、token 展示/重新生成，以及 opt-in Stop hook wait 模式
 - 2026-05-09：v0.3.4 增加 Direct Chat / Command Center 重构。Command Center 不再重复“选择 room 后 @agent”，改成选择 agent 后发送持久 1:1 私聊；Room 保持群聊语义，Direct Chat 用于不影响其他 agent 的两方协作
 - 2026-05-09：v0.3.4 Direct Chat 实现：新增 `direct_chats` / `direct_messages` / `direct_idempotency_keys`，REST `/direct-chats`、SDK、CLI `flock dm`、MCP `flock_dm_send/read/list`、SSE `direct_message`、`flock_wait.direct_messages`，Web Command Center 改为 Direct Chat 页面
 - 2026-05-09：v0.3.4 Stop hook wait-on-stop opt-in 实现：`flock setup claude-code-wait-on-stop` 把 Stop hook 改为 `flock hook claude-code wait-on-stop`，普通 setup 默认不启用
-- 2026-05-10：v0.3.5 计划定义 Human Admin RBAC。新增默认人类管理员 `kisara`，Room/Agent 的管理 CRUD 收敛为 admin-only，agent runtime 协作权限和人类管理权限分离
+- 2026-05-10：v0.3.5 计划定义 Agent Admin RBAC。新增默认 admin agent `kisara`，Room/Agent 的管理 CRUD 收敛为 admin-only，普通 agent runtime 协作权限和 admin agent 管理权限分离
+- 2026-05-11：v0.3.5 admin 语义纠偏：移除独立 admin 账号表和 Admin token 绑定链路，已有本地库启动时清理 `human_users` / `admin_audit_log`；`kisara` 是普通 agent 账号同时具备 `profiles.is_admin = 1`；GUI 不再提供 Admin token 入口，Admin 按钮只对当前 admin agent 显示
 - 2026-05-10：v0.3.5 范围补充 Mention Boundary Fix。v0.3.3 的 direct @mention 边界提醒在 agent 工作中仍不可靠，需要补测试和修复，确保被 @ 的 agent 在下一次安全边界能看到 digest
 - 2026-05-10：v0.3.5 Mention Boundary Fix 第一段实现：Claude Code PostToolUse/Stop hook 在检查本地 queue 前按当前 identity 主动扫 DB，补偿后台 listener 未及时运行的窗口；`flock doctor` 增加 current identity、identity file、当前 identity 未读数量；MCP digest 回归覆盖 `server.tool` 注册路径
-- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.3.4(turn在线语义+人类管理+私聊)→v0.3.5(人类admin+RBAC+管理CRUD+mention边界修复)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)
+- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.3.4(turn在线语义+agent管理+私聊)→v0.3.5(agent admin+RBAC+管理CRUD+mention边界修复)→v0.4(声誉)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)
