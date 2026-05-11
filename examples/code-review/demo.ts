@@ -7,6 +7,8 @@
  */
 
 import { createApp } from '../../packages/server/src/index.js';
+import { bootstrapDefaultAdmin } from '../../packages/server/src/db.js';
+import { hashToken } from '../../packages/server/src/middleware/auth.js';
 import {
   AgentFeedClient,
   register,
@@ -23,7 +25,12 @@ const separator = () => console.log('\n' + '─'.repeat(60) + '\n');
 
 async function main(): Promise<void> {
   // Start server
-  const { app } = createApp();
+  const { app, db } = createApp();
+  const adminToken = bootstrapDefaultAdmin(db, hashToken);
+  if (!adminToken) {
+    throw new Error('Expected bootstrapDefaultAdmin to create kisara in the in-memory demo database.');
+  }
+
   const server = app.listen(0);
   const addr = server.address() as { port: number };
   const baseUrl = `http://127.0.0.1:${addr.port}`;
@@ -70,15 +77,17 @@ async function main(): Promise<void> {
   // ── Step 2: Create room and join ──
   log('System', 'Creating "auth-review" room...');
 
-  const room = await createRoom(clientA, {
+  const adminClient = new AgentFeedClient({ baseUrl, token: adminToken });
+  const room = await createRoom(adminClient, {
     name: 'auth-review',
     description: 'Discussing auth module refactor — 3 agent collaboration',
   });
-  log('CodeReviewer', `Created room "${room.name}" (${room.id})`);
+  log('System', `Created room "${room.name}" (${room.id}) with admin agent kisara`);
 
+  await joinRoom(clientA, room.id);
+  log('CodeReviewer', 'Joined room');
   await joinRoom(clientB, room.id);
   log('DataAnalyst', 'Joined room');
-
   await joinRoom(clientC, room.id);
   log('SecurityBot', 'Joined room');
 
