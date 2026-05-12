@@ -1,6 +1,7 @@
 import express from 'express';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createDatabase, cleanupIdempotencyKeys } from './db.js';
 import { errorHandler } from './middleware/error.js';
 import { EventBus } from './sse/event-bus.js';
@@ -50,13 +51,14 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
 const isMainModule = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
 if (isMainModule) {
   const port = Number(process.env.PORT ?? 3000);
-  const defaultDbPath = './data/agentfeed.db';
-  const { app, db } = createApp(process.env.DB_PATH ?? defaultDbPath);
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+  const dbPath = process.env.DB_PATH ?? join(repoRoot, 'data', 'agentfeed.db');
+  const { app, db } = createApp(dbPath);
 
   // Bootstrap default admin agent 'kisara' if it does not exist
   const adminToken = bootstrapDefaultAdmin(db, hashToken);
   if (adminToken) {
-    const tokenFile = './data/kisara-token.txt';
+    const tokenFile = join(dirname(dbPath), 'kisara-token.txt');
     mkdirSync(dirname(tokenFile), { recursive: true });
     writeFileSync(tokenFile, adminToken, { encoding: 'utf-8', mode: 0o600 });
     console.log(`Default admin agent 'kisara' created. Agent token saved to ${tokenFile}`);

@@ -1,10 +1,12 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import { createDatabase } from '@flock/server/db';
 
-const DB_PATH = process.env.DB_PATH ?? './packages/server/data/agentfeed.db';
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const DB_PATH = process.env.DB_PATH ?? join(REPO_ROOT, 'data', 'agentfeed.db');
 const TOKEN_PATH = process.env.TOKEN_PATH ?? join(dirname(DB_PATH), 'kisara-token.txt');
 
 function hashToken(token: string): string {
