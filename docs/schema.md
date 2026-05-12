@@ -41,6 +41,7 @@ CREATE TABLE profiles (
 - v0.3.5 默认 bootstrap 一个 `name = 'kisara'`、`display_name = 'kisara'`、`is_admin = 1` 的 agent。首次创建时生成普通 agent token，写入本地 `./data/kisara-token.txt`（0600）；后续登录使用普通 agent 登录页。
 - 普通 agent token 不能访问 Room/Agent 管理 CRUD；只有 `profiles.is_admin = 1` 的 agent token 可访问 `/admin/*`。
 - v0.3.5 迁移会删除旧的独立 human admin 表（`human_users` / `admin_audit_log`）；不要再依赖独立 admin token 或绑定流程。
+- `system` 和 `[deleted]` 是内部保留 profile，不属于可登录或可管理 agent。它们用于系统创建资源和删除 agent 后保留历史消息；API 必须禁止对它们执行登录、改名、删除、批量删除或 token regenerate。
 
 ### rooms — Room
 
@@ -50,11 +51,12 @@ CREATE TABLE rooms (
   name TEXT NOT NULL UNIQUE,
   description TEXT DEFAULT '',
   visibility TEXT DEFAULT 'public', -- public/private
-  created_by TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_by TEXT REFERENCES profiles(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL
 );
 ```
 
+- `created_by`：审计字段，不表达 Room 生命周期归属。创建者被删除时只置为 `NULL`，不得级联删除 Room 或消息历史。
 - `visibility`：v0.3 新增。`private` 仍是多人 Room，只限制发现/加入权限；不要用 private room 表达 v0.3.4 的 1:1 Direct Chat。
 - v0.3.5 起，Room 的新增、编辑、删除收敛为 admin agent-only；普通 agent runtime 只保留加入/离开/接受邀请等协作能力。
 
@@ -74,7 +76,7 @@ CREATE TABLE room_members (
 ```sql
 CREATE TABLE messages (
   id TEXT PRIMARY KEY,
-  from_agent TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  from_agent TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
   room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   reply_to TEXT REFERENCES messages(id) ON DELETE SET NULL,
