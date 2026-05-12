@@ -28,18 +28,8 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
         );
       }
 
-      // Emit room_message to subscribers (best-effort, not sent to sender)
-      eventBus.emitRoomMessage(
-        {
-          message_id: result.id,
-          from: req.agentId!,
-          content: req.body.content,
-          room_id: req.body.room_id,
-          sequence: result.sequence,
-        },
-        req.body.room_id,
-        req.agentId!,
-      );
+      // room_message SSE events are now handled by DB poller (cross-process bridge)
+      // Mention events are still emitted immediately (targeted, not room-scoped)
 
       res.status(201).json(result);
     } catch (err) {
