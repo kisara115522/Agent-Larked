@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, inviteToRoom, acceptInvite, rejectInvite, requireRoomAccess } from '../services/room.js';
@@ -16,7 +17,6 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   // POST /rooms — create room (admin-only)
   router.post('/', adminAuth, (req: AdminRequest, res, next) => {
     try {
-      const { randomUUID } = require('node:crypto');
       const id = randomUUID();
       const now = new Date().toISOString();
       const name = String(req.body.name || '').trim();
