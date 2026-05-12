@@ -36,16 +36,24 @@ function flockHome(): string {
   return process.env.FLOCK_HOME || join(homedir(), '.flock');
 }
 
+function agentDir(): string {
+  const agentName = process.env.AGENT_NAME;
+  if (agentName) {
+    return join(flockHome(), 'agents', agentName);
+  }
+  return flockHome();
+}
+
 function queuePath(): string {
-  return join(flockHome(), 'unread.jsonl');
+  return join(agentDir(), 'unread.jsonl');
 }
 
 function seenPath(): string {
-  return join(flockHome(), 'mentions-seen.json');
+  return join(agentDir(), 'mentions-seen.json');
 }
 
 function listenerStatusPath(): string {
-  return join(flockHome(), 'mentions-listener.json');
+  return join(agentDir(), 'mentions-listener.json');
 }
 
 function ensureHome(): void {

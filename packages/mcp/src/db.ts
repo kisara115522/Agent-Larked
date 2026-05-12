@@ -14,9 +14,17 @@ interface Identity {
   token: string;
 }
 
+function getFlockHome(): string {
+  return process.env.FLOCK_HOME || join(homedir(), '.flock');
+}
+
 function getIdentityPath(): string {
-  const dir = process.env.FLOCK_HOME || join(homedir(), '.flock');
-  return join(dir, 'identity.json');
+  const flockHome = getFlockHome();
+  const agentName = process.env.AGENT_NAME;
+  if (agentName) {
+    return join(flockHome, 'agents', agentName, 'identity.json');
+  }
+  return join(flockHome, 'identity.json');
 }
 
 function loadIdentityFile(): Identity | null {
