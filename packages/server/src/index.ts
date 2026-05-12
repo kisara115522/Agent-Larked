@@ -16,6 +16,7 @@ import { eventsRouter } from './routes/events.js';
 import { authRouter } from './routes/auth.js';
 import { directChatsRouter } from './routes/direct-chats.js';
 import { adminRouter } from './routes/admin.js';
+import { tasksRouter } from './routes/tasks.js';
 import { bootstrapDefaultAdmin } from './db.js';
 import { hashToken } from './middleware/auth.js';
 
@@ -40,9 +41,13 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   app.use('/broadcast', broadcastRouter(db, eventBus));
   app.use('/feed', feedRouter(db));
   app.use('/admin', adminRouter(db, eventBus));
+  app.use('/tasks', tasksRouter(db, eventBus));
 
   // Error handler (must be last)
   app.use(errorHandler);
+
+  // Start DB poller for cross-process SSE bridge (MCP writes to DB, poller pushes to SSE)
+  eventBus.startPolling(db, 2000);
 
   return { app, db };
 }
