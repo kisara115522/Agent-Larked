@@ -106,15 +106,13 @@ export function Sidebar() {
             >
               🔍
             </button>
-            {isAdmin && (
-              <button
-                onClick={() => setShowCreateRoom(true)}
-                className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-elevated transition-colors text-xs"
-                title="Create room"
-              >
-                +
-              </button>
-            )}
+            <button
+              onClick={() => setShowCreateRoom(true)}
+              className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-elevated transition-colors text-xs"
+              title="Create room"
+            >
+              +
+            </button>
           </div>
         </div>
         {rooms.map(room => (

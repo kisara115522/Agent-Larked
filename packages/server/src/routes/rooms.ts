@@ -4,7 +4,6 @@ import type Database from 'better-sqlite3';
 import { joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, inviteToRoom, acceptInvite, rejectInvite, requireRoomAccess } from '../services/room.js';
 import { getMessages } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
-import { adminAuthMiddleware, type AdminRequest } from '../middleware/admin-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
@@ -12,10 +11,9 @@ import { ServerError } from '../middleware/error.js';
 export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
-  const adminAuth = adminAuthMiddleware(db);
 
-  // POST /rooms — create room (admin-only)
-  router.post('/', adminAuth, (req: AdminRequest, res, next) => {
+  // POST /rooms — create room (any authenticated agent)
+  router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -24,6 +22,9 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
         throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Room name must be 1-64 characters', false, 400);
       }
       const visibility = req.body.visibility ?? 'public';
+      if (visibility !== 'public' && visibility !== 'private') {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'visibility must be public or private', false, 400);
+      }
 
       // Check uniqueness
       const dup = db.prepare('SELECT id FROM rooms WHERE name = ?').get(name);
@@ -31,17 +32,20 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
         throw new ServerError(ErrorCode.ROOM_ALREADY_EXISTS, `Room '${name}' already exists`, false, 409);
       }
 
-      // Admin creates room — use 'system' for created_by
+      const agentId = req.agentId!;
       db.prepare(
-        "INSERT INTO rooms (id, name, description, visibility, created_by, created_at) VALUES (?, ?, ?, ?, 'system', ?)",
-      ).run(id, name, req.body.description ?? '', visibility, now);
+        'INSERT INTO rooms (id, name, description, visibility, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(id, name, req.body.description ?? '', visibility, agentId, now);
+
+      // Auto-join creator
+      db.prepare('INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at) VALUES (?, ?, ?)').run(id, agentId, now);
 
       res.status(201).json({
         id,
         name,
         description: req.body.description ?? '',
         visibility,
-        created_by: 'system',
+        created_by: agentId,
         created_at: now,
       });
     } catch (err) {
