@@ -40,6 +40,7 @@ export interface DoctorStatus {
   claude_code_settings: string;
   post_tool_use_hook: boolean;
   stop_hook: boolean;
+  hooks_ready: boolean;
   identity_file: string;
   identity_exists: boolean;
   current_identity: { id: string; name: string } | null;
@@ -47,9 +48,13 @@ export interface DoctorStatus {
   unread_queue_exists: boolean;
   unread_count: number;
   unread_for_current_identity: boolean;
+  unread_total: number;
+  unread_recipient_ids: string[];
+  listener_identity_matches_current: boolean | null;
   mention_listener_status_file: string;
   mention_listener_status_exists: boolean;
   mention_listener_status: unknown | null;
+  warnings: string[];
 }
 
 interface MentionRow {
@@ -66,6 +71,14 @@ interface MentionRow {
 
 function flockHome(): string {
   return process.env.FLOCK_HOME || join(homedir(), '.flock');
+}
+
+function agentDir(): string {
+  const agentName = process.env.AGENT_NAME;
+  if (agentName) {
+    return join(flockHome(), 'agents', agentName);
+  }
+  return flockHome();
 }
 
 function defaultClaudeSettingsPath(): string {
@@ -264,14 +277,14 @@ function sanitizeExcerpt(content: string): string {
   return `${normalized.slice(0, 16)}...`;
 }
 
-function readQueuedMentions(home = flockHome()): QueuedMentionDigest[] {
+function readQueuedMentions(home = agentDir()): QueuedMentionDigest[] {
   const identity = readIdentity(home);
   const queuePath = join(home, 'unread.jsonl');
   if (!identity || !existsSync(queuePath)) return [];
   return readQueue(queuePath).filter((mention) => mention.recipient_id === identity.id);
 }
 
-function pollDirectMentionsAtBoundary(home = flockHome()): void {
+function pollDirectMentionsAtBoundary(home = agentDir()): void {
   const identity = readIdentity(home);
   if (!identity) return;
 
@@ -352,19 +365,41 @@ export function buildDoctorStatus(
   settings: ClaudeCodeSettings,
   settingsPath: string,
   commandPrefix: string,
-  home = flockHome(),
+  home = agentDir(),
 ): DoctorStatus {
   const commands = hookCommands(commandPrefix);
   const identityPath = join(home, 'identity.json');
   const queuePath = join(home, 'unread.jsonl');
   const listenerStatusPath = join(home, 'mentions-listener.json');
   const identity = readIdentity(home);
-  const unreadMentions = identity ? readQueuedMentions(home) : [];
+  const allQueuedMentions = readQueue(queuePath);
+  const unreadMentions = identity ? allQueuedMentions.filter((mention) => mention.recipient_id === identity.id) : [];
+  const postToolUseHook = hasHook(settings.hooks?.PostToolUse ?? [], commands.postToolUse);
+  const stopHook = hasHook(settings.hooks?.Stop ?? [], commands.stop);
+  const listenerStatus = readJsonFile(listenerStatusPath);
+  const listenerAgentId = typeof listenerStatus === 'object' && listenerStatus !== null && 'agent_id' in listenerStatus
+    ? (listenerStatus as { agent_id?: unknown }).agent_id
+    : undefined;
+  const listenerIdentityMatchesCurrent = identity && typeof listenerAgentId === 'string'
+    ? listenerAgentId === identity.id
+    : null;
+  const unreadRecipientIds = [...new Set(allQueuedMentions.map((mention) => mention.recipient_id).filter((id): id is string => Boolean(id)))];
+  const warnings: string[] = [];
+  if (!postToolUseHook || !stopHook) {
+    warnings.push('Claude Code Flock hooks are not fully installed; run `flock setup claude-code --yes` for non-Flock tool boundary delivery.');
+  }
+  if (listenerIdentityMatchesCurrent === false) {
+    warnings.push('Mention listener identity does not match current identity; this session may be reading a stale or shared identity file.');
+  }
+  if (identity && unreadMentions.length === 0 && unreadRecipientIds.length > 0) {
+    warnings.push('Unread mention queue has entries for other agent identities; current identity may not match this running agent.');
+  }
 
   return {
     claude_code_settings: settingsPath,
-    post_tool_use_hook: hasHook(settings.hooks?.PostToolUse ?? [], commands.postToolUse),
-    stop_hook: hasHook(settings.hooks?.Stop ?? [], commands.stop),
+    post_tool_use_hook: postToolUseHook,
+    stop_hook: stopHook,
+    hooks_ready: postToolUseHook && stopHook,
     identity_file: identityPath,
     identity_exists: existsSync(identityPath),
     current_identity: identity,
@@ -372,9 +407,13 @@ export function buildDoctorStatus(
     unread_queue_exists: existsSync(queuePath),
     unread_count: unreadMentions.length,
     unread_for_current_identity: unreadMentions.length > 0,
+    unread_total: allQueuedMentions.length,
+    unread_recipient_ids: unreadRecipientIds,
+    listener_identity_matches_current: listenerIdentityMatchesCurrent,
     mention_listener_status_file: listenerStatusPath,
     mention_listener_status_exists: existsSync(listenerStatusPath),
-    mention_listener_status: readJsonFile(listenerStatusPath),
+    mention_listener_status: listenerStatus,
+    warnings,
   };
 }
 
@@ -449,12 +488,26 @@ function getDbPath(): string {
   return resolve(rawPath);
 }
 
-function readIdentity(home = flockHome()): { id: string; name: string } | null {
-  try {
-    const raw = readFileSync(join(home, 'identity.json'), 'utf-8').trim();
-    const identity = JSON.parse(raw) as { id?: string; name?: string };
-    if (identity.id && identity.name) return { id: identity.id, name: identity.name };
-  } catch { /* ignore */ }
+function readIdentity(home?: string): { id: string; name: string } | null {
+  // If explicit home, use it directly
+  if (home) {
+    try {
+      const raw = readFileSync(join(home, 'identity.json'), 'utf-8').trim();
+      const identity = JSON.parse(raw) as { id?: string; name?: string };
+      if (identity.id && identity.name) return { id: identity.id, name: identity.name };
+    } catch { /* ignore */ }
+    return null;
+  }
+  // Auto-detect: check per-agent directory first, then global
+  const agentDirPath = agentDir();
+  const globalDir = flockHome();
+  for (const dir of [agentDirPath, ...(agentDirPath !== globalDir ? [globalDir] : [])]) {
+    try {
+      const raw = readFileSync(join(dir, 'identity.json'), 'utf-8').trim();
+      const identity = JSON.parse(raw) as { id?: string; name?: string };
+      if (identity.id && identity.name) return { id: identity.id, name: identity.name };
+    } catch { /* ignore */ }
+  }
   return null;
 }
 

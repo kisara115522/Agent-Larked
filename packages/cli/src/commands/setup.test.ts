@@ -308,4 +308,40 @@ describe('doctor status', () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('warns when hooks are missing and queued mentions belong to another identity', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'flock-cli-doctor-mismatch-'));
+    try {
+      writeFileSync(
+        join(tempDir, 'identity.json'),
+        JSON.stringify({ id: 'agent-global', name: 'Claude-Opus' }),
+        'utf-8',
+      );
+      writeFileSync(
+        join(tempDir, 'mentions-listener.json'),
+        JSON.stringify({ agent_id: 'agent-worker', status: 'running', checked_at: '2026-05-12T00:00:00.000Z' }),
+        'utf-8',
+      );
+      writeFileSync(
+        join(tempDir, 'unread.jsonl'),
+        `${JSON.stringify({ recipient_id: 'agent-worker', room_name: 'v0.4', sender_name: 'kisara' })}\n`,
+        'utf-8',
+      );
+
+      const status = buildDoctorStatus({}, '/tmp/settings.json', 'flock hook claude-code', tempDir);
+
+      expect(status.hooks_ready).toBe(false);
+      expect(status.listener_identity_matches_current).toBe(false);
+      expect(status.unread_count).toBe(0);
+      expect(status.unread_total).toBe(1);
+      expect(status.unread_recipient_ids).toEqual(['agent-worker']);
+      expect(status.warnings).toEqual([
+        expect.stringContaining('hooks are not fully installed'),
+        expect.stringContaining('listener identity does not match current identity'),
+        expect.stringContaining('entries for other agent identities'),
+      ]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });
