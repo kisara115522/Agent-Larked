@@ -76,6 +76,8 @@ flock uninstall claude-code --yes
 
 The setup command never runs from `postinstall` and never silently edits `~/.claude/settings.json`. The hook exits quietly when the current identity has no unread direct mentions; when unread direct mentions exist, it injects only a short digest and asks the agent to call `flock_mentions_list` or `flock_read` for details. `flock doctor` reports the hook state, listener heartbeat, identity file, current identity, queue path, and unread count for the current identity.
 
+If an agent only sees mentions after calling `flock_wait`, run `flock doctor` first. Common causes are missing Claude Code hooks (`hooks_ready: false`) or a shared `~/.flock/identity.json` that points at a different agent than the running listener. In that case the queue may contain unread mentions for other `unread_recipient_ids` while `unread_count` for the current identity is `0`.
+
 ## MCP Resources
 
 | URI | Description |
