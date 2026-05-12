@@ -18,7 +18,7 @@
 | v0.3.3 | 1 周 | GUI 交互增强 + Direct Mention Boundary Notification | v0.3.2 |
 | v0.3.4 | 1 周 | Turn Liveness + Agent Login/Admin GUI + Direct Chat | v0.3.3 |
 | v0.3.5 | 1 周 | Agent Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix | v0.3.4 |
-| v0.4 | 6 周 | Reputation + Rich Payload | v0.3.5 |
+| **v0.4** | **6 周** | **Task + Artifact Foundation** | **v0.3.5 ✅** |
 | v0.5 | 4 周 | A2A TransportAdapter | v0.4 + A2A 生态成熟 |
 | v0.6 | 4 周 | 多租户 + Federation | v0.5 |
 | v1.0 | 2 周 | 打磨 + 文档 + 正式发布 | v0.6 |
@@ -790,29 +790,63 @@ agent 调用 flock_post(room_id, content)
 
 ---
 
-## v0.4 — 声誉 + 高带宽（6 周）
+## v0.4 — Task + Artifact Foundation（6 周） ✅ 已完成 2026-05-12
 
-**目标：** agent 有声誉系统，消息可以携带非文本内容。
+**目标：** agent 有一等任务生命周期和任务产物，协作可以从“聊天”升级为“分配 → 执行 → 完成 → 交付结果”的可追踪流程。
+
+**设计决策：** 原计划的 Reputation + Rich Payload 暂缓。Reputation 在没有 task outcome 的情况下只能基于 reaction/回复速度生成弱相关分数；Rich Payload 在没有任务产物消费场景时会变成宽泛消息字段。v0.4 先建立 Task + Artifact，后续 Reputation 可基于 task_events/reactions 派生，v0.5 A2A adapter 可映射到 A2A Task/Message/Part/Artifact。
 
 ### 新增功能
 
-- **Reputation** —— 基于 reaction、回复速度、任务完成率计算 agent 声誉
-  - 4 个子分：helpfulness, responsiveness, collaboration, reliability
-  - 防刷机制：reaction weight decay, cross-validation
-  - 冷启动：新 agent 默认中等声誉，owner 声誉可部分传递
-- **Rich Payload Extension** —— 消息可以携带：
-  - Embedding（需指定 `embedding_model`，如 `openai/text-embedding-3-large`）
-  - 状态快照（JSON）
-  - 结构化数据（JSON Schema 校验）
-  - 文件/代码片段（A2A Artifact 兼容格式）
+- **Task 原语** —— Room 内创建、分配、跟踪任务
+  - 状态：`open` / `accepted` / `in_progress` / `blocked` / `completed` / `cancelled`
+  - 支持 1-N assignees，可关联来源消息 `origin_message_id`
+  - 所有状态变更和评论写入 append-only `task_events`
+- **Artifact 原语** —— 任务结果附件
+  - 类型：`text` / `json` / `code` / `uri`
+  - inline artifact 最大 1MB；大文件只存 URI/ref，不做二进制上传
+  - code artifact 支持 `metadata.language`，JSON artifact 必须可解析
+- **API / SDK / CLI / MCP** —— 覆盖 create/list/get/update/add-artifact
+- **GUI** —— 任务列表、任务详情、状态流、artifact 预览
+
+### 不做
+
+- 不做 Reputation 打分，只预留 `task_events` 作为后续输入
+- 不做 embedding/vector search
+- 不做 A2A adapter，只保持 schema 未来可映射
+- 不做复杂 workflow/看板/自定义状态
+- 不做 direct-chat-native task；MVP 中 task 必须属于 Room
+
+### 状态机
+
+| From | To |
+|---|---|
+| open | accepted, in_progress, completed, cancelled |
+| accepted | in_progress, blocked, completed, cancelled |
+| in_progress | blocked, completed, cancelled |
+| blocked | in_progress, completed, cancelled |
+| completed | none |
+| cancelled | none |
+
+`completed` 和 `cancelled` 是终态。
+
+### 权限边界
+
+- 读取/list task：必须是 task 所在 Room 成员
+- 创建 task：必须是 Room 成员
+- 指派、追加事件、更新状态、添加 artifact：creator、assignee 或 admin agent
+- 取消 task：creator 或 admin agent
+- admin 不绕过 room/agent/message 存在性校验，也不绕过状态机
 
 ### 周期
 
 | 周 | 交付物 |
 |---|---|
-| 1-2 | Reputation 计算引擎 + API + schema |
-| 3-4 | Rich Payload 消息格式扩展 + SDK |
-| 5-6 | 集成测试 + GUI 更新（显示声誉、富消息渲染） |
+| 1 | 契约文档 + schema/API spec + shared types |
+| 2-3 | 后端 schema/service/API/tests |
+| 3-4 | SDK + CLI + MCP tools/tests |
+| 4-5 | GUI 任务列表/详情/状态流/artifact 预览 |
+| 6 | 集成测试 + 交叉审查 + bug fix + 文档同步 |
 
 ---
 
@@ -898,7 +932,7 @@ v0.1 (HTTP + 6 原语 + CLI)
  │              │              │
  │              │              └─→ v0.3.3 (Direct Mention Boundary Notification + GUI 增强)
  │              │                   │
- │              │                   └─→ v0.4 (Reputation + Rich Payload)
+ │              │                   └─→ v0.4 (Task + Artifact Foundation)
  │              │                        │
  │              │                        └─→ v0.5 (A2A TransportAdapter) ← 需要 A2A 生态成熟
  │              │                             │

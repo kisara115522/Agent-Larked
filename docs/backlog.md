@@ -102,6 +102,14 @@
 
 ## 🟢 改进建议
 
+### 🟢 v0.4 原 Reputation + Rich Payload 计划缺少数据闭环
+- **发现于：** 2026-05-12，4版本开发小组规划讨论
+- **问题：** 原 v0.4 计划要求基于 reaction、回复速度、任务完成率计算 reputation，并扩展 embedding/状态快照/结构化数据/文件消息。但当前系统没有一等 task/completion/outcome 模型，任务完成率无数据来源；embedding/富消息也缺少明确消费流程。
+- **影响：** 直接实现会得到弱相关或不可解释的声誉分，并把消息模型变复杂；后续真正做任务或 A2A adapter 时可能返工。
+- **建议修复：** v0.4 改为 Task + Artifact Foundation：先建立 Room 内任务生命周期、append-only task_events、text/json/code/uri artifacts；Reputation 推迟为基于 task_events/reactions 的派生读模型，Rich Payload 收敛为任务产物。
+- **状态：** in-progress（v0.4 已重新定版，契约文档已写入 `docs/superpowers/specs/2026-05-12-v0.4-task-artifact-design.md`）
+- **计划版本：** v0.4
+
 ### 🟢 CLI 缺少 `flock whoami` 命令
 - **发现于：** 2026-05-05，使用 CLI 时发现
 - **问题：** 不知道当前 CLI 用的是哪个 agent 身份
@@ -581,3 +589,19 @@
   - 文档明确不能真正打断模型推理或长工具调用，只承诺下一安全边界提醒
 - **状态：** done（v0.3.5 — codex foreground fallback + 原子写 + doctor 增强）
 - **计划版本：** v0.3.5
+
+### 🔴 Direct Mention Boundary 在多 agent 同机时身份和 hook 安装状态不可见
+- **发现于：** 2026-05-12，v0.4 协作时 kisara 实测 @Claude-01/@Claude-02
+- **问题：** 后台 listener 已将 direct mention 写入 `~/.flock/unread.jsonl`，但 Claude Code `~/.claude/settings.json` 未安装 Flock PostToolUse/Stop hooks 时，agent 使用非 Flock 工具不会在边界收到 digest。同时 hook 进程读取全局 `~/.flock/identity.json`，多 agent 同机时可能读到另一个 agent 身份，导致队列里有未读但当前 identity 的 `unread_count = 0`。
+- **影响：** 用户会看到 agent 只有主动 `flock_wait` 才响应，误以为 Direct Mention Boundary 完全无效；多 agent 协作时尤其容易丢调度消息。
+- **建议修复：** 强化 `flock doctor` 输出 `hooks_ready`、`unread_total`、`unread_recipient_ids`、`listener_identity_matches_current` 和 warnings；文档明确先用 doctor 判断 hook 未安装或 identity mismatch。后续需要把 identity/queue 进一步按 session 或 worktree 隔离。
+- **状态：** in-progress（诊断增强已实现；身份隔离仍待设计）
+- **计划版本：** v0.4 修复支线
+
+### 🔴 GUI SSE 重连后 Room 订阅丢失
+- **发现于：** 2026-05-12，v0.4 协作时 kisara 实测 GUI 必须刷新才能看到新消息
+- **问题：** EventSource 重连或同 agent 新连接会触发旧连接 `close`，`EventBus.addClient` 的 close handler 会从所有 room subscriptions 删除该 agent。RoomPage 只在 mount 时调用 `/rooms/:id/subscribe`，重连后不会重新订阅，导致 SSE connected 但 `room_message` 不再推送。
+- **影响：** GUI 实时协作退化为手动刷新。
+- **建议修复：** EventBus 连接生命周期和 room subscription 生命周期分离；旧连接 close 只能删除对应 SSE client，不能清理显式 room subscriptions。补回归测试覆盖重连和旧连接 close。
+- **状态：** done（EventBus 修复 + `event-bus.test.ts` 回归）
+- **计划版本：** v0.4 修复支线
