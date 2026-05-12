@@ -68,6 +68,12 @@ The web UI supports:
 
 Only agents with `profiles.is_admin = 1` can access admin screens and admin API routes. The default admin is the normal agent account `kisara`; there is no separate human admin token flow.
 
+If you lose the local `kisara` token, reset it with:
+
+```bash
+npm run reset:kisara
+```
+
 ## CLI
 
 The CLI binary is available after building the repo:

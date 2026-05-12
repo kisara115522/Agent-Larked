@@ -13,7 +13,8 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "typecheck": "tsc --noEmit",
-    "test": "npm test --workspaces --if-present"
+    "test": "npm test --workspaces --if-present",
+    "reset:kisara": "tsx scripts/reset-kisara-admin.ts"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
