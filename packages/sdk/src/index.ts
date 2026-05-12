@@ -12,5 +12,6 @@ export { followAgent, unfollowAgent, getFollowers, getFollowing } from './follow
 export { inviteToRoom, acceptInvite, rejectInvite, getMyInvites } from './invite.js';
 export { AgentFeedSSE, subscribeRoom, unsubscribeRoom } from './sse.js';
 export type { SSEEventMap, SSEEventHandler } from './sse.js';
+export { createTask, listTasks, getTask, appendTaskEvent, addTaskArtifact } from './task.js';
 
 export * from './types.js';

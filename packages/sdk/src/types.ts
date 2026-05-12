@@ -31,6 +31,23 @@ export type {
   SSEDirectMessageEvent,
   SSEEvent,
   OkResponse,
+  TaskStatus,
+  TaskPriority,
+  TaskEventType,
+  ArtifactType,
+  Task,
+  TaskEvent,
+  TaskArtifact,
+  TaskDetail,
+  CreateTaskRequest,
+  CreateTaskResponse,
+  ListTasksQuery,
+  ListTasksResponse,
+  GetTaskResponse,
+  AddTaskEventRequest,
+  AddTaskEventResponse,
+  AddTaskArtifactRequest,
+  AddTaskArtifactResponse,
 } from '@flock/shared';
 
 export { ErrorCode, createError } from '@flock/shared';
