@@ -6,12 +6,13 @@ import { get, post } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
 import { ComposeBar } from '../components/feed/ComposeBar';
 import { ThreadView } from '../components/feed/ThreadView';
+import { TaskPanel } from '../components/task/TaskPanel';
 import type { Message, GetMessagesResponse } from '@flock/shared';
 
 export function RoomPage() {
   const { id: roomId } = useParams<{ id: string }>();
   const { token } = useAuth();
-  const { subscribe } = useSSE();
+  const { subscribe, connected } = useSSE();
 
   // Prevent browser from restoring scroll position on refresh — we handle it ourselves
   useEffect(() => {
@@ -27,6 +28,8 @@ export function RoomPage() {
   const [hasMore, setHasMore] = useState(false);
   const cursorRef = useRef<number | null>(null);
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
+  const [showTasks, setShowTasks] = useState(false);
+  const [taskRefreshKey, setTaskRefreshKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -72,7 +75,7 @@ export function RoomPage() {
       post(`/rooms/${roomId}/subscribe`, token).catch(() => {});
       return () => { post(`/rooms/${roomId}/unsubscribe`, token).catch(() => {}); };
     }
-  }, [token, roomId, loadMessages]);
+  }, [token, roomId, loadMessages, connected]);
 
   // Auto-scroll: instant on initial load, smooth on new messages, skip when loading older
   const shouldScrollRef = useRef(true);
@@ -99,6 +102,13 @@ export function RoomPage() {
         const data = event.data as { room_id: string };
         if (data.room_id === roomId) {
           loadMessages(true);
+        }
+      }
+      if (event.event === 'task_created' || event.event === 'task_status' || event.event === 'task_artifact') {
+        const data = event.data as { room_id: string };
+        if (data.room_id === roomId) {
+          loadMessages(true);
+          setTaskRefreshKey(value => value + 1);
         }
       }
     });
@@ -155,15 +165,30 @@ export function RoomPage() {
 
   return (
     <div className="h-full flex">
-      <div className={`flex-1 flex flex-col ${threadMessageId ? 'border-r border-border' : ''}`}>
+      <div className={`flex-1 flex flex-col ${threadMessageId || showTasks ? 'border-r border-border' : ''}`}>
         <header className="px-6 py-3 border-b border-border shrink-0 flex items-center justify-between">
           <h2 className="text-base font-semibold">💬 {roomName || `Room ${roomId?.slice(0, 8)}`}</h2>
-          <button
-            onClick={handleLeave}
-            className="px-2.5 py-1 text-xs text-text-muted border border-border rounded-md hover:border-error hover:text-error transition-colors"
-          >
-            Leave
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setShowTasks(value => !value);
+                setThreadMessageId(null);
+              }}
+              className={`px-2.5 py-1 text-xs border rounded-md transition-colors ${
+                showTasks
+                  ? 'border-accent text-accent bg-accent-muted/30'
+                  : 'border-border text-text-muted hover:border-accent hover:text-accent'
+              }`}
+            >
+              Tasks
+            </button>
+            <button
+              onClick={handleLeave}
+              className="px-2.5 py-1 text-xs text-text-muted border border-border rounded-md hover:border-error hover:text-error transition-colors"
+            >
+              Leave
+            </button>
+          </div>
         </header>
         <div className="flex-1 overflow-y-auto">
           {hasMore && (
@@ -196,7 +221,10 @@ export function RoomPage() {
                   createdAt={msg.created_at}
                   sequence={msg.sequence}
                   onReact={handleReact}
-                  onReply={setThreadMessageId}
+                  onReply={messageId => {
+                    setThreadMessageId(messageId);
+                    setShowTasks(false);
+                  }}
                 />
               ))}
             </div>
@@ -212,13 +240,21 @@ export function RoomPage() {
         )}
       </div>
 
-      {threadMessageId && (
+      {threadMessageId && !showTasks && (
         <div className="w-96 shrink-0">
           <ThreadView
             messageId={threadMessageId}
             onClose={() => setThreadMessageId(null)}
           />
         </div>
+      )}
+      {showTasks && roomId && token && (
+        <TaskPanel
+          roomId={roomId}
+          token={token}
+          refreshKey={taskRefreshKey}
+          onClose={() => setShowTasks(false)}
+        />
       )}
     </div>
   );
