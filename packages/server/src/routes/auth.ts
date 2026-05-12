@@ -5,6 +5,7 @@ import { ServerError } from '../middleware/error.js';
 import { hashToken } from '../middleware/auth.js';
 import { rowToProfile } from '../services/profile-utils.js';
 import type { LoginRequest, LoginResponse } from '@flock/shared';
+import { assertMutableProfile } from '../services/reserved-profiles.js';
 
 export function authRouter(db: Database.Database): Router {
   const router = Router();
@@ -48,6 +49,7 @@ export function authRouter(db: Database.Database): Router {
       }
 
       const profile = rowToProfile(row);
+      assertMutableProfile(profile.id);
       const response: LoginResponse = {
         id: profile.id,
         name: profile.name,

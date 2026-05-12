@@ -9,6 +9,7 @@ import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import type { BatchDeleteRequest, BatchDeleteResult, RegenerateTokenResponse } from '@flock/shared';
 import { deleteAgentCascade } from '../services/cleanup.js';
+import { assertMutableProfile } from '../services/reserved-profiles.js';
 
 export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();
@@ -106,6 +107,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
   // POST /agents/:id/token — regenerate token (admin-only)
   router.post('/:id/token', adminAuth, (req: AdminRequest, res, next) => {
     try {
+      assertMutableProfile(req.params.id as string);
       const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(req.params.id) as { id: string } | undefined;
       if (!existing) {
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
@@ -128,6 +130,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
   router.delete('/:id', adminAuth, (req: AdminRequest, res, next) => {
     try {
       const agentId = req.params.id as string;
+      assertMutableProfile(agentId);
       const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
       if (!existing) {
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
@@ -153,6 +156,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
 
       for (const agentId of agent_ids) {
         try {
+          assertMutableProfile(agentId);
           const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
           if (!existing) {
             results.push({ id: agentId, success: false, error: 'Agent not found' });

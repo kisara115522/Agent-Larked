@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
-import type Database from 'better-sqlite3';
+import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import { hashToken } from '../middleware/auth.js';
 
 describe('Agent Admin RBAC', () => {
   let app: Express;
-  let db: Database.Database;
+  let db: SqliteDatabase;
   let adminToken: string;
   let adminId: string;
 
@@ -50,6 +50,73 @@ describe('Agent Admin RBAC', () => {
         const adminAuditLog = migrated.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'admin_audit_log'").get();
         expect(humanUsers).toBeUndefined();
         expect(adminAuditLog).toBeUndefined();
+      } finally {
+        migrated.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('migrates room and message profile foreign keys to preserve history', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'flock-room-fk-'));
+      const dbPath = join(dir, 'legacy-room-fk.db');
+      const legacy = new Database(dbPath);
+      try {
+        legacy.pragma('foreign_keys = ON');
+        legacy.exec(`
+          CREATE TABLE profiles (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            token_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );
+          CREATE TABLE rooms (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT DEFAULT '',
+            visibility TEXT DEFAULT 'public',
+            created_by TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL
+          );
+          CREATE TABLE messages (
+            id TEXT PRIMARY KEY,
+            from_agent TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            reply_to TEXT REFERENCES messages(id) ON DELETE SET NULL,
+            broadcast INTEGER DEFAULT 0,
+            sequence INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            created_order INTEGER NOT NULL,
+            UNIQUE(room_id, sequence),
+            UNIQUE(created_order)
+          );
+          INSERT INTO profiles (id, name, token_hash, created_at, updated_at)
+          VALUES ('creator-id', 'creator', 'hash', '2026-05-12T00:00:00.000Z', '2026-05-12T00:00:00.000Z');
+          INSERT INTO rooms (id, name, created_by, created_at)
+          VALUES ('room-id', 'legacy-room', 'creator-id', '2026-05-12T00:00:00.000Z');
+          INSERT INTO messages (id, from_agent, room_id, content, sequence, created_at, created_order)
+          VALUES ('message-id', 'creator-id', 'room-id', 'legacy message', 1, '2026-05-12T00:00:00.000Z', 1);
+        `);
+      } finally {
+        legacy.close();
+      }
+
+      const migrated = createDatabase(dbPath);
+      try {
+        const fk = migrated.prepare("PRAGMA foreign_key_list('rooms')").all() as Array<{ from: string; on_delete: string }>;
+        expect(fk.find(row => row.from === 'created_by')?.on_delete).toBe('SET NULL');
+        const messageFk = migrated.prepare("PRAGMA foreign_key_list('messages')").all() as Array<{ from: string; on_delete: string }>;
+        expect(messageFk.find(row => row.from === 'from_agent')?.on_delete).toBe('SET DEFAULT');
+
+        migrated.prepare('DELETE FROM profiles WHERE id = ?').run('creator-id');
+
+        const room = migrated.prepare('SELECT id, created_by FROM rooms WHERE id = ?').get('room-id') as { id: string; created_by: string | null } | undefined;
+        expect(room).toEqual({ id: 'room-id', created_by: null });
+
+        const message = migrated.prepare('SELECT id, room_id, from_agent FROM messages WHERE id = ?').get('message-id');
+        expect(message).toEqual({ id: 'message-id', room_id: 'room-id', from_agent: '[deleted]' });
+        expect(migrated.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       } finally {
         migrated.close();
         rmSync(dir, { recursive: true, force: true });
@@ -106,7 +173,7 @@ describe('Agent Admin RBAC', () => {
     beforeEach(async () => {
       const reg = await request(app)
         .post('/agents')
-        .send({ name: `test-agent-${Date.now()}` })
+        .send({ name: `test-agent-${Date.now()}-${Math.random().toString(16).slice(2)}` })
         .expect(201);
       agentId = reg.body.id;
       agentToken = reg.body.token;
@@ -163,8 +230,71 @@ describe('Agent Admin RBAC', () => {
 
       const remainingAgent = db.prepare('SELECT id FROM profiles WHERE id = ?').get(target.body.id);
       expect(remainingAgent).toBeUndefined();
+      const remainingRoom = db.prepare('SELECT created_by FROM rooms WHERE id = ?').get(ownedRoom.body.id) as { created_by: string | null } | undefined;
+      expect(remainingRoom).toEqual({ created_by: null });
+      const remainingMessage = db.prepare('SELECT from_agent FROM messages WHERE room_id = ?').get(ownedRoom.body.id) as { from_agent: string } | undefined;
+      expect(remainingMessage).toEqual({ from_agent: '[deleted]' });
       const dangling = db.prepare('PRAGMA foreign_key_check').all();
       expect(dangling).toEqual([]);
+    });
+
+    it('deleting a room creator preserves the room and its messages', async () => {
+      const creator = await request(app)
+        .post('/agents')
+        .send({ name: `creator-delete-${Date.now()}` })
+        .expect(201);
+
+      const room = await request(app)
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: `creator-room-${Date.now()}`, agent_id: creator.body.id })
+        .expect(201);
+
+      await request(app)
+        .post('/messages')
+        .set('Authorization', `Bearer ${creator.body.token}`)
+        .send({ room_id: room.body.id, content: 'history must survive', idempotency_key: 'creator-delete-message' })
+        .expect(201);
+
+      await request(app)
+        .delete(`/admin/agents/${creator.body.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const remainingRoom = db.prepare('SELECT id, created_by FROM rooms WHERE id = ?').get(room.body.id) as { id: string; created_by: string | null } | undefined;
+      expect(remainingRoom).toEqual({ id: room.body.id, created_by: null });
+
+      const messages = db.prepare('SELECT content, from_agent FROM messages WHERE room_id = ?').all(room.body.id);
+      expect(messages).toEqual([{ content: 'history must survive', from_agent: '[deleted]' }]);
+    });
+
+    it('hides reserved profiles from admin agent lists and rejects reserved profile deletion', async () => {
+      const res = await request(app)
+        .get('/admin/agents')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const ids = res.body.agents.map((agent: { id: string }) => agent.id);
+      expect(ids).not.toContain('system');
+      expect(ids).not.toContain('[deleted]');
+
+      await request(app)
+        .delete('/admin/agents/system')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(403);
+
+      await request(app)
+        .delete('/admin/agents/%5Bdeleted%5D')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(403);
+
+      const isolated = createApp();
+      bootstrapDefaultAdmin(isolated.db, hashToken);
+      isolated.db.prepare('UPDATE profiles SET token_hash = ? WHERE id = ?').run(hashToken('reserved-token'), 'system');
+      await request(isolated.app)
+        .post('/auth/login')
+        .send({ identifier: 'system', token: 'reserved-token' })
+        .expect(403);
     });
 
     it('admin can batch delete via POST /admin/agents/batch-delete', async () => {

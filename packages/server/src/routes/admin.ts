@@ -9,6 +9,7 @@ import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { deleteAgentCascade, deleteRoomCascade } from '../services/cleanup.js';
+import { assertMutableProfile } from '../services/reserved-profiles.js';
 
 export function adminRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();
@@ -84,6 +85,7 @@ export function adminRouter(db: Database.Database, eventBus?: EventBus): Router 
   router.delete('/agents/:id', adminAuth, (req: AdminRequest, res, next) => {
     try {
       const agentId = req.params.id as string;
+      assertMutableProfile(agentId);
       const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
       if (!existing) {
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
@@ -106,6 +108,7 @@ export function adminRouter(db: Database.Database, eventBus?: EventBus): Router 
       const results: Array<{ id: string; success: boolean; error?: string }> = [];
       for (const agentId of agent_ids) {
         try {
+          assertMutableProfile(agentId);
           const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
           if (!existing) {
             results.push({ id: agentId, success: false, error: 'Agent not found' });
@@ -127,6 +130,7 @@ export function adminRouter(db: Database.Database, eventBus?: EventBus): Router 
   router.post('/agents/:id/token', adminAuth, (req: AdminRequest, res, next) => {
     try {
       const agentId = req.params.id as string;
+      assertMutableProfile(agentId);
       const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
       if (!existing) {
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);

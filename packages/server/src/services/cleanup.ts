@@ -1,15 +1,15 @@
 import type Database from 'better-sqlite3';
-
-const DELETED_AGENT_ID = '[deleted]';
-const SYSTEM_AGENT_ID = 'system';
+import { assertMutableProfile, DELETED_AGENT_ID, SYSTEM_AGENT_ID } from './reserved-profiles.js';
 
 /** Cascade-delete an agent while preserving public room history under a deleted-agent tombstone. */
 export function deleteAgentCascade(db: Database.Database, agentId: string): void {
+  assertMutableProfile(agentId);
+
   db.transaction(() => {
     ensureProfile(db, SYSTEM_AGENT_ID, 'system', 'System');
     ensureProfile(db, DELETED_AGENT_ID, '[deleted]', 'Deleted Agent');
 
-    db.prepare('UPDATE rooms SET created_by = ? WHERE created_by = ?').run(SYSTEM_AGENT_ID, agentId);
+    db.prepare('UPDATE rooms SET created_by = NULL WHERE created_by = ?').run(agentId);
     db.prepare('UPDATE messages SET from_agent = ? WHERE from_agent = ?').run(DELETED_AGENT_ID, agentId);
 
     db.prepare('DELETE FROM direct_idempotency_keys WHERE agent_id = ? OR peer_id = ?').run(agentId, agentId);

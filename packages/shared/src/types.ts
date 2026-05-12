@@ -88,7 +88,7 @@ export interface Room {
   name: string;
   description: string;
   visibility: RoomVisibility;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
 }
 

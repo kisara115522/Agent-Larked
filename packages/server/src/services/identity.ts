@@ -7,6 +7,7 @@ import { ServerError } from '../middleware/error.js';
 import { hashToken } from '../middleware/auth.js';
 import { rowToProfile } from './profile-utils.js';
 import type { EventBus } from '../sse/event-bus.js';
+import { assertMutableProfile, reservedProfileWhereClause } from './reserved-profiles.js';
 
 const STALE_ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -36,6 +37,8 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
   const token = randomBytes(32).toString('hex');
   const tokenHash = hashToken(token);
   const now = new Date().toISOString();
+
+  assertMutableProfile(req.name);
 
   try {
     db.prepare(`
@@ -67,6 +70,8 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
 }
 
 export function updateProfile(db: Database.Database, agentId: string, req: UpdateAgentRequest): AgentProfile {
+  assertMutableProfile(agentId);
+
   const existing = db.prepare('SELECT * FROM profiles WHERE id = ?').get(agentId) as Record<string, unknown> | undefined;
   if (!existing) {
     throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
@@ -130,7 +135,7 @@ export function searchAgents(
   query: { q?: string; capabilities?: string; status?: string; limit?: number; cursor?: string },
 ): { agents: AgentProfile[]; next_cursor: string | null; has_more: boolean } {
   const limit = Math.min(query.limit ?? 20, 100);
-  const conditions: string[] = [];
+  const conditions: string[] = [reservedProfileWhereClause()];
   const params: unknown[] = [];
 
   if (query.q) {

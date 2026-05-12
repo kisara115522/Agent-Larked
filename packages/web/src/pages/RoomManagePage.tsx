@@ -9,7 +9,7 @@ interface Room {
   description: string;
   visibility: 'public' | 'private';
   member_count: number;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
 }
 

@@ -197,7 +197,7 @@ export function getRoomMembers(db: Database.Database, roomId: string): GetRoomMe
 
 export function inviteToRoom(db: Database.Database, roomId: string, inviterId: string, inviteeId: string): Invite {
   // Check room exists
-  const room = db.prepare('SELECT id, created_by, visibility FROM rooms WHERE id = ?').get(roomId) as { id: string; created_by: string; visibility: string } | undefined;
+  const room = db.prepare('SELECT id, created_by, visibility FROM rooms WHERE id = ?').get(roomId) as { id: string; created_by: string | null; visibility: string } | undefined;
   if (!room) {
     throw new ServerError(ErrorCode.ROOM_NOT_FOUND, 'Room not found', false, 404);
   }
