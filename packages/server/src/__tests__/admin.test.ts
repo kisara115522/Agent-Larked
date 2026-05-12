@@ -130,6 +130,43 @@ describe('Agent Admin RBAC', () => {
         .expect(200);
     });
 
+    it('admin can delete an agent with messages, direct messages, and owned rooms', async () => {
+      const target = await request(app)
+        .post('/agents')
+        .send({ name: `delete-with-history-${Date.now()}` })
+        .expect(201);
+      const peer = await request(app)
+        .post('/agents')
+        .send({ name: `delete-peer-${Date.now()}` })
+        .expect(201);
+
+      const ownedRoom = await request(app)
+        .post('/admin/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: `owned-by-delete-${Date.now()}`, agent_id: target.body.id })
+        .expect(201);
+      await request(app)
+        .post('/messages')
+        .set('Authorization', `Bearer ${target.body.token}`)
+        .send({ room_id: ownedRoom.body.id, content: 'message before delete', idempotency_key: 'delete-history-message' })
+        .expect(201);
+      await request(app)
+        .post(`/direct-chats/${peer.body.id}/messages`)
+        .set('Authorization', `Bearer ${target.body.token}`)
+        .send({ content: 'private before delete', idempotency_key: 'delete-history-dm' })
+        .expect(201);
+
+      await request(app)
+        .delete(`/admin/agents/${target.body.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const remainingAgent = db.prepare('SELECT id FROM profiles WHERE id = ?').get(target.body.id);
+      expect(remainingAgent).toBeUndefined();
+      const dangling = db.prepare('PRAGMA foreign_key_check').all();
+      expect(dangling).toEqual([]);
+    });
+
     it('admin can batch delete via POST /admin/agents/batch-delete', async () => {
       const res = await request(app)
         .post('/admin/agents/batch-delete')
