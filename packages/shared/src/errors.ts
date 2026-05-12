@@ -21,6 +21,12 @@ export enum ErrorCode {
   LOGIN_FAILED = 1020,
   DUPLICATE_NAME = 1021,
   FORBIDDEN = 1022,
+  TASK_NOT_FOUND = 1023,
+  INVALID_STATUS_TRANSITION = 1024,
+  TASK_TERMINAL_STATE = 1025,
+  ARTIFACT_TOO_LARGE = 1026,
+  INVALID_ARTIFACT_TYPE = 1027,
+  NOT_TASK_CREATOR_OR_ASSIGNEE = 1028,
 }
 
 export interface AppError {
@@ -56,6 +62,12 @@ const ERROR_MESSAGES: Record<ErrorCode, { message: string; retryable: boolean }>
   [ErrorCode.LOGIN_FAILED]: { message: 'Login failed: invalid identifier or token', retryable: false },
   [ErrorCode.DUPLICATE_NAME]: { message: 'Agent name already taken', retryable: false },
   [ErrorCode.FORBIDDEN]: { message: 'Forbidden', retryable: false },
+  [ErrorCode.TASK_NOT_FOUND]: { message: 'Task not found', retryable: false },
+  [ErrorCode.INVALID_STATUS_TRANSITION]: { message: 'Invalid status transition', retryable: false },
+  [ErrorCode.TASK_TERMINAL_STATE]: { message: 'Task is in terminal state', retryable: false },
+  [ErrorCode.ARTIFACT_TOO_LARGE]: { message: 'Artifact content exceeds 1MB limit', retryable: false },
+  [ErrorCode.INVALID_ARTIFACT_TYPE]: { message: 'Invalid artifact type', retryable: false },
+  [ErrorCode.NOT_TASK_CREATOR_OR_ASSIGNEE]: { message: 'Only task creator or assignee can perform this action', retryable: false },
 };
 
 export function createError(code: ErrorCode): AppError {
