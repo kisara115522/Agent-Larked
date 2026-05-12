@@ -144,6 +144,79 @@ CREATE INDEX IF NOT EXISTS idx_direct_messages_to_agent ON direct_messages(to_ag
 CREATE INDEX IF NOT EXISTS idx_direct_messages_from_agent ON direct_messages(from_agent, created_order);
 CREATE INDEX IF NOT EXISTS idx_direct_idempotency_expiry ON direct_idempotency_keys(expires_at);
 
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open',
+  priority TEXT NOT NULL DEFAULT 'normal',
+  created_by TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
+  origin_message_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT,
+  cancelled_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_room_status ON tasks(room_id, status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_created_by ON tasks(created_by, updated_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_origin_message ON tasks(origin_message_id);
+
+CREATE TABLE IF NOT EXISTS task_assignees (
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  assigned_by TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
+  assigned_at TEXT NOT NULL,
+  PRIMARY KEY (task_id, agent_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_assignees_agent ON task_assignees(agent_id, task_id);
+
+CREATE TABLE IF NOT EXISTS task_events (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  actor_id TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
+  type TEXT NOT NULL,
+  from_status TEXT,
+  to_status TEXT,
+  body TEXT DEFAULT '',
+  metadata TEXT DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  created_order INTEGER NOT NULL,
+  UNIQUE(created_order)
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_events_task_order ON task_events(task_id, created_order);
+CREATE INDEX IF NOT EXISTS idx_task_events_actor ON task_events(actor_id, created_order);
+
+CREATE TABLE IF NOT EXISTS task_artifacts (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  created_by TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
+  type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  content TEXT,
+  uri TEXT,
+  mime_type TEXT DEFAULT '',
+  metadata TEXT DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_artifacts_task ON task_artifacts(task_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_task_artifacts_creator ON task_artifacts(created_by, created_at);
+
+CREATE TABLE IF NOT EXISTS task_idempotency_keys (
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  response TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  PRIMARY KEY (agent_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_idempotency_expiry ON task_idempotency_keys(expires_at);
+
 `;
 
 export function createDatabase(path: string = ':memory:'): Database.Database {
@@ -190,7 +263,8 @@ function migrateColumn(db: Database.Database, table: string, column: string, def
 export function cleanupIdempotencyKeys(db: Database.Database): number {
   const roomResult = db.prepare("DELETE FROM idempotency_keys WHERE expires_at < datetime('now')").run();
   const directResult = db.prepare("DELETE FROM direct_idempotency_keys WHERE expires_at < datetime('now')").run();
-  return roomResult.changes + directResult.changes;
+  const taskResult = db.prepare("DELETE FROM task_idempotency_keys WHERE expires_at < datetime('now')").run();
+  return roomResult.changes + directResult.changes + taskResult.changes;
 }
 
 /** Bootstrap default admin agent 'kisara'. Returns the agent token if newly created. */
