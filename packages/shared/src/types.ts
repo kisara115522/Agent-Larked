@@ -345,7 +345,171 @@ export type SSEEvent =
   | { event: 'reaction'; data: SSEReactionEvent }
   | { event: 'room_message'; data: SSERoomMessageEvent }
   | { event: 'direct_message'; data: SSEDirectMessageEvent }
-  | { event: 'agent_status'; data: SSEAgentStatusEvent };
+  | { event: 'agent_status'; data: SSEAgentStatusEvent }
+  | { event: 'task_created'; data: SSETaskCreatedEvent }
+  | { event: 'task_status'; data: SSETaskStatusEvent }
+  | { event: 'task_artifact'; data: SSETaskArtifactEvent };
+
+// Task + Artifact (v0.4)
+export type TaskStatus = 'open' | 'accepted' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type TaskEventType = 'created' | 'status_changed' | 'commented' | 'assignees_changed' | 'artifact_added';
+export type ArtifactType = 'text' | 'json' | 'code' | 'uri';
+
+export interface Task {
+  id: string;
+  room_id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  created_by: string;
+  origin_message_id: string | null;
+  assignees: string[];
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  cancelled_at: string | null;
+}
+
+export interface TaskEvent {
+  id: string;
+  task_id: string;
+  actor_id: string;
+  type: TaskEventType;
+  from_status: TaskStatus | null;
+  to_status: TaskStatus | null;
+  body: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TaskArtifact {
+  id: string;
+  task_id: string;
+  created_by: string;
+  type: ArtifactType;
+  name: string;
+  content: string | null;
+  uri: string | null;
+  mime_type: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TaskDetail {
+  task: Task;
+  assignees: string[];
+  events: TaskEvent[];
+  artifacts: TaskArtifact[];
+}
+
+export interface CreateTaskRequest {
+  room_id: string;
+  title: string;
+  description?: string;
+  assignees?: string[];
+  origin_message_id?: string;
+  priority?: TaskPriority;
+  idempotency_key: string;
+}
+
+export interface CreateTaskResponse {
+  id: string;
+  room_id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  created_by: string;
+  origin_message_id: string | null;
+  assignees: string[];
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  cancelled_at: string | null;
+}
+
+export interface ListTasksQuery {
+  room_id?: string;
+  status?: TaskStatus;
+  assignee_id?: string;
+  created_by?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ListTasksResponse {
+  tasks: Task[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+export interface GetTaskResponse {
+  task: Task;
+  assignees: string[];
+  events: TaskEvent[];
+  artifacts: TaskArtifact[];
+}
+
+export interface AddTaskEventRequest {
+  status?: TaskStatus;
+  body?: string;
+  metadata?: Record<string, unknown>;
+  idempotency_key: string;
+}
+
+export interface AddTaskEventResponse {
+  id: string;
+  task_id: string;
+  type: TaskEventType;
+  from_status: TaskStatus | null;
+  to_status: TaskStatus | null;
+  created_at: string;
+}
+
+export interface AddTaskArtifactRequest {
+  type: ArtifactType;
+  name: string;
+  content?: string;
+  uri?: string;
+  mime_type?: string;
+  metadata?: Record<string, unknown>;
+  idempotency_key: string;
+}
+
+export interface AddTaskArtifactResponse {
+  id: string;
+  task_id: string;
+  type: ArtifactType;
+  name: string;
+  created_by: string;
+  created_at: string;
+}
+
+// SSE Task Events (v0.4)
+export interface SSETaskCreatedEvent {
+  task_id: string;
+  room_id: string;
+  title: string;
+  created_by: string;
+}
+
+export interface SSETaskStatusEvent {
+  task_id: string;
+  room_id: string;
+  from_status: TaskStatus;
+  to_status: TaskStatus;
+  actor_id: string;
+}
+
+export interface SSETaskArtifactEvent {
+  task_id: string;
+  room_id: string;
+  artifact_id: string;
+  artifact_type: ArtifactType;
+  actor_id: string;
+}
 
 // Generic OK response
 export interface OkResponse {
