@@ -19,7 +19,7 @@
 | v0.3.4 | 1 周 | Turn Liveness + Agent Login/Admin GUI + Direct Chat | v0.3.3 |
 | v0.3.5 | 1 周 | Agent Admin RBAC + Room/Agent Admin CRUD + Mention Boundary Fix | v0.3.4 |
 | **v0.4** | **6 周** | **Task + Artifact Foundation** | **v0.3.5 ✅** |
-| v0.5 | 4 周 | A2A TransportAdapter | v0.4 + A2A 生态成熟 |
+| **v0.5** | **7 周** | **Agent Runtime + 自主协作（6 环迭代）** | **v0.4 ✅** |
 | v0.6 | 4 周 | 多租户 + Federation | v0.5 |
 | v1.0 | 2 周 | 打磨 + 文档 + 正式发布 | v0.6 |
 
@@ -850,25 +850,76 @@ agent 调用 flock_post(room_id, content)
 
 ---
 
-## v0.5 — A2A 对齐（4 周）
+## v0.5 — Agent Runtime + 自主协作（7 周，6 环迭代）
 
-**目标：** AgentFeed 可以通过 A2A 协议与其他 agent 框架互操作。
+**目标：** 人类在 Flock GUI 点击"启动 Agent"→ agent 出现、工作、休眠。被 @mention 时自动唤醒。Agent 可以 spawn 帮手。跨机器。人类一句话 → agent 自组织。
 
-**前提：** A2A 生态有可用的参考服务器。如果 A2A 生态未就绪，推迟此版本。
+**设计文档：** `docs/proposals/v0.5-refactor.md`（1028 行，覆盖 6 个议题）
 
-### 新增功能
+**核心变更：**
+- 引入人类身份认证（human login + session）
+- Agent Profile 独立管理（配置编辑器、Skills/MCP 选择器）
+- Agent Runtime daemon（Claude Agent SDK + spawn/resume/stop）
+- Tool Boundary 消息注入（agent 工作中收到新消息）
+- Orchestration Harness（任务状态机 + 派发 + 验收循环）
+- Token 成本控制（四层：摘要注入 + 文件交接 + 状态机防空转 + 预算限制）
+- Transport Adapter 层（channel-agnostic 架构约束，为未来移动端/社交平台预留）
 
-- **A2ATransportAdapter** —— 实现 TransportAdapter 接口，将 AgentFeed API 调用转为 A2A JSON-RPC
-- **A2A Agent Card 扩展** —— AgentFeed profile 字段映射到 A2A Agent Card metadata
-- **字段映射** —— 按设计文档的 A2A v0.3 映射表
-- **双模运行** —— 同时支持 HTTP 和 A2A 两种传输
+### 6 环实施计划
 
-### 周期
+| 环 | 周期 | 内容 | 交付物 | kisara 验收 |
+|---|---|---|---|---|
+| **环 1** | 1 周 | 清理 + 地基 | 人类登录、删旧代码（Task/Admin/Follow/Broadcast） | 登录能用、页面干净、无报错 |
+| **环 2** | 1.5 周 | Agent 生命周期 | Runtime 骨架 + spawn/stop + GUI | GUI 操作 spawn/stop，agent 在 Room 对话 |
+| **环 3** | 1 周 | 实时消息 + 唤醒 | Tool boundary 注入 + @mention 唤醒 | agent 边干活边收到消息 |
+| **环 4** | 1 周 | 跨机器 | 多 Runtime + Streamable HTTP MCP | 两台机器各跑一个 Runtime |
+| **环 5** | 1.5 周 | Harness 任务系统 | 状态机 + 任务派发 + 任务看板 | 创建任务 → 派给 agent → 完成 → 看板更新 |
+| **环 6** | 1 周 | Token 控制 + 配置 | Token 预算 + 配置编辑器 + Skills/MCP 选择器 | 编辑 agent 配置，看到 token 消耗 |
 
-| 周 | 交付物 |
-|---|---|
-| 1-2 | A2ATransportAdapter 实现 |
-| 3-4 | 互操作测试（与 A2A 参考服务器对接）+ 文档 |
+### 测试策略
+
+| 层 | 谁测 | 怎么测 |
+|---|---|---|
+| Server API | agent | 自动化测试（vitest），每个端点覆盖 |
+| MCP 工具 | agent | 自动化测试，模拟 agent 调用 |
+| SDK/CLI | agent | 自动化测试 + 手动 CLI 测试 |
+| Runtime | agent | spawn agent → 验证 agent 在 Room 发消息 → stop |
+| GUI | kisara | agent 写完后，kisara 操作 GUI 验收 |
+
+每环交付：自动化测试通过 → 手动测试脚本 → GUI 验收清单。
+
+### 渠道扩展预留（架构约束，不实现）
+
+当前设计天然 channel-agnostic：
+- REST API → 任何客户端都能调
+- SSE → 任何客户端都能订阅
+- `sender_type` 字段 → 区分消息来源（未来扩展 `bot`/`system`）
+- Room/DM 模型 → 对应群聊/私聊
+
+预留但不实现的扩展点：
+- `content_type` 字段（当前纯文本，未来支持富文本/附件）
+- Transport Adapter 层（不同渠道实现 adapter，Server 不关心消息来自哪个渠道）
+- 认证层可扩展（当前 cookie session，未来可加 OAuth/API key）
+
+### 新增组件
+
+- `packages/runtime/` — Agent Runtime daemon（`@flock/agent-runtime`）
+- `packages/server/` 扩展 — Runtime 注册、spawn API、callback 分发
+- `packages/web/` 扩展 — 人类登录、Agent 配置编辑器、任务看板
+
+### 成功标准
+
+1. **一键 spawn** — GUI "启动 Agent" → agent 在 10 秒内出现在房间
+2. **@mention 唤醒** — 休眠 agent 在被 @mention 后 30 秒内唤醒
+3. **跨机器** — 机器 B 上的 agent 从机器 A 的 Flock server spawn
+4. **Agent 间协作** — Agent A 通过 API 请求 spawn Agent B
+5. **透明** — GUI 显示 agent 状态（spawning/active/dormant/error）
+6. **持久化** — Agent 重启后从 session 恢复
+7. **Token 高效** — 休眠 = 零 token
+8. **状态机** — 任务状态自动流转（todo→in_progress→review→done）
+9. **失败兜底** — 任务卡住自动超时、重试或人工干预
+10. **Token 可控** — 预算限制、用量显示、防空转
+11. **GUI 看板** — 任务面板 + 配置编辑器
 
 ---
 
@@ -934,7 +985,7 @@ v0.1 (HTTP + 6 原语 + CLI)
  │              │                   │
  │              │                   └─→ v0.4 (Task + Artifact Foundation)
  │              │                        │
- │              │                        └─→ v0.5 (A2A TransportAdapter) ← 需要 A2A 生态成熟
+ │              │                        └─→ v0.5 (Agent Runtime + 自主协作，6 环迭代)
  │              │                             │
  │              │                             └─→ v0.6 (Multi-tenant + Federation)
  │              │                                  │

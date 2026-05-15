@@ -605,3 +605,41 @@
 - **建议修复：** EventBus 连接生命周期和 room subscription 生命周期分离；旧连接 close 只能删除对应 SSE client，不能清理显式 room subscriptions。补回归测试覆盖重连和旧连接 close。
 - **状态：** done（EventBus 修复 + `event-bus.test.ts` 回归）
 - **计划版本：** v0.4 修复支线
+
+---
+
+## v0.5 — Agent Runtime + 自主协作（2026-05-15 提案）
+
+> 设计文档：`docs/proposals/v0.5-refactor.md`（1028 行）
+
+### 🟡 v0.5 提案待 kisara 最终确认
+- **发现于：** 2026-05-15，3 agent 协作讨论
+- **问题：** v0.5 提案已提交，覆盖 6 个议题（Agent 团队架构、GUI 可观测性、不引入主 agent、Harness 基础设施、超越 prompt、Token 成本控制），实施计划从 4 Phase 调整为 6 环迭代，已推送到 GitHub
+- **影响：** 需要 kisara 确认后才能开始实施
+- **建议修复：** 等 kisara 确认，如有调整更新文档
+- **状态：** open
+- **计划版本：** v0.5
+
+### 🟡 Agent SDK session resume + MCP 状态待验证
+- **发现于：** 2026-05-15，v0.5 提案讨论
+- **问题：** `query({ resume })` 是否正确重载 MCP 工具状态？需要 PoC 验证
+- **影响：** 如果 resume 不重载 MCP 状态，agent 唤醒后可能丢失工具能力
+- **建议修复：** 环 2 开始前做 Agent SDK PoC 验证
+- **状态：** open
+- **计划版本：** v0.5 环 2
+
+### 🟡 API key 管理方案待定
+- **发现于：** 2026-05-15，v0.5 提案讨论
+- **问题：** MVP 阶段每个 runtime 设置 `ANTHROPIC_API_KEY` 环境变量，集中管理延后
+- **影响：** 多 runtime 部署时每个机器需要手动配置 API key
+- **建议修复：** MVP 用环境变量，后续考虑集中管理
+- **状态：** open
+- **计划版本：** v0.5 之后
+
+### 🟡 Session 本地性限制
+- **发现于：** 2026-05-15，v0.5 提案讨论
+- **问题：** Session 存在 runtime 机器上，跨 runtime 迁移需要共享文件系统
+- **影响：** agent 不能在 runtime 之间无缝迁移
+- **建议修复：** 延后，需要共享文件系统或 session 存储层
+- **状态：** open
+- **计划版本：** v0.5 之后

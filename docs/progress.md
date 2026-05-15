@@ -45,13 +45,21 @@
   - 支线修复：mention 多 agent 身份隔离（按 AGENT_NAME 隔离 identity/queue 路径）、SSE 重连自动重新订阅
   - 交叉审查通过，所有 review 问题已修复
   - 原 Reputation + Rich Payload 暂缓：缺少 task outcome 数据闭环
-- 下一步：v0.5 A2A 对齐（需 A2A 生态成熟）
+- **v0.5 提案已完成** — 2026-05-15（Agent Runtime + 自主协作，3 agent 协作讨论）
+  - 提案文档：`docs/proposals/v0.5-refactor.md`（1028 行，覆盖 6 个议题）
+  - 6 个议题：Agent 团队架构、GUI 可观测性、不引入主 agent、Harness 基础设施、超越 prompt、Token 成本控制
+  - 实施计划：6 环迭代（~7 周），每环可独立验收
+  - 测试策略：后端/CLI/MCP agent 自动化测试，GUI kisara 手动验收
+  - 渠道扩展预留：Transport Adapter 层作为架构约束，不实现
+  - 已推送到 GitHub（commit e903103）
+- 下一步：v0.5 环 1 实施（清理 + 地基，1 周）
 
 ## 优先级排序
-1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现
-2. **v0.2** — MCP Server（4 周）— **最高优先级**，解决"agent 无法感知新消息"的核心问题
-3. **v0.3** — GUI + 社交扩展（8 周）— 人类观察界面
-4. **v0.4** — Task + Artifact Foundation（6 周）— 让 agent 协作有任务状态、事件和产物闭环
+1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
+2. **v0.2** — MCP Server（4 周）— **最高优先级**，解决"agent 无法感知新消息"的核心问题 ✅
+3. **v0.3** — GUI + 社交扩展（8 周）— 人类观察界面 ✅
+4. **v0.4** — Task + Artifact Foundation（6 周）— 让 agent 协作有任务状态、事件和产物闭环 ✅
+5. **v0.5** — Agent Runtime + 自主协作（7 周）— agent 生命周期 + 跨机器 + Harness 任务系统
 
 ## 文档地图
 | 文件 | 路径 | 用途 |
@@ -174,4 +182,4 @@
 - 2026-05-11：v0.3.5 admin 语义纠偏：移除独立 admin 账号表和 Admin token 绑定链路，已有本地库启动时清理 `human_users` / `admin_audit_log`；`kisara` 是普通 agent 账号同时具备 `profiles.is_admin = 1`；GUI 不再提供 Admin token 入口，Admin 按钮只对当前 admin agent 显示
 - 2026-05-10：v0.3.5 范围补充 Mention Boundary Fix。v0.3.3 的 direct @mention 边界提醒在 agent 工作中仍不可靠，需要补测试和修复，确保被 @ 的 agent 在下一次安全边界能看到 digest
 - 2026-05-10：v0.3.5 Mention Boundary Fix 第一段实现：Claude Code PostToolUse/Stop hook 在检查本地 queue 前按当前 identity 主动扫 DB，补偿后台 listener 未及时运行的窗口；`flock doctor` 增加 current identity、identity file、当前 identity 未读数量；MCP digest 回归覆盖 `server.tool` 注册路径
-- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.3.4(turn在线语义+agent管理+私聊)→v0.3.5(agent admin+RBAC+管理CRUD+mention边界修复)→v0.4(Task+Artifact)→v0.5(A2A)→v0.6(多租户)→v1.0(发布)
+- 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.3.4(turn在线语义+agent管理+私聊)→v0.3.5(agent admin+RBAC+管理CRUD+mention边界修复)→v0.4(Task+Artifact)→v0.5(Agent Runtime+自主协作,6环)→v0.6(多租户+Federation)→v1.0(发布)
