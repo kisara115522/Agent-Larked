@@ -4,8 +4,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useSSE } from '../../context/SSEContext';
 import { useMentions } from '../../context/MentionContext';
 import { get } from '../../api/client';
-import { AgentAvatar } from '../agent/AgentAvatar';
-import { StatusIndicator } from '../agent/StatusIndicator';
 import { CreateRoomModal } from '../room/CreateRoomModal';
 import { JoinRoomModal } from '../room/JoinRoomModal';
 
@@ -43,7 +41,6 @@ export function Sidebar() {
     get<{ agents: Agent[] }>('/agents', token).then(r => setAgents(r.agents)).catch(() => {});
   }, [token]);
 
-  // Update agent status in real-time via SSE
   useEffect(() => {
     return subscribe(event => {
       if (event.event === 'agent_status') {
@@ -53,186 +50,74 @@ export function Sidebar() {
     });
   }, [subscribe]);
 
+  const activeCount = agents.filter(a => a.status === 'active').length;
+  const totalUnread = Object.values(unreadByRoom).reduce((s, n) => s + n, 0);
+
   return (
-    <aside className="w-60 bg-surface border-r border-border flex flex-col h-screen shrink-0">
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-accent">Flock</h1>
-          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-text-muted'}`} title={connected ? 'SSE connected' : 'SSE disconnected'} />
-        </div>
-        <p className="text-xs text-text-muted mt-0.5">Agent Collaboration</p>
+    <aside className="w-[220px] bg-surface border-r border-border flex flex-col h-screen shrink-0 overflow-hidden">
+      {/* Header */}
+      <div className="p-4 pb-3 border-b border-border">
+        <h2 className="text-lg font-bold tracking-tight">Flock</h2>
       </div>
 
-      {!connected && (
-        <div className="px-3 py-1.5 bg-warning/10 border-b border-warning/20 text-warning text-[11px] flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
-          Reconnecting...
-        </div>
-      )}
-
-      {human && (
-        <div className="p-3 border-b border-border flex items-center gap-2">
-          <AgentAvatar name={human.username} displayName={human.display_name} />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{human.display_name || human.username}</p>
-            <div className="flex items-center gap-1.5">
-              <StatusIndicator status="online" />
-              <span className="text-xs text-text-muted">Human</span>
-            </div>
-          </div>
-          <button
-            onClick={logout}
-            className="text-xs text-text-muted hover:text-error transition-colors shrink-0"
-            title="Logout"
-          >
-            ↗
-          </button>
-        </div>
-      )}
-
+      {/* Nav */}
       <nav className="flex-1 overflow-y-auto p-2">
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) =>
-            `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-              isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
-            }`
-          }
-        >
-          <span>📡</span>
-          <span>Feed</span>
-        </NavLink>
-
-        <NavLink
-          to="/tasks"
-          className={({ isActive }) =>
-            `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-              isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
-            }`
-          }
-        >
-          <span>📋</span>
-          <span>Tasks</span>
-        </NavLink>
-
-        <div className="mt-4 mb-2 px-3 flex items-center justify-between">
-          <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Rooms</p>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setShowJoinRoom(true)}
-              className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-elevated transition-colors text-[10px]"
-              title="Browse rooms"
-            >
-              🔍
-            </button>
-            <button
-              onClick={() => setShowCreateRoom(true)}
-              className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-elevated transition-colors text-xs"
-              title="Create room"
-            >
-              +
-            </button>
-          </div>
-        </div>
-        {rooms.map(room => {
-          const mentions = unreadByRoom[room.id] ?? 0;
-          return (
-            <NavLink
-              key={room.id}
-              to={`/rooms/${room.id}`}
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
-                }`
-              }
-            >
-              <span>💬</span>
-              <span className="truncate">{room.name}</span>
-              {mentions > 0 ? (
-                <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center">
-                  {mentions > 99 ? '99+' : mentions}
-                </span>
-              ) : (
-                <span className="ml-auto text-[11px] text-text-muted font-mono">{room.member_count}</span>
-              )}
-            </NavLink>
-          );
-        })}
-
-        <div className="mt-4 mb-2 px-3 flex items-center justify-between">
-          <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Agents</p>
-          <NavLink
-            to="/agents"
-            className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-elevated transition-colors text-[10px]"
-            title="Manage agents"
-          >
-            ⚙
-          </NavLink>
-        </div>
-        {[...agents]
-          .sort((a, b) => {
-            const order = { active: 0, recovering: 1, dormant: 2, error: 3 };
-            return (order[a.status as keyof typeof order] ?? 4) - (order[b.status as keyof typeof order] ?? 4);
-          })
-          .slice(0, 20)
-          .map(a => (
-            <NavLink
-              key={a.id}
-              to={`/agents/${a.id}`}
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
-                }`
-              }
-            >
-              <AgentAvatar name={a.name} displayName={a.display_name} size="sm" />
-              <span className="truncate flex-1">{a.display_name || a.name}</span>
-              <StatusIndicator status={a.status as 'active' | 'dormant' | 'recovering' | 'error'} />
-            </NavLink>
-          ))}
+        <NavItem to="/" icon="⚡" label="工作流" />
+        <NavItem to="/feed" icon="💬" label="Room" badge={totalUnread > 0 ? totalUnread : undefined} />
+        <NavItem to="/agents" icon="🤖" label="Agent" />
+        <NavItem to="/tasks" icon="📋" label="任务" />
+        <NavItem to="/orchestrator" icon="🔀" label="编排" />
+        <NavItem to="/runtimes" icon="🖥️" label="Runtime" />
+        <NavItem to="/wake" icon="🔔" label="唤醒" />
+        <NavItem to="/tokens" icon="🪙" label="Token" />
+        <NavItem to="/settings" icon="⚙️" label="设置" />
       </nav>
 
-      <div className="p-2 border-t border-border">
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-              isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
-            }`
-          }
-        >
-          <span>⚙</span>
-          <span>Settings</span>
-        </NavLink>
+      {/* User Info */}
+      <div className="p-3 border-t border-border">
+        {human && (
+          <div className="flex items-center gap-2.5">
+            <div className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)' }}>
+              {(human.display_name || human.username || '?')[0].toUpperCase()}
+            </div>
+            <div>
+              <div className="text-[13px] font-semibold">{human.display_name || human.username}</div>
+              <div className="text-[11px] text-text-muted">管理员</div>
+            </div>
+            <button onClick={logout} className="ml-auto text-[11px] text-text-muted hover:text-error transition-colors" title="退出">↗</button>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-text-dim">
+          <div className={`w-[5px] h-[5px] rounded-full ${connected ? 'bg-[#34D399]' : 'bg-text-dim'}`} />
+          {connected ? 'SSE 已连接' : 'SSE 断开'}
+        </div>
       </div>
 
-      <NavLink
-        to="/command"
-        className={({ isActive }) =>
-          `m-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            isActive ? 'bg-accent text-white' : 'bg-surface-elevated text-text-muted hover:text-text'
-          }`
-        }
-      >
-        <span>🎯</span>
-        <span>Direct Chat</span>
-      </NavLink>
-
-      {showCreateRoom && token && (
-        <CreateRoomModal
-          token={token}
-          onClose={() => setShowCreateRoom(false)}
-          onCreated={refreshRooms}
-        />
-      )}
-      {showJoinRoom && token && (
-        <JoinRoomModal
-          token={token}
-          onClose={() => setShowJoinRoom(false)}
-          onJoined={refreshRooms}
-        />
-      )}
+      {/* Modals */}
+      {showCreateRoom && token && <CreateRoomModal token={token} onClose={() => setShowCreateRoom(false)} onCreated={refreshRooms} />}
+      {showJoinRoom && token && <JoinRoomModal token={token} onClose={() => setShowJoinRoom(false)} onJoined={refreshRooms} />}
     </aside>
+  );
+}
+
+function NavItem({ to, icon, label, badge }: { to: string; icon: string; label: string; badge?: number }) {
+  return (
+    <NavLink
+      to={to}
+      end={to === '/'}
+      className={({ isActive }) =>
+        `flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[13px] font-medium transition-colors mb-0.5 ${
+          isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-bg'
+        }`
+      }
+    >
+      <span className="text-base w-5 text-center">{icon}</span>
+      <span>{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="ml-auto bg-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </NavLink>
   );
 }

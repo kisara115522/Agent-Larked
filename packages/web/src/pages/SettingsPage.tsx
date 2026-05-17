@@ -2,27 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { get } from '../api/client';
 
-interface Agent {
-  id: string;
-  name: string;
-  display_name: string;
-  status: string;
-}
-
-interface TokenBudget {
-  agent_id: string;
-  daily_limit: number;
-  monthly_limit: number;
-  current_daily: number;
-  current_monthly: number;
-}
-
-interface AgentConfig {
-  agent_id: string;
-  config_type: string;
-  config_value: string;
-}
-
 interface GlobalConfig {
   config_type: string;
   config_value: string;
@@ -30,193 +9,109 @@ interface GlobalConfig {
 
 export function SettingsPage() {
   const { token } = useAuth();
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [budgets, setBudgets] = useState<TokenBudget[]>([]);
-  const [globalConfigs, setGlobalConfigs] = useState<GlobalConfig[]>([]);
+  const [configs, setConfigs] = useState<GlobalConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'tokens' | 'configs'>('tokens');
 
-  const loadData = useCallback(async () => {
+  const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [agentsRes, budgetsRes, configsRes] = await Promise.allSettled([
-        get<{ agents: Agent[] }>('/agents', token),
-        get<{ budgets: TokenBudget[] }>('/token-budgets', token),
-        get<{ configs: GlobalConfig[] }>('/configs', token),
-      ]);
-      if (agentsRes.status === 'fulfilled') setAgents(agentsRes.value.agents);
-      if (budgetsRes.status === 'fulfilled') setBudgets(budgetsRes.value.budgets);
-      if (configsRes.status === 'fulfilled') setGlobalConfigs(configsRes.value.configs);
-    } catch {
-      // API may not be ready
-    } finally {
+      const res = await get<{ configs: GlobalConfig[] }>('/configs', token).catch(() => ({ configs: [] }));
+      setConfigs(res.configs);
+    } catch {} finally {
       setLoading(false);
     }
   }, [token]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">Loading settings...</p>
-      </div>
-    );
+    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">Loading...</p></div>;
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <header className="px-6 py-4 border-b border-border shrink-0">
-        <h2 className="text-lg font-semibold">Settings</h2>
-        <p className="text-sm text-text-muted">Token budgets and configuration</p>
-      </header>
-
-      <div className="px-6 pt-3 border-b border-border shrink-0 flex gap-4">
-        {(['tokens', 'configs'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab
-                ? 'border-accent text-accent'
-                : 'border-transparent text-text-muted hover:text-text'
-            }`}
-          >
-            {tab === 'tokens' ? 'Token Usage' : 'Configuration'}
-          </button>
-        ))}
+    <div className="flex flex-col h-full">
+      <div className="px-6 py-3 border-b border-border shrink-0 bg-surface min-h-[56px]">
+        <h3 className="text-base font-semibold">全局设置</h3>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        {activeTab === 'tokens' && (
-          <TokenUsageTab agents={agents} budgets={budgets} />
-        )}
-        {activeTab === 'configs' && (
-          <ConfigTab configs={globalConfigs} />
-        )}
-      </div>
-    </div>
-  );
-}
+      <div className="flex-1 overflow-y-auto p-5 max-w-[800px]">
+        {/* Global Skills */}
+        <h4 className="text-[15px] font-semibold mb-3 pb-2 border-b border-border">全局 Skills</h4>
+        <ToggleRow name="web-search" desc="网络搜索" defaultOn />
+        <ToggleRow name="file-operations" desc="文件读写" defaultOn />
+        <ToggleRow name="code-analysis" desc="代码分析审查" defaultOn />
+        <ToggleRow name="database-query" desc="数据库查询" defaultOn />
+        <ToggleRow name="agentmemory" desc="Agent 外部记忆" defaultOn />
 
-function TokenUsageTab({ agents, budgets }: { agents: Agent[]; budgets: TokenBudget[] }) {
-  const budgetByAgent = new Map(budgets.map(b => [b.agent_id, b]));
+        {/* Global MCP Servers */}
+        <h4 className="text-[15px] font-semibold mb-3 pb-2 border-b border-border mt-6">全局 MCP Servers</h4>
+        <MCPToggleRow name="flock-server" transport="stdio" desc="post, read, wait, react, thread, mentions, dm, room, task, agent" defaultOn />
+        <MCPToggleRow name="github-mcp" transport="stdio" desc="GitHub PR/Issue/Repo" defaultOn />
+        <MCPToggleRow name="agentmemory" transport="stdio" desc="save, recall, reflect, consolidate, smart_search" defaultOn />
 
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard
-          label="Total Agents"
-          value={agents.length.toString()}
-          sub={`${agents.filter(a => a.status === 'active').length} active`}
-        />
-        <StatCard
-          label="Daily Token Limit"
-          value={budgets.length > 0 ? formatNumber(budgets[0].daily_limit) : '—'}
-          sub="per agent"
-        />
-        <StatCard
-          label="Monthly Token Limit"
-          value={budgets.length > 0 ? formatNumber(budgets[0].monthly_limit) : '—'}
-          sub="per agent"
-        />
-      </div>
-
-      <div className="border border-border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-surface-elevated text-text-muted text-xs">
-              <th className="text-left px-4 py-2 font-medium">Agent</th>
-              <th className="text-right px-4 py-2 font-medium">Daily Used</th>
-              <th className="text-right px-4 py-2 font-medium">Daily Limit</th>
-              <th className="text-right px-4 py-2 font-medium">Monthly Used</th>
-              <th className="text-right px-4 py-2 font-medium">Monthly Limit</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {agents.map(agent => {
-              const budget = budgetByAgent.get(agent.id);
-              return (
-                <tr key={agent.id} className="hover:bg-surface-elevated/50">
-                  <td className="px-4 py-2">
-                    <span className="font-medium">{agent.display_name || agent.name}</span>
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono text-text-muted">
-                    {budget ? formatNumber(budget.current_daily) : '—'}
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono text-text-muted">
-                    {budget ? formatNumber(budget.daily_limit) : '—'}
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono text-text-muted">
-                    {budget ? formatNumber(budget.current_monthly) : '—'}
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono text-text-muted">
-                    {budget ? formatNumber(budget.monthly_limit) : '—'}
-                  </td>
-                </tr>
-              );
-            })}
-            {agents.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-text-muted">
-                  No agents registered
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function ConfigTab({ configs }: { configs: GlobalConfig[] }) {
-  return (
-    <div className="space-y-4">
-      {configs.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-3xl mb-3">⚙</p>
-          <p className="text-sm text-text-muted">No configuration set</p>
-          <p className="text-xs text-text-muted mt-1">Configuration will appear here when the config API is available</p>
+        {/* Token Budget Defaults */}
+        <h4 className="text-[15px] font-semibold mb-3 pb-2 border-b border-border mt-6">Token 预算默认值</h4>
+        <div className="grid grid-cols-2 gap-3 mt-2">
+          <div className="bg-bg border border-border rounded p-2.5 px-3">
+            <div className="text-[10px] text-text-dim uppercase tracking-wider">每日限额</div>
+            <div className="text-[13px] font-medium font-mono mt-0.5">100,000 tokens</div>
+          </div>
+          <div className="bg-bg border border-border rounded p-2.5 px-3">
+            <div className="text-[10px] text-text-dim uppercase tracking-wider">每月限额</div>
+            <div className="text-[13px] font-medium font-mono mt-0.5">3,000,000 tokens</div>
+          </div>
         </div>
-      ) : (
-        <div className="border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-elevated text-text-muted text-xs">
-                <th className="text-left px-4 py-2 font-medium">Key</th>
-                <th className="text-left px-4 py-2 font-medium">Value</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {configs.map(c => (
-                <tr key={c.config_type} className="hover:bg-surface-elevated/50">
-                  <td className="px-4 py-2 font-mono text-xs">{c.config_type}</td>
-                  <td className="px-4 py-2 text-text-muted">{c.config_value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+
+        {/* Global Configs from API */}
+        {configs.length > 0 && (
+          <>
+            <h4 className="text-[15px] font-semibold mb-3 pb-2 border-b border-border mt-6">服务器配置</h4>
+            {configs.map(c => (
+              <div key={c.config_type} className="flex items-center gap-3 py-2.5 border-b border-border">
+                <span className="text-[13px] font-medium flex-1">{c.config_type}</span>
+                <span className="text-xs text-text-muted font-mono">{c.config_value}</span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function ToggleRow({ name, desc, defaultOn }: { name: string; desc: string; defaultOn?: boolean }) {
+  const [on, setOn] = useState(defaultOn ?? false);
   return (
-    <div className="p-4 bg-surface border border-border rounded-lg">
-      <p className="text-xs text-text-muted mb-1">{label}</p>
-      <p className="text-xl font-semibold text-text">{value}</p>
-      {sub && <p className="text-xs text-text-muted mt-0.5">{sub}</p>}
+    <div className="flex items-center gap-3 py-2.5 border-b border-border">
+      <span className="text-[13px] font-medium flex-1">{name}</span>
+      <span className="text-xs text-text-muted">{desc}</span>
+      <button
+        onClick={() => setOn(!on)}
+        className={`w-9 h-5 rounded-full relative cursor-pointer shrink-0 transition-colors ${on ? 'bg-accent' : 'bg-border'}`}
+      >
+        <div className={`absolute w-4 h-4 rounded-full bg-white top-0.5 transition-transform ${on ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+      </button>
     </div>
   );
 }
 
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toString();
+function MCPToggleRow({ name, transport, desc, defaultOn }: { name: string; transport: string; desc: string; defaultOn?: boolean }) {
+  const [on, setOn] = useState(defaultOn ?? false);
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-border">
+      <div className="flex-1">
+        <span className="text-[13px] font-medium">{name}</span>
+        <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${transport === 'stdio' ? 'bg-[#064E3B] text-[#34D399]' : 'bg-accent-muted text-accent'}`}>
+          {transport}
+        </span>
+        <div className="text-xs text-text-muted mt-0.5">{desc}</div>
+      </div>
+      <button
+        onClick={() => setOn(!on)}
+        className={`w-9 h-5 rounded-full relative cursor-pointer shrink-0 transition-colors ${on ? 'bg-accent' : 'bg-border'}`}
+      >
+        <div className={`absolute w-4 h-4 rounded-full bg-white top-0.5 transition-transform ${on ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+      </button>
+    </div>
+  );
 }

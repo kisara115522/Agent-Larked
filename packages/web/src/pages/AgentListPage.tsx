@@ -17,6 +17,31 @@ interface Agent {
   last_active_at?: string;
 }
 
+const STATUS_BADGE: Record<string, string> = {
+  active: 'bg-[#064E3B] text-[#34D399]',
+  dormant: 'bg-surface-elevated text-text-muted border border-border',
+  recovering: 'bg-[#78350F] text-[#FBBF24]',
+  error: 'bg-error-muted text-error',
+};
+
+const AGENT_GRADIENTS: Record<string, string> = {
+  claude001: '#10B981,#059669',
+  claude002: '#F59E0B,#D97706',
+  claude003: '#8B5CF6,#7C3AED',
+  kisara: '#3B82F6,#8B5CF6',
+};
+
+function getGradient(name: string): string {
+  return AGENT_GRADIENTS[name] || '#6B7280,#4B5563';
+}
+
+function getInitials(name: string): string {
+  if (name === 'kisara') return 'K';
+  const match = name.match(/claude(\d+)/);
+  if (match) return `C${match[1]}`;
+  return name.slice(0, 2).toUpperCase();
+}
+
 export function AgentListPage() {
   const { token } = useAuth();
   const { subscribe } = useSSE();
@@ -34,18 +59,13 @@ export function AgentListPage() {
     try {
       const res = await get<{ agents: Agent[] }>('/agents', token);
       setAgents(res.agents);
-    } catch {
-      // ignore
-    } finally {
+    } catch {} finally {
       setLoading(false);
     }
   }, [token]);
 
-  useEffect(() => {
-    loadAgents();
-  }, [loadAgents]);
+  useEffect(() => { loadAgents(); }, [loadAgents]);
 
-  // Real-time status updates
   useEffect(() => {
     return subscribe(event => {
       if (event.event === 'agent_status') {
@@ -57,34 +77,16 @@ export function AgentListPage() {
 
   const handleSpawn = async (agentId: string) => {
     if (!token) return;
-    try {
-      await post(`/agents/${agentId}/spawn`, token, {});
-      loadAgents();
-    } catch (err) {
-      console.error('Failed to spawn agent:', err);
-    }
+    try { await post(`/agents/${agentId}/spawn`, token, {}); loadAgents(); } catch {}
   };
-
   const handleStop = async (agentId: string) => {
     if (!token) return;
-    try {
-      await post(`/agents/${agentId}/stop`, token);
-      loadAgents();
-    } catch (err) {
-      console.error('Failed to stop agent:', err);
-    }
+    try { await post(`/agents/${agentId}/stop`, token); loadAgents(); } catch {}
   };
-
   const handleWake = async (agentId: string) => {
     if (!token) return;
-    try {
-      await post(`/agents/${agentId}/wake`, token, {});
-      loadAgents();
-    } catch (err) {
-      console.error('Failed to wake agent:', err);
-    }
+    try { await post(`/agents/${agentId}/wake`, token, {}); loadAgents(); } catch {}
   };
-
   const handleCreate = async () => {
     if (!token || !newName.trim()) return;
     setCreating(true);
@@ -94,183 +96,64 @@ export function AgentListPage() {
         bio: newBio.trim() || undefined,
         capabilities: newCapabilities.trim() ? newCapabilities.split(',').map(s => s.trim()) : [],
       });
-      setShowCreate(false);
-      setNewName('');
-      setNewBio('');
-      setNewCapabilities('');
+      setShowCreate(false); setNewName(''); setNewBio(''); setNewCapabilities('');
       loadAgents();
-    } catch (err) {
-      console.error('Failed to create agent:', err);
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'active': return 'Running';
-      case 'dormant': return 'Sleeping';
-      case 'recovering': return 'Recovering';
-      case 'error': return 'Error';
-      default: return status;
-    }
-  };
-
-  const getActionButtons = (agent: Agent) => {
-    switch (agent.status) {
-      case 'active':
-        return (
-          <button
-            onClick={(e) => { e.stopPropagation(); handleStop(agent.id); }}
-            className="px-3 py-1.5 text-xs font-medium bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors"
-          >
-            Stop
-          </button>
-        );
-      case 'dormant':
-        return (
-          <div className="flex gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleWake(agent.id); }}
-              className="px-3 py-1.5 text-xs font-medium bg-warning/10 text-warning rounded-lg hover:bg-warning/20 transition-colors"
-            >
-              Wake
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleStop(agent.id); }}
-              className="px-3 py-1.5 text-xs font-medium bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors"
-            >
-              Stop
-            </button>
-          </div>
-        );
-      case 'recovering':
-        return (
-          <span className="text-xs text-warning">Recovering...</span>
-        );
-      case 'error':
-        return (
-          <button
-            onClick={(e) => { e.stopPropagation(); handleSpawn(agent.id); }}
-            className="px-3 py-1.5 text-xs font-medium bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
-          >
-            Restart
-          </button>
-        );
-      default:
-        return (
-          <button
-            onClick={(e) => { e.stopPropagation(); handleSpawn(agent.id); }}
-            className="px-3 py-1.5 text-xs font-medium bg-accent text-white rounded-lg hover:opacity-90 transition-opacity"
-          >
-            Start
-          </button>
-        );
-    }
+    } catch {} finally { setCreating(false); }
   };
 
   if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">Loading agents...</p>
-      </div>
-    );
+    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">Loading...</p></div>;
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <header className="px-6 py-4 border-b border-border shrink-0 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Agents</h2>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="px-3 py-1.5 text-sm font-medium bg-accent text-white rounded-lg hover:opacity-90 transition-opacity"
-        >
-          + Create Agent
-        </button>
-      </header>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        {agents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <p className="text-3xl mb-3">🤖</p>
-            <p className="text-sm text-text-muted">No agents yet</p>
-            <p className="text-xs text-text-muted mt-1">Create your first agent to get started</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {agents.map(agent => (
-              <div
-                key={agent.id}
-                onClick={() => navigate(`/agents/${agent.id}`)}
-                className="flex items-center gap-4 p-4 bg-surface rounded-lg border border-border hover:border-accent/50 cursor-pointer transition-colors"
-              >
-                <AgentAvatar name={agent.name} displayName={agent.display_name} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-medium truncate">{agent.display_name || agent.name}</h3>
-                    <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
-                    <span className="text-xs text-text-muted">{getStatusLabel(agent.status)}</span>
-                  </div>
-                  {agent.bio && <p className="text-xs text-text-muted mt-0.5 truncate">{agent.bio}</p>}
-                  <div className="flex items-center gap-2 mt-1">
-                    {agent.capabilities.slice(0, 3).map(cap => (
-                      <span key={cap} className="px-1.5 py-0.5 text-[10px] bg-surface-elevated rounded font-mono">
-                        {cap}
-                      </span>
-                    ))}
-                    {agent.capabilities.length > 3 && (
-                      <span className="text-[10px] text-text-muted">+{agent.capabilities.length - 3}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  {getActionButtons(agent)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+    <div className="flex flex-col h-full">
+      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
+        <h3 className="text-base font-semibold">Agent 管理</h3>
+        <div className="ml-auto">
+          <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
+            + 启动新 Agent
+          </button>
+        </div>
       </div>
 
-      {/* Create Agent Modal */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="space-y-3">
+          {agents.map(agent => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              onSpawn={handleSpawn}
+              onStop={handleStop}
+              onWake={handleWake}
+              onNavigate={() => navigate(`/agents/${agent.id}`)}
+            />
+          ))}
+          {agents.length === 0 && (
+            <div className="text-center text-text-dim text-sm py-16">暂无 agent，点击上方按钮创建</div>
+          )}
+        </div>
+      </div>
+
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
-          <div className="w-96 p-6 bg-surface rounded-lg border border-border" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">Create Agent</h3>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Agent name"
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-3"
-            />
-            <input
-              type="text"
-              value={newBio}
-              onChange={(e) => setNewBio(e.target.value)}
-              placeholder="Bio (optional)"
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-3"
-            />
-            <input
-              type="text"
-              value={newCapabilities}
-              onChange={(e) => setNewCapabilities(e.target.value)}
-              placeholder="Capabilities (comma-separated)"
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-4"
-            />
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
+          <div className="w-[520px] p-6 bg-surface border border-border rounded-[14px]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">创建 Agent</h3>
+            <div className="mb-4">
+              <label className="block text-xs text-text-muted mb-1">Agent 名称</label>
+              <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="agent-name" className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent" />
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs text-text-muted mb-1">Bio</label>
+              <input value={newBio} onChange={e => setNewBio(e.target.value)} placeholder="描述这个 agent 的用途" className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent" />
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs text-text-muted mb-1">Capabilities（逗号分隔）</label>
+              <input value={newCapabilities} onChange={e => setNewCapabilities(e.target.value)} placeholder="code-analysis, security, ..." className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent" />
+            </div>
             <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowCreate(false)}
-                className="px-4 py-2 text-sm text-text-muted hover:text-text transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreate}
-                disabled={creating || !newName.trim()}
-                className="px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                {creating ? 'Creating...' : 'Create'}
+              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-text-muted hover:text-text">取消</button>
+              <button onClick={handleCreate} disabled={creating || !newName.trim()} className="px-4 py-2 text-sm font-semibold bg-accent text-white rounded-full hover:bg-accent-hover disabled:opacity-50">
+                {creating ? '创建中...' : '创建'}
               </button>
             </div>
           </div>
@@ -278,4 +161,70 @@ export function AgentListPage() {
       )}
     </div>
   );
+}
+
+function AgentCard({ agent, onSpawn, onStop, onWake, onNavigate }: {
+  agent: Agent;
+  onSpawn: (id: string) => void;
+  onStop: (id: string) => void;
+  onWake: (id: string) => void;
+  onNavigate: () => void;
+}) {
+  const isDormant = agent.status === 'dormant';
+  const gradient = getGradient(agent.name);
+  const initials = getInitials(agent.name);
+
+  return (
+    <div
+      onClick={onNavigate}
+      className={`bg-surface border border-border rounded-[10px] p-4 transition-border-color hover:border-text-dim cursor-pointer ${isDormant ? 'opacity-70' : ''}`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-11 h-11 rounded-full flex items-center justify-center text-base font-bold text-white shrink-0" style={{ background: `linear-gradient(135deg,${gradient})` }}>
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[15px] font-semibold">{agent.display_name || agent.name}</span>
+            <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
+          </div>
+          <div className="text-xs text-text-muted">{agent.bio || '无描述'}</div>
+        </div>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_BADGE[agent.status] || STATUS_BADGE.dormant}`}>
+          {agent.status}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3 mt-3 text-xs">
+        <div><div className="text-text-dim mb-0.5">Runtime</div><div className="text-text-muted">{agent.runtime_id ? '已分配' : '未分配'}</div></div>
+        <div><div className="text-text-dim mb-0.5">Session</div><div className="text-text-muted font-mono text-[11px]">—</div></div>
+        <div><div className="text-text-dim mb-0.5">最后活跃</div><div className="text-text-muted">{agent.last_active_at ? formatRelativeTime(agent.last_active_at) : '从未'}</div></div>
+        <div><div className="text-text-dim mb-0.5">Token</div><div className="text-text-muted">—</div></div>
+      </div>
+
+      <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+        <button onClick={e => { e.stopPropagation(); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover">对话</button>
+        <button onClick={e => { e.stopPropagation(); onNavigate(); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-surface-elevated text-text border border-border hover:border-text-dim">详情</button>
+        {agent.status === 'active' && (
+          <button onClick={e => { e.stopPropagation(); onStop(agent.id); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-error-muted text-error hover:bg-error hover:text-white ml-auto">停止</button>
+        )}
+        {(agent.status === 'dormant' || agent.status === 'error') && (
+          <>
+            <button onClick={e => { e.stopPropagation(); onWake(agent.id); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white ml-auto">唤醒</button>
+            <button onClick={e => { e.stopPropagation(); onSpawn(agent.id); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover">启动</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '刚刚';
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
 }
