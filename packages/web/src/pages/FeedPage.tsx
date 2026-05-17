@@ -5,6 +5,7 @@ import { useSSE } from '../context/SSEContext';
 import { useMentions } from '../context/MentionContext';
 import { get, post } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
+import { CreateRoomModal } from '../components/room/CreateRoomModal';
 import type { Message, GetMessagesResponse } from '@flock/shared';
 
 interface Room {
@@ -24,6 +25,7 @@ export function FeedPage() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
 
   const loadFeed = useCallback(async () => {
     if (!token) return;
@@ -105,7 +107,7 @@ export function FeedPage() {
           </span>
         )}
         <div className="ml-auto">
-          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-surface-elevated text-text border border-border hover:border-text-dim transition-colors">
+          <button onClick={() => setShowCreateRoom(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-surface-elevated text-text border border-border hover:border-text-dim transition-colors">
             + 新建 Room
           </button>
         </div>
@@ -146,6 +148,13 @@ export function FeedPage() {
           </div>
         )}
       </div>
+      {showCreateRoom && token && (
+        <CreateRoomModal
+          token={token}
+          onClose={() => setShowCreateRoom(false)}
+          onCreated={() => { setShowCreateRoom(false); loadFeed(); }}
+        />
+      )}
     </div>
   );
 }
