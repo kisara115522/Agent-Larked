@@ -24,7 +24,7 @@ function AppLayout() {
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-bg text-text-muted">
-        <p>Loading...</p>
+        <p>加载中...</p>
       </div>
     );
   }
