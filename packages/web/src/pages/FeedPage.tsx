@@ -90,7 +90,7 @@ export function FeedPage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">Loading feed...</p>
+        <p className="text-sm text-text-muted">加载中...</p>
       </div>
     );
   }
@@ -114,8 +114,8 @@ export function FeedPage() {
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <p className="text-3xl mb-3">💬</p>
-            <p className="text-sm text-text-muted">No messages yet</p>
-            <p className="text-xs text-text-muted mt-1">Join a room to see messages here</p>
+            <p className="text-sm text-text-muted">暂无消息</p>
+            <p className="text-xs text-text-muted mt-1">加入一个 Room 查看消息</p>
           </div>
         ) : (
           <div className="divide-y divide-border">

@@ -34,7 +34,7 @@ function renderContent(content: string): React.ReactNode {
   return parts.map((part, i) => {
     if (part.startsWith('@')) {
       return (
-        <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-accent-muted text-accent font-medium">
+        <span key={i} className="text-accent bg-accent-muted px-1.5 py-0.5 rounded-full font-medium text-xs">
           {part}
         </span>
       );
@@ -53,43 +53,40 @@ const reactionEmojis: Record<string, string> = {
 export function MessageCard({ id, from, fromName, content, mentions, reactions, createdAt, senderType, currentUserId, onReact, onReply }: MessageCardProps) {
   const isMentioned = currentUserId && mentions.includes(currentUserId);
   return (
-    <div className={`group flex gap-3 px-4 py-3 hover:bg-surface-elevated/50 transition-colors ${isMentioned ? 'border-l-2 border-accent bg-accent-muted/10' : ''}`}>
+    <div className={`group flex gap-2.5 mb-3.5 animate-[fadeUp_.15s] hover:bg-surface-elevated/30 transition-colors px-0 py-0 ${isMentioned ? 'border-l-2 border-accent bg-accent-muted/10 pl-3 -ml-3' : ''}`}>
       <AgentAvatar name={from} displayName={fromName} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-text">{fromName}</span>
-          {senderType === 'human' && (
-            <span className="px-1.5 py-0.5 text-[10px] rounded bg-accent-muted text-accent font-medium">Human</span>
-          )}
-          <span className="text-[11px] text-text-muted font-mono">{formatTime(createdAt)}</span>
+          <span className={`text-[13px] font-semibold ${senderType === 'human' ? 'text-accent' : 'text-text'}`}>{fromName}</span>
+          <span className="text-[11px] text-text-dim font-mono">{formatTime(createdAt)}</span>
         </div>
-        <p className="text-sm text-text/90 mt-1 leading-relaxed whitespace-pre-wrap break-words">
+        <p className="text-sm text-text mt-0.5 leading-[1.65] whitespace-pre-wrap break-words">
           {renderContent(content)}
         </p>
         {(reactions.length > 0 || onReact) && (
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+          <div className="flex items-center gap-1 mt-1 flex-wrap">
             {reactions.map(r => (
               <button
                 key={r.type}
                 onClick={() => onReact?.(id, r.type)}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-border bg-surface hover:border-accent transition-colors"
+                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs border border-border bg-surface hover:border-accent transition-colors"
               >
                 <span>{reactionEmojis[r.type] ?? r.type}</span>
                 <span className="text-text-muted">{r.count}</span>
               </button>
             ))}
             {onReact && (
-              <div className="flex gap-1">
+              <div className="flex gap-0.5">
                 {onReply && (
                   <button
                     onClick={() => onReply(id)}
                     className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-text-muted hover:bg-surface-elevated hover:text-text transition-colors"
-                    title="Reply in thread"
+                    title="回复"
                   >
                     💬
                   </button>
                 )}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
                   {Object.entries(reactionEmojis).map(([type, emoji]) => (
                     <button
                       key={type}

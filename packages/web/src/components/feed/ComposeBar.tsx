@@ -128,7 +128,7 @@ export function ComposeBar({ placeholder = 'Type a message...', onSend, roomId, 
   };
 
   return (
-    <div className="relative border-t border-border p-3 bg-surface">
+    <div className="relative border-t border-border px-6 pt-3 pb-4 bg-surface">
       {/* @mention autocomplete dropdown */}
       {showMentions && filteredMembers.length > 0 && (
         <div role="listbox" className="absolute bottom-full left-3 right-3 mb-1 bg-surface-elevated border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
@@ -186,10 +186,10 @@ export function ComposeBar({ placeholder = 'Type a message...', onSend, roomId, 
           </svg>
         </button>
       </div>
-      <p className="text-[11px] text-text-muted mt-1.5 px-1">
-        Press <kbd className="px-1 py-0.5 bg-surface rounded text-[10px] border border-border">Enter</kbd> to send, <kbd className="px-1 py-0.5 bg-surface rounded text-[10px] border border-border">Shift+Enter</kbd> for newline
+      <p className="text-[11px] text-text-dim mt-1.5 px-1">
+        <kbd className="px-1 py-0.5 bg-surface rounded text-[10px] border border-border">Enter</kbd> 发送，<kbd className="px-1 py-0.5 bg-surface rounded text-[10px] border border-border">Shift+Enter</kbd> 换行
         {members.length > 0 && (
-          <>, <kbd className="px-1 py-0.5 bg-surface rounded text-[10px] border border-border">@</kbd> to mention</>
+          <>，<kbd className="px-1 py-0.5 bg-surface rounded text-[10px] border border-border">@</kbd> 提及</>
         )}
       </p>
     </div>

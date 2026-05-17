@@ -71,18 +71,18 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
         >
           ✕
         </button>
-        <h3 className="text-sm font-semibold">Thread</h3>
-        <span className="text-xs text-text-muted font-mono">{messageId.slice(0, 8)}</span>
+        <h3 className="text-sm font-semibold">话题</h3>
+        <span className="text-xs text-text-dim font-mono">{messageId.slice(0, 8)}</span>
       </header>
 
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-text-muted">Loading thread...</p>
+            <p className="text-xs text-text-muted">加载中...</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-text-muted">No replies yet</p>
+            <p className="text-xs text-text-muted">暂无回复</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -90,7 +90,7 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
               <div key={msg.id} className={i === 0 ? 'bg-accent-muted/20' : ''}>
                 {i === 0 && (
                   <div className="px-4 pt-2 pb-0">
-                    <span className="text-[10px] text-accent font-medium uppercase tracking-wider">Original message</span>
+                    <span className="text-[10px] text-accent font-medium uppercase tracking-wider">原始消息</span>
                   </div>
                 )}
                 <MessageCard
@@ -112,7 +112,7 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
         )}
       </div>
 
-      <ComposeBar onSend={handleSend} placeholder="Reply to thread..." roomId={messages[0]?.room_id} token={token ?? undefined} />
+      <ComposeBar onSend={handleSend} placeholder="回复话题..." roomId={messages[0]?.room_id} token={token ?? undefined} />
     </div>
   );
 }

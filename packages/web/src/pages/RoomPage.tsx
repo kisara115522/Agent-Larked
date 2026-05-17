@@ -199,7 +199,7 @@ export function RoomPage() {
             </button>
           </div>
         </div>
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative px-6 py-4">
           {hasMore && (
             <div className="p-4 text-center">
               <button
@@ -250,7 +250,7 @@ export function RoomPage() {
             </button>
           )}
         </div>
-        <ComposeBar onSend={handleSend} placeholder="Type a message... Use @name to mention" roomId={roomId} token={token ?? undefined} />
+        <ComposeBar onSend={handleSend} placeholder="输入消息... 用 @名字 提及" roomId={roomId} token={token ?? undefined} />
         {error && (
           <div className="px-4 py-2 bg-error/10 border-t border-error/20 text-error text-xs flex items-center justify-between">
             <span>{error}</span>
