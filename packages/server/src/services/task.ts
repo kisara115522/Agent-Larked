@@ -246,14 +246,16 @@ export function checkStaleTasks(
   db: Database.Database,
   timeoutMs: number = 30 * 60 * 1000, // Default: 30 minutes
 ): string[] {
-  const cutoff = new Date(Date.now() - timeoutMs).toISOString();
+  // Use SQLite-compatible format (no T, no Z) to match datetime('now') format
+  const cutoffDate = new Date(Date.now() - timeoutMs);
+  const cutoff = cutoffDate.toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
   const staleTasks = db.prepare(`
     SELECT id, title, room_id, assigned_to, retry_count, max_retries
     FROM tasks
     WHERE status = 'in_progress' AND updated_at < ?
   `).all(cutoff) as { id: string; title: string; room_id: string; assigned_to: string | null; retry_count: number; max_retries: number }[];
 
-  const now = new Date().toISOString();
+  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
   const staleIds: string[] = [];
 
   for (const task of staleTasks) {
@@ -265,7 +267,7 @@ export function checkStaleTasks(
 
       db.prepare(`
         INSERT INTO task_events (id, task_id, event_type, actor_id, payload, created_at)
-        VALUES (?, ?, 'retry', NULL, ?, ?)
+        VALUES (?, ?, 'retry', 'system', ?, ?)
       `).run(uuidv4(), task.id, JSON.stringify({ reason: 'timeout', retry_count: task.retry_count + 1 }), now);
     } else {
       // Max retries exceeded: mark as error
@@ -275,7 +277,7 @@ export function checkStaleTasks(
 
       db.prepare(`
         INSERT INTO task_events (id, task_id, event_type, actor_id, payload, created_at)
-        VALUES (?, ?, 'failed', NULL, ?, ?)
+        VALUES (?, ?, 'failed', 'system', ?, ?)
       `).run(uuidv4(), task.id, JSON.stringify({ reason: 'max_retries_exceeded' }), now);
     }
 

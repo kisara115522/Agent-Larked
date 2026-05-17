@@ -5,6 +5,7 @@ import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
 import { bootstrapDefaultAgent } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
+import { checkStaleTasks } from '../services/task.js';
 
 let app: Express;
 let db: Database.Database;
@@ -100,5 +101,96 @@ describe('Tasks API', () => {
       .expect(200);
 
     expect(res.body.id).toBe(taskId);
+  });
+
+  it('returns task events timeline', async () => {
+    const list = await request(app)
+      .get(`/tasks?room_id=${roomId}`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    const taskId = list.body.tasks[0].id;
+
+    const res = await request(app)
+      .get(`/tasks/${taskId}/events`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    expect(res.body.events).toBeDefined();
+    expect(Array.isArray(res.body.events)).toBe(true);
+    expect(res.body.events.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.events[0].event_type).toBe('created');
+  });
+
+  it('returns 404 for events on unknown task', async () => {
+    await request(app)
+      .get('/tasks/nonexistent/events')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(404);
+  });
+});
+
+describe('Task Stale Detection', () => {
+  let staleDb: Database.Database;
+
+  beforeAll(() => {
+    ({ db: staleDb } = createApp());
+    bootstrapDefaultAgent(staleDb, hashToken);
+    staleDb.prepare("INSERT INTO profiles (id, name, status, token_hash, created_at, updated_at) VALUES ('test-agent', 'TestBot', 'online', 'test-hash', datetime('now'), datetime('now'))").run();
+  });
+
+  it('retries stale tasks within max_retries', () => {
+    const roomId = 'stale-room-1';
+    staleDb.prepare("INSERT INTO rooms (id, name, visibility, created_by, created_at) VALUES (?, 'test', 'public', 'test-agent', datetime('now'))").run(roomId);
+    staleDb.prepare("INSERT INTO room_members (room_id, agent_id, joined_at) VALUES (?, 'test-agent', datetime('now'))").run(roomId);
+
+    const taskId = 'stale-task-1';
+    staleDb.prepare(`
+      INSERT INTO tasks (id, room_id, title, status, priority, max_retries, retry_count, created_by, created_at, updated_at)
+      VALUES (?, ?, 'Stale task', 'in_progress', 0, 3, 0, 'test-agent', datetime('now'), datetime('now', '-1 hour'))
+    `).run(taskId, roomId);
+
+    const staleIds = checkStaleTasks(staleDb, 30 * 60 * 1000);
+    expect(staleIds).toContain(taskId);
+
+    const task = staleDb.prepare('SELECT status, retry_count FROM tasks WHERE id = ?').get(taskId) as { status: string; retry_count: number };
+    expect(task.status).toBe('todo');
+    expect(task.retry_count).toBe(1);
+  });
+
+  it('marks tasks as error when max_retries exceeded', () => {
+    const roomId = 'stale-room-2';
+    staleDb.prepare("INSERT INTO rooms (id, name, visibility, created_by, created_at) VALUES (?, 'test2', 'public', 'test-agent', datetime('now'))").run(roomId);
+    staleDb.prepare("INSERT INTO room_members (room_id, agent_id, joined_at) VALUES (?, 'test-agent', datetime('now'))").run(roomId);
+
+    const taskId = 'stale-task-2';
+    staleDb.prepare(`
+      INSERT INTO tasks (id, room_id, title, status, priority, max_retries, retry_count, created_by, created_at, updated_at)
+      VALUES (?, ?, 'Exhausted task', 'in_progress', 0, 2, 2, 'test-agent', datetime('now'), datetime('now', '-1 hour'))
+    `).run(taskId, roomId);
+
+    const staleIds = checkStaleTasks(staleDb, 30 * 60 * 1000);
+    expect(staleIds).toContain(taskId);
+
+    const task = staleDb.prepare('SELECT status FROM tasks WHERE id = ?').get(taskId) as { status: string };
+    expect(task.status).toBe('error');
+  });
+
+  it('ignores tasks within timeout', () => {
+    const roomId = 'stale-room-3';
+    staleDb.prepare("INSERT INTO rooms (id, name, visibility, created_by, created_at) VALUES (?, 'test3', 'public', 'test-agent', datetime('now'))").run(roomId);
+    staleDb.prepare("INSERT INTO room_members (room_id, agent_id, joined_at) VALUES (?, 'test-agent', datetime('now'))").run(roomId);
+
+    const taskId = 'fresh-task';
+    staleDb.prepare(`
+      INSERT INTO tasks (id, room_id, title, status, priority, max_retries, retry_count, created_by, created_at, updated_at)
+      VALUES (?, ?, 'Fresh task', 'in_progress', 0, 3, 0, 'test-agent', datetime('now'), datetime('now'))
+    `).run(taskId, roomId);
+
+    // Use a very short timeout so only tasks older than 1ms are stale
+    const staleIds = checkStaleTasks(staleDb, 1);
+    // The fresh task should not be in the stale list (but tasks from previous tests may be)
+    const freshTaskStale = staleIds.includes(taskId);
+    expect(freshTaskStale).toBe(false);
   });
 });
