@@ -657,23 +657,28 @@
 - **问题：** `callback.ts:108` — `sendCallbackWithRetry(runtime, agentId, event).catch(() => {})` 吞掉所有错误，callback 失败时完全没有日志
 - **影响：** @mention wake 失败时无法排查原因
 - **建议修复：** `.catch((err) => console.error('Callback failed:', agentId, err))` 或写入错误日志表
-- **状态：** open
-- **计划版本：** v0.5
+- **状态：** done（87c7b1d — 加了 console.error 日志）
 
 ### 🟡 Ring 2 Review: human 消息 idempotency_key 用 Date.now() 生成
 - **发现于：** 2026-05-17，claude002 review claude001 的 Ring 2 commit (a4c68c0)
 - **问题：** `rooms.ts:141` — human 消息的 idempotency_key 用 `Date.now()` 生成，同一毫秒内多次调用可能重复
 - **影响：** 极端情况下 human 消息可能因 key 重复被拒绝
 - **建议修复：** 用 `randomUUID()` 或接受客户端传入的 key
-- **状态：** open
-- **计划版本：** v0.5
+- **状态：** done（87c7b1d — 改用 randomUUID()）
 
 ### 🟡 Ring 2 Review: callback URL 拼接未处理 trailing slash
 - **发现于：** 2026-05-17，claude002 review claude001 的 Ring 2 commit (a4c68c0)
 - **问题：** `callback.ts:34` — `${runtime.callback_url}/agents/${agentId}/callback` 未处理 trailing slash，可能变成 `http://host:9000//agents/...`
 - **影响：** 如果 runtime 注册时 callback_url 带尾部 `/`，callback 请求可能 404
 - **建议修复：** 用 `new URL()` 构建或 `callback_url.replace(/\/+$/, '')`
-- **状态：** open
+- **状态：** done（87c7b1d — 加了 replace(/\/+$/, '')）
+
+### 🟡 Ring 2 Review: broadcast wake 语义未区分 @mention 和普通消息
+- **发现于：** 2026-05-17，claude002 review claude001 的 Ring 2 commit (a4c68c0)
+- **问题：** `rooms.ts:133` — human 发消息触发 `wakeRoomAgents` 唤醒所有 dormant agents，但未检查是否包含 @mention。普通消息也应该唤醒全部还是只唤醒被 @mention 的？
+- **影响：** 广播唤醒可能过度（普通消息也唤醒所有 agent），或设计意图不明确
+- **建议修复：** 明确设计意图：human 消息 = 广播唤醒全部 dormant agent（当前行为），agent 消息 = 只唤醒 @mention 的。当前实现符合设计，记录为已知行为
+- **状态：** open（待设计确认）
 - **计划版本：** v0.5
 
 ### 🟢 Ring 2 Review: Runtime 注册权限未限制
@@ -684,12 +689,12 @@
 - **状态：** open
 - **计划版本：** v0.5 之后
 
-### 🟡 Ring 4 Review: HTTP transport session 无 TTL 清理
+### ~~🟡 Ring 4 Review: HTTP transport session 无 TTL 清理~~
 - **发现于：** 2026-05-17，claude002 self-review Ring 4 (commits fd6e7b9..3c586df)
 - **问题：** `http.ts` 的 `transports` Map 没有 TTL 清理机制，如果客户端断开但没触发 close 事件，session 会一直占内存
 - **影响：** 长时间运行可能导致内存泄漏
-- **建议修复：** 添加 session TTL（如 30 分钟无活动自动清理），或定期扫描 stale sessions
-- **状态：** open
+- **修复：** 添加了 30 分钟 idle timeout + 每 60 秒清理 + unref() 不阻塞进程退出
+- **状态：** done（2026-05-17，commit 25bd32e）
 - **计划版本：** v0.5
 
 ### 🟢 Ring 4 Review: CORS 设为 * 在生产环境不安全
