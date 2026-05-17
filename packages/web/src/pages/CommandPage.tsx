@@ -106,7 +106,7 @@ export function CommandPage() {
       setContent('');
       await loadMessages(selectedAgentId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send direct message');
+      setError(err instanceof Error ? err.message : '发送失败');
     } finally {
       setSending(false);
     }
@@ -125,8 +125,8 @@ export function CommandPage() {
     <div className="h-full flex">
       <aside className="w-72 border-r border-border bg-surface flex flex-col">
         <header className="px-4 py-3 border-b border-border shrink-0">
-          <h2 className="text-base font-semibold">Direct Chat</h2>
-          <p className="text-xs text-text-muted mt-0.5">Persistent 1:1 agent messages</p>
+          <h2 className="text-base font-semibold">私信</h2>
+          <p className="text-xs text-text-muted mt-0.5">与 Agent 的 1:1 对话</p>
         </header>
 
         <div className="flex-1 overflow-y-auto p-2">
@@ -165,7 +165,7 @@ export function CommandPage() {
       </aside>
 
       <section className="flex-1 flex flex-col min-w-0">
-        <header className="px-6 py-3 border-b border-border shrink-0 flex items-center gap-3">
+        <header className="px-6 py-3 border-b border-border shrink-0 flex items-center gap-3 bg-surface min-h-[56px]">
           {selectedAgent ? (
             <>
               <AgentAvatar name={selectedAgent.name} displayName={selectedAgent.display_name} />
@@ -178,19 +178,19 @@ export function CommandPage() {
               </div>
             </>
           ) : (
-            <h2 className="text-base font-semibold">Select an agent</h2>
+            <h2 className="text-base font-semibold">选择一个 Agent</h2>
           )}
         </header>
 
         <div className="flex-1 overflow-y-auto">
           {!selectedAgentId ? (
             <div className="h-full flex items-center justify-center text-sm text-text-muted">
-              Choose an agent to open a direct chat.
+              选择一个 Agent 开始对话
             </div>
           ) : loadingMessages ? (
-            <div className="h-full flex items-center justify-center text-sm text-text-muted">Loading messages...</div>
+            <div className="h-full flex items-center justify-center text-sm text-text-muted">加载中...</div>
           ) : messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-sm text-text-muted">No direct messages yet.</div>
+            <div className="h-full flex items-center justify-center text-sm text-text-muted">暂无私信</div>
           ) : (
             <div className="divide-y divide-border">
               {messages.map(msg => {
@@ -232,7 +232,7 @@ export function CommandPage() {
                 }
               }}
               disabled={!selectedAgentId}
-              placeholder={selectedAgent ? `Message ${selectedAgent.display_name || selectedAgent.name}` : 'Select an agent first'}
+              placeholder={selectedAgent ? `给 ${selectedAgent.display_name || selectedAgent.name} 发消息...` : '先选择一个 Agent'}
               rows={1}
               className="flex-1 bg-transparent text-sm text-text resize-none outline-none placeholder:text-text-muted min-h-[20px] max-h-[120px] disabled:opacity-50"
             />
@@ -241,7 +241,7 @@ export function CommandPage() {
               disabled={!selectedAgentId || !content.trim() || sending}
               className="shrink-0 h-8 px-3 rounded-full bg-accent text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
             >
-              Send
+              发送
             </button>
           </div>
           {error && <p className="mt-2 text-xs text-error">{error}</p>}
