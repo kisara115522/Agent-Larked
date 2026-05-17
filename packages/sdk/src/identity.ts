@@ -28,10 +28,11 @@ export function getAgent(
   return client.get<AgentProfile>(`/agents/${agentId}`);
 }
 
-export function listAgents(
+export async function listAgents(
   client: AgentFeedClient,
 ): Promise<AgentProfile[]> {
-  return client.get<AgentProfile[]>('/agents');
+  const res = await client.get<{ agents: AgentProfile[] }>('/agents');
+  return res.agents;
 }
 
 export function getMe(
