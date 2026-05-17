@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useCallback, useState } f
 import type { ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 
-type SSEEventType = 'mention' | 'reaction' | 'room_message' | 'direct_message' | 'agent_status' | 'task_created' | 'task_status' | 'task_artifact';
+type SSEEventType = 'mention' | 'reaction' | 'room_message' | 'direct_message' | 'agent_status' | 'task_created' | 'task_status' | 'task_artifact' | 'workflow_event';
 
 interface SSEMessage {
   event: SSEEventType;

@@ -1,3 +1,7 @@
+import { useState, useEffect } from 'react';
+import { get } from '../../api/client';
+import { getToken } from '../../context/tokenStorage';
+
 const STATUS_LABEL: Record<string, string> = {
   todo: '待办',
   in_progress: '进行中',
@@ -28,6 +32,20 @@ const PRIORITY_BADGE: Record<number, string> = {
   2: 'bg-error-muted text-error',
 };
 
+const EVENT_LABEL: Record<string, string> = {
+  created: '创建',
+  assigned: '分配',
+  started: '开始',
+  progress: '进度',
+  review: '审查',
+  approved: '通过',
+  rejected: '退回',
+  failed: '失败',
+  retry: '重试',
+  completed: '完成',
+  status_changed: '状态变更',
+};
+
 interface Task {
   id: string;
   title: string;
@@ -45,10 +63,12 @@ interface Agent {
   display_name: string;
 }
 
-interface TaskEvent {
-  time: string;
-  type: string;
-  desc: string;
+interface TaskEventItem {
+  id: string;
+  event_type: string;
+  actor_name: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
 }
 
 export function TaskDetailModal({ task, agents, onClose }: {
@@ -56,13 +76,17 @@ export function TaskDetailModal({ task, agents, onClose }: {
   agents: Agent[];
   onClose: () => void;
 }) {
+  const [events, setEvents] = useState<TaskEventItem[]>([]);
   const assignee = task.assigned_to ? agents.find(a => a.id === task.assigned_to) : null;
   const createdTime = new Date(task.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 
-  // Mock timeline events
-  const events: TaskEvent[] = [
-    { time: createdTime, type: 'created', desc: '任务创建' },
-  ];
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    get<{ events: TaskEventItem[] }>(`/tasks/${task.id}/events`, token)
+      .then(res => setEvents(res.events))
+      .catch(() => {});
+  }, [task.id]);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
@@ -104,15 +128,20 @@ export function TaskDetailModal({ task, agents, onClose }: {
         {/* Timeline */}
         <h4 className="text-sm font-semibold mt-4 mb-2">事件时间线</h4>
         <div className="text-xs text-text-muted">
-          {events.map((ev, i) => (
-            <div key={i} className="flex gap-2.5 py-1.5 border-b border-border">
-              <span className="font-mono text-text-dim w-[50px] shrink-0">{ev.time}</span>
-              <span className={`font-semibold w-[70px] shrink-0 ${ev.type === 'rejected' ? 'text-error' : ev.type === 'created' ? 'text-accent' : 'text-accent'}`}>
-                {ev.type}
-              </span>
-              <span>{ev.desc}</span>
-            </div>
-          ))}
+          {events.length === 0 ? (
+            <div className="text-text-dim py-2">暂无事件</div>
+          ) : events.map((ev) => {
+            const time = new Date(ev.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            return (
+              <div key={ev.id} className="flex gap-2.5 py-1.5 border-b border-border">
+                <span className="font-mono text-text-dim w-[50px] shrink-0">{time}</span>
+                <span className={`font-semibold w-[70px] shrink-0 ${ev.event_type === 'rejected' || ev.event_type === 'failed' ? 'text-error' : 'text-accent'}`}>
+                  {EVENT_LABEL[ev.event_type] || ev.event_type}
+                </span>
+                <span>{ev.actor_name ?? ''}{ev.payload?.from_status ? ` ${ev.payload.from_status} → ${ev.payload.to_status}` : ''}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
