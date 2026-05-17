@@ -135,7 +135,7 @@ export function searchAgents(
   query: { q?: string; capabilities?: string; status?: string; limit?: number; cursor?: string },
 ): { agents: AgentProfile[]; next_cursor: string | null; has_more: boolean } {
   const limit = Math.min(query.limit ?? 20, 100);
-  const conditions: string[] = [reservedProfileWhereClause()];
+  const conditions: string[] = [reservedProfileWhereClause(), "token_hash != 'human-no-login'"];
   const params: unknown[] = [];
 
   if (query.q) {
