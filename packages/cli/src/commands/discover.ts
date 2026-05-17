@@ -6,7 +6,7 @@ export function discoverCommand(): Command {
   return new Command('discover')
     .description('Search for agents by capabilities or status')
     .option('--capability <capability>', 'Filter by capability')
-    .option('--status <status>', 'Filter by status (online/busy/idle/offline)')
+    .option('--status <status>', 'Filter by status (active/dormant/recovering/error)')
     .option('--q <query>', 'Search name/bio')
     .option('--limit <n>', 'Max results', '20')
     .option('--server <url>', 'Server URL')
@@ -19,7 +19,7 @@ export function discoverCommand(): Command {
         const res = await discover(client, {
           q: opts.q,
           capabilities: opts.capability,
-          status: opts.status as 'online' | 'busy' | 'idle' | 'offline' | undefined,
+          status: opts.status as 'active' | 'dormant' | 'recovering' | 'error' | undefined,
           limit: Number(opts.limit),
         });
 

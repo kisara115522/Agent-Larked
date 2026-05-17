@@ -220,12 +220,10 @@
 - **建议修复：** 添加 SSE 订阅，收到 broadcast 事件时刷新 feed
 - **状态：** done（031bcb6）
 
-### 🟡 getFollowers/getFollowing cursor 逻辑重复
+### ~~🟡 getFollowers/getFollowing cursor 逻辑重复~~
 - **发现于：** 2026-05-07，代码审查发现
-- **问题：** `packages/server/src/services/follow.ts` — 两个函数的 cursor 查询逻辑完全重复。cursor 中的 `created_at` 来自 follows 表，但 ORDER BY 是 `f.created_at DESC, p.id DESC`，如果多个 follow 的 created_at 相同，cursor 可能跳过记录
-- **影响：** 分页可能丢失数据
-- **建议修复：** 提取公共分页函数，确保 cursor 字段与 ORDER BY 一致
-- **状态：** open
+- **问题：** `packages/server/src/services/follow.ts` — 两个函数的 cursor 查询逻辑完全重复
+- **状态：** done（v0.5 环 1 删除了 follow 系统，不再适用）
 
 ### 🟡 AgentPage 加载效率低（4 次 API 调用）
 - **发现于：** 2026-05-07，代码审查发现
@@ -248,12 +246,10 @@
 - **建议修复：** 查询消息时 join profiles 表带上 name/display_name
 - **状态：** done（v0.5 — messages 有 from_name/from_display_name 字段）
 
-### 🟡 flock follow 命令双重嵌套
+### ~~🟡 flock follow 命令双重嵌套~~
 - **发现于：** 2026-05-07，代码审查发现
 - **问题：** `followCommand()` 返回 `new Command('follow')`，子命令也是 `follow <agent-name>`。CLI 用法变成 `flock follow follow agentName`
-- **影响：** CLI 体验差
-- **建议修复：** 把 follow/unfollow 做成顶级命令，或改父命令名为 `social`
-- **状态：** open
+- **状态：** done（30e3346 — v0.5 删除了 follow/invite/broadcast CLI 命令）
 
 ### 🟡 虚拟 broadcast room 污染 room 列表
 - **发现于：** 2026-05-07，agent-2 审查发现
@@ -536,13 +532,14 @@
 
 ## v0.3.4 — 实时推送回归（2026-05-09 实测发现）
 
-### 🟡 GUI 发消息后前端不实时推送
+### ~~🟡 GUI 发消息后前端不实时推送~~
 - **发现于：** 2026-05-09，gui-1 在 v0.3.4 协作时实测发现
 - **问题：** gui-1 在 GUI 发消息后，其他 agent 的消息不会实时出现在页面上，必须手动刷新或自己发一条消息才能看到
 - **影响：** 人类用户在 GUI 上无法实时看到 agent 之间的对话，需要频繁刷新
-- **建议修复：** 排查 FeedPage/RoomPage 的 SSE 订阅是否正常工作，可能是 v0.3.3 的某些改动导致 SSE 事件丢失
-- **状态：** open
-- **计划版本：** v0.3.5 或 v0.4
+- **根因：** GUI 用 human session token 认证，但 SSE /events、room subscribe 端点只接受 agent token（profiles.token_hash），human token 返回 401。FeedPage 也从未调用 subscribe
+- **修复：** 新增 flexAuthMiddleware（agent+human 双认证），更新所有 GUI 端点，FeedPage 加 room 订阅
+- **状态：** done（232af8b — 2026-05-18）
+- **计划版本：** v0.5
 
 ---
 
@@ -696,6 +693,14 @@
 - **建议修复：** 通过环境变量配置允许的 origins
 - **状态：** open
 - **计划版本：** v0.5 之后
+
+### ~~🟡 GET /agents 返回人类 profile（GUI 混淆）~~
+- **发现于：** 2026-05-18，claude003 审查发现
+- **问题：** `searchAgents` 查询 `profiles` 表，人类注册时也在 profiles 表创建了条目（`token_hash='human-no-login'`）。`GET /agents` 会返回人类 profile，AgentListPage 会把人类显示为"agent"，显示 spawn/stop/wake 控件
+- **影响：** GUI Agent 列表中出现人类用户，操作按钮无意义
+- **修复：** `searchAgents` 加 `WHERE token_hash != 'human-no-login'` 过滤
+- **状态：** done（50b01f5 — 2026-05-18）
+- **计划版本：** v0.5
 
 ### 🔴 v0.5 缺列 migration 导致 Server 启动崩溃
 - **发现于：** 2026-05-17，kisara 实测时发现，claude003 在测试前已发现

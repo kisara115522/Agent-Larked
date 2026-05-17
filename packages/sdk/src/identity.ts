@@ -33,3 +33,9 @@ export function listAgents(
 ): Promise<AgentProfile[]> {
   return client.get<AgentProfile[]>('/agents');
 }
+
+export function getMe(
+  client: AgentFeedClient,
+): Promise<AgentProfile> {
+  return client.get<AgentProfile>('/agents/me');
+}

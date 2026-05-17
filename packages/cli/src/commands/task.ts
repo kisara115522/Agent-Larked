@@ -50,8 +50,8 @@ export function taskCommand(): Command {
         console.log(`  Title:    ${result.title}`);
         console.log(`  Status:   ${result.status}`);
         console.log(`  Priority: ${result.priority}`);
-        if (result.assignees.length > 0) {
-          console.log(`  Assignees: ${result.assignees.join(', ')}`);
+        if (result.assigned_to) {
+          console.log(`  Assigned: ${result.assigned_to}`);
         }
       } catch (err) {
         console.error(`Failed: ${(err as Error).message}`);
