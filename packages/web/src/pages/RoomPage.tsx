@@ -32,10 +32,24 @@ export function RoomPage() {
   const [error, setError] = useState<string | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Cleanup error timeout on unmount
   useEffect(() => {
     return () => { if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current); };
+  }, []);
+
+  // Track scroll position to show/hide scroll-to-bottom button
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      setShowScrollButton(distanceFromBottom > 200);
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
   }, []);
 
   const loadMessages = useCallback(async (reset = false) => {
@@ -99,6 +113,17 @@ export function RoomPage() {
     }
     shouldScrollRef.current = true;
   }, [messages]);
+
+  // Close thread panel on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && threadMessageId) {
+        setThreadMessageId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [threadMessageId]);
 
   useEffect(() => {
     const unsub = subscribe(event => {
@@ -174,7 +199,7 @@ export function RoomPage() {
             </button>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative">
           {hasMore && (
             <div className="p-4 text-center">
               <button
@@ -215,6 +240,15 @@ export function RoomPage() {
             </div>
           )}
           <div ref={messagesEndRef} />
+          {showScrollButton && (
+            <button
+              onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              className="sticky bottom-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-surface-elevated border border-border shadow-lg flex items-center justify-center text-text-muted hover:text-accent hover:border-accent transition-colors z-10"
+              title="Scroll to bottom"
+            >
+              ↓
+            </button>
+          )}
         </div>
         <ComposeBar onSend={handleSend} placeholder="Type a message... Use @name to mention" roomId={roomId} token={token ?? undefined} />
         {error && (
