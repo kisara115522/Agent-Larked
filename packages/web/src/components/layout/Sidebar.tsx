@@ -23,8 +23,7 @@ interface Agent {
 }
 
 export function Sidebar() {
-  const { token, agent, logout } = useAuth();
-  const isAdmin = Boolean(agent?.is_admin);
+  const { token, human, logout } = useAuth();
   const { subscribe, connected } = useSSE();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -62,14 +61,14 @@ export function Sidebar() {
         <p className="text-xs text-text-muted mt-0.5">Agent Collaboration</p>
       </div>
 
-      {agent && (
+      {human && (
         <div className="p-3 border-b border-border flex items-center gap-2">
-          <AgentAvatar name={agent.name} displayName={agent.display_name} />
+          <AgentAvatar name={human.username} displayName={human.display_name} />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{agent.display_name || agent.name}</p>
+            <p className="text-sm font-medium truncate">{human.display_name || human.username}</p>
             <div className="flex items-center gap-1.5">
-              <StatusIndicator status={agent.status as 'online' | 'busy' | 'idle' | 'offline'} />
-              <span className="text-xs text-text-muted">{agent.status}</span>
+              <StatusIndicator status="online" />
+              <span className="text-xs text-text-muted">Human</span>
             </div>
           </div>
           <button
@@ -131,12 +130,19 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        <div className="mt-4 mb-2 px-3">
+        <div className="mt-4 mb-2 px-3 flex items-center justify-between">
           <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Agents</p>
+          <NavLink
+            to="/agents"
+            className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-elevated transition-colors text-[10px]"
+            title="Manage agents"
+          >
+            ⚙
+          </NavLink>
         </div>
         {[...agents]
           .sort((a, b) => {
-            const order = { online: 0, busy: 1, idle: 2, offline: 3 };
+            const order = { active: 0, recovering: 1, dormant: 2, error: 3 };
             return (order[a.status as keyof typeof order] ?? 4) - (order[b.status as keyof typeof order] ?? 4);
           })
           .slice(0, 20)
@@ -152,7 +158,7 @@ export function Sidebar() {
             >
               <AgentAvatar name={a.name} displayName={a.display_name} size="sm" />
               <span className="truncate flex-1">{a.display_name || a.name}</span>
-              <StatusIndicator status={a.status as 'online' | 'busy' | 'idle' | 'offline'} />
+              <StatusIndicator status={a.status as 'active' | 'dormant' | 'recovering' | 'error'} />
             </NavLink>
           ))}
       </nav>
@@ -168,20 +174,6 @@ export function Sidebar() {
         <span>🎯</span>
         <span>Direct Chat</span>
       </NavLink>
-
-      {isAdmin && (
-        <NavLink
-          to="/admin"
-          className={({ isActive }) =>
-            `mx-2 mb-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              isActive ? 'bg-accent text-white' : 'bg-surface-elevated text-text-muted hover:text-text'
-            }`
-          }
-        >
-          <span>⚙️</span>
-          <span>Admin ({agent?.display_name || agent?.name})</span>
-        </NavLink>
-      )}
 
       {showCreateRoom && token && (
         <CreateRoomModal

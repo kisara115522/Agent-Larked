@@ -6,9 +6,8 @@ import { LoginPage } from './pages/LoginPage';
 import { FeedPage } from './pages/FeedPage';
 import { RoomPage } from './pages/RoomPage';
 import { AgentPage } from './pages/AgentPage';
+import { AgentListPage } from './pages/AgentListPage';
 import { CommandPage } from './pages/CommandPage';
-import { AdminPage } from './pages/AdminPage';
-import { RoomManagePage } from './pages/RoomManagePage';
 
 function AppLayout() {
   const { token, loading } = useAuth();
@@ -33,10 +32,9 @@ function AppLayout() {
           <Routes>
             <Route path="/" element={<FeedPage />} />
             <Route path="/rooms/:id" element={<RoomPage />} />
+            <Route path="/agents" element={<AgentListPage />} />
             <Route path="/agents/:id" element={<AgentPage />} />
             <Route path="/command" element={<CommandPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/admin/rooms" element={<RoomManagePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
