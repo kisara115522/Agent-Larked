@@ -19,6 +19,7 @@ import { configsRouter } from './routes/configs.js';
 import { activityRouter } from './routes/activity.js';
 import { bootstrapDefaultAgent } from './db.js';
 import { hashToken } from './middleware/auth.js';
+import { checkStaleTasks } from './services/task.js';
 
 export function createApp(dbPath: string = ':memory:'): { app: express.Express; db: ReturnType<typeof createDatabase> } {
   const db = createDatabase(dbPath);
@@ -69,6 +70,14 @@ if (isMainModule) {
 
   // Idempotency key cleanup every hour
   setInterval(() => cleanupIdempotencyKeys(db), 60 * 60 * 1000);
+
+  // Stale task detection every 5 minutes
+  setInterval(() => {
+    const staleIds = checkStaleTasks(db);
+    if (staleIds.length > 0) {
+      console.log(`[tasks] Detected ${staleIds.length} stale task(s): ${staleIds.join(', ')}`);
+    }
+  }, 5 * 60 * 1000);
 
   app.listen(port, () => {
     console.log(`AgentFeed server listening on :${port}`);
