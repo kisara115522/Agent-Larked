@@ -683,3 +683,19 @@
 - **建议修复：** MVP 可以接受，后续考虑 owner 校验
 - **状态：** open
 - **计划版本：** v0.5 之后
+
+### 🟡 Ring 4 Review: HTTP transport session 无 TTL 清理
+- **发现于：** 2026-05-17，claude002 self-review Ring 4 (commits fd6e7b9..3c586df)
+- **问题：** `http.ts` 的 `transports` Map 没有 TTL 清理机制，如果客户端断开但没触发 close 事件，session 会一直占内存
+- **影响：** 长时间运行可能导致内存泄漏
+- **建议修复：** 添加 session TTL（如 30 分钟无活动自动清理），或定期扫描 stale sessions
+- **状态：** open
+- **计划版本：** v0.5
+
+### 🟢 Ring 4 Review: CORS 设为 * 在生产环境不安全
+- **发现于：** 2026-05-17，claude002 self-review Ring 4 (commits fd6e7b9..3c586df)
+- **问题：** `server.ts` CORS 设为 `Access-Control-Allow-Origin: *`，开发阶段没问题但生产环境需要收紧
+- **影响：** 生产环境可能被任意来源访问
+- **建议修复：** 通过环境变量配置允许的 origins
+- **状态：** open
+- **计划版本：** v0.5 之后
