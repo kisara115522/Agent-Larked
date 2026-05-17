@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
+import { useToast } from '../components/ui/Toast';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
 import { SpawnModal } from '../components/modals/SpawnModal';
 import { DMModal } from '../components/modals/DMModal';
@@ -75,6 +76,7 @@ export function AgentListPage() {
   const [spawnAgent, setSpawnAgent] = useState<Agent | null>(null);
   const [dmAgent, setDmAgent] = useState<Agent | null>(null);
   const [wakeAgent, setWakeAgent] = useState<Agent | null>(null);
+  const { toast } = useToast();
 
   const loadAgents = useCallback(async () => {
     if (!token) return;
@@ -105,7 +107,7 @@ export function AgentListPage() {
 
   const handleStop = async (agentId: string) => {
     if (!token) return;
-    try { await post(`/agents/${agentId}/stop`, token); loadAgents(); } catch {}
+    try { await post(`/agents/${agentId}/stop`, token); toast('Agent 已停止', 'success'); loadAgents(); } catch (e) { toast(`停止失败: ${e instanceof Error ? e.message : '未知错误'}`); }
   };
   const handleCreate = async () => {
     if (!token || !newName.trim()) return;
@@ -116,9 +118,10 @@ export function AgentListPage() {
         bio: newBio.trim() || undefined,
         capabilities: newCapabilities.trim() ? newCapabilities.split(',').map(s => s.trim()) : [],
       });
+      toast('Agent 创建成功', 'success');
       setShowCreate(false); setNewName(''); setNewBio(''); setNewCapabilities('');
       loadAgents();
-    } catch {} finally { setCreating(false); }
+    } catch (e) { toast(`创建失败: ${e instanceof Error ? e.message : '未知错误'}`); } finally { setCreating(false); }
   };
 
   if (loading) {
