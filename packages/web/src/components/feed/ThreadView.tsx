@@ -11,7 +11,7 @@ interface ThreadViewProps {
 }
 
 export function ThreadView({ messageId, onClose }: ThreadViewProps) {
-  const { token } = useAuth();
+  const { token, human } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -103,6 +103,7 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
                   createdAt={msg.created_at}
                   sequence={msg.sequence}
                   senderType={msg.sender_type}
+                  currentUserId={human?.id}
                   onReact={handleReact}
                 />
               </div>

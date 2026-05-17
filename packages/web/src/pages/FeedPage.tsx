@@ -18,7 +18,7 @@ interface FeedItem extends Message {
 }
 
 export function FeedPage() {
-  const { token } = useAuth();
+  const { token, human } = useAuth();
   const { subscribe } = useSSE();
   const { totalUnread } = useMentions();
   const navigate = useNavigate();
@@ -136,6 +136,7 @@ export function FeedPage() {
                   reactions={msg.reactions}
                   createdAt={msg.created_at}
                   senderType={msg.sender_type}
+                  currentUserId={human?.id}
                   onReact={handleReact}
                 />
               </div>

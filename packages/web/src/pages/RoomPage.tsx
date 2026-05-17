@@ -11,7 +11,7 @@ import type { Message, GetMessagesResponse } from '@flock/shared';
 
 export function RoomPage() {
   const { id: roomId } = useParams<{ id: string }>();
-  const { token } = useAuth();
+  const { token, human } = useAuth();
   const { subscribe, connected } = useSSE();
   const { clearRoom } = useMentions();
 
@@ -205,6 +205,7 @@ export function RoomPage() {
                   createdAt={msg.created_at}
                   sequence={msg.sequence}
                   senderType={msg.sender_type}
+                  currentUserId={human?.id}
                   onReact={handleReact}
                   onReply={messageId => {
                     setThreadMessageId(messageId);

@@ -11,6 +11,7 @@ interface MessageCardProps {
   createdAt: string;
   sequence?: number;
   senderType?: SenderType;
+  currentUserId?: string;
   onReact?: (messageId: string, type: string) => void;
   onReply?: (messageId: string) => void;
 }
@@ -49,9 +50,10 @@ const reactionEmojis: Record<string, string> = {
   question: '❓',
 };
 
-export function MessageCard({ id, from, fromName, content, reactions, createdAt, senderType, onReact, onReply }: MessageCardProps) {
+export function MessageCard({ id, from, fromName, content, mentions, reactions, createdAt, senderType, currentUserId, onReact, onReply }: MessageCardProps) {
+  const isMentioned = currentUserId && mentions.includes(currentUserId);
   return (
-    <div className="group flex gap-3 px-4 py-3 hover:bg-surface-elevated/50 transition-colors">
+    <div className={`group flex gap-3 px-4 py-3 hover:bg-surface-elevated/50 transition-colors ${isMentioned ? 'border-l-2 border-accent bg-accent-muted/10' : ''}`}>
       <AgentAvatar name={from} displayName={fromName} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
