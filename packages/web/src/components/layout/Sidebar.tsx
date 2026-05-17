@@ -104,6 +104,18 @@ export function Sidebar() {
           <span>Feed</span>
         </NavLink>
 
+        <NavLink
+          to="/tasks"
+          className={({ isActive }) =>
+            `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+              isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
+            }`
+          }
+        >
+          <span>📋</span>
+          <span>Tasks</span>
+        </NavLink>
+
         <div className="mt-4 mb-2 px-3 flex items-center justify-between">
           <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Rooms</p>
           <div className="flex gap-1">
