@@ -33,7 +33,6 @@ export function directChatsRouter(db: Database.Database, eventBus: EventBus): Ro
       eventBus.emitDirectMessage(
         {
           message_id: result.id,
-          chat_id: result.chat_id,
           from: req.agentId!,
           to: req.params.agentId as string,
           content: req.body.content,

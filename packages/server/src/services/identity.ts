@@ -19,14 +19,14 @@ const STALE_ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 export function cleanupStaleOnlineAgents(db: Database.Database): string[] {
   const threshold = new Date(Date.now() - STALE_ONLINE_THRESHOLD_MS).toISOString();
   const stale = db.prepare(
-    "SELECT id FROM profiles WHERE status = 'online' AND last_active_at IS NOT NULL AND last_active_at < ?"
+    "SELECT id FROM profiles WHERE status = 'active' AND last_active_at IS NOT NULL AND last_active_at < ?"
   ).all(threshold) as Array<{ id: string }>;
 
   if (stale.length === 0) return [];
 
   const now = new Date().toISOString();
   db.prepare(
-    "UPDATE profiles SET status = 'offline', updated_at = ? WHERE status = 'online' AND last_active_at IS NOT NULL AND last_active_at < ?"
+    "UPDATE profiles SET status = 'dormant', updated_at = ? WHERE status = 'active' AND last_active_at IS NOT NULL AND last_active_at < ?"
   ).run(now, threshold);
 
   return stale.map(a => a.id);
@@ -43,7 +43,7 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
   try {
     db.prepare(`
       INSERT INTO profiles (id, name, bio, capabilities, model, status, token_hash, created_at, updated_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, 'online', ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
     `).run(
       id,
       req.name,
@@ -105,7 +105,7 @@ export function updateProfile(db: Database.Database, agentId: string, req: Updat
   if (req.status !== undefined) {
     updates.push('status = ?');
     values.push(req.status);
-    if (req.status === 'online') {
+    if (req.status === 'active') {
       updates.push('last_active_at = ?');
       values.push(now);
     }

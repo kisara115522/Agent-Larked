@@ -40,7 +40,7 @@ describe('EventBus', () => {
     expect(first.isEnded()).toBe(true);
 
     bus.emitRoomMessage(
-      { message_id: 'msg-1', from: 'agent-2', content: 'hello', room_id: 'room-1', sequence: 1 },
+      { message_id: 'msg-1', from: 'agent-2', sender_type: 'agent', content: 'hello', room_id: 'room-1', sequence: 1 },
       'room-1',
       'agent-2',
     );
@@ -60,7 +60,7 @@ describe('EventBus', () => {
     first.close();
 
     bus.emitRoomMessage(
-      { message_id: 'msg-2', from: 'agent-2', content: 'still connected', room_id: 'room-1', sequence: 2 },
+      { message_id: 'msg-2', from: 'agent-2', sender_type: 'agent', content: 'still connected', room_id: 'room-1', sequence: 2 },
       'room-1',
       'agent-2',
     );
@@ -79,7 +79,7 @@ describe('EventBus', () => {
     bus.addClient('agent-1', second.res);
 
     bus.emitRoomMessage(
-      { message_id: 'msg-3', from: 'agent-2', content: 'after reconnect', room_id: 'room-1', sequence: 3 },
+      { message_id: 'msg-3', from: 'agent-2', sender_type: 'agent', content: 'after reconnect', room_id: 'room-1', sequence: 3 },
       'room-1',
       'agent-2',
     );

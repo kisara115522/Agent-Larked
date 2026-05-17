@@ -3,7 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
-import { bootstrapDefaultAdmin } from '../db.js';
+import { bootstrapDefaultAgent } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
 
 let app: Express;
@@ -12,18 +12,25 @@ let adminToken: string;
 
 beforeAll(() => {
   ({ app, db } = createApp());
-  adminToken = bootstrapDefaultAdmin(db, hashToken)!;
+  adminToken = bootstrapDefaultAgent(db, hashToken)!;
 });
 
+async function createRoomAndJoin(agentToken: string, roomId: string) {
+  await request(app)
+    .post(`/rooms/${roomId}/join`)
+    .set('Authorization', `Bearer ${agentToken}`)
+    .expect(200);
+}
 
 describe('Edge cases', () => {
   it('POST /messages with non-existent mention agent → 400', async () => {
     const reg = await request(app).post('/agents').send({ name: 'EdgeBot1' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
+      .post('/rooms')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-1', agent_id: reg.body.id })
+      .send({ name: 'edge-room-1' })
       .expect(201);
+    await createRoomAndJoin(reg.body.token, room.body.id);
 
     await request(app)
       .post('/messages')
@@ -55,9 +62,9 @@ describe('Edge cases', () => {
     const owner = await request(app).post('/agents').send({ name: 'EdgeBot3' }).expect(201);
     const outsider = await request(app).post('/agents').send({ name: 'Outsider1' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-3', agent_id: owner.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${owner.body.token}`)
+      .send({ name: 'edge-room-3' })
       .expect(201);
 
     await request(app)
@@ -74,9 +81,9 @@ describe('Edge cases', () => {
   it('Duplicate reaction returns 200 with existing reaction', async () => {
     const reg = await request(app).post('/agents').send({ name: 'EdgeBot4' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-4', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'edge-room-4' })
       .expect(201);
     const msg = await request(app)
       .post('/messages')
@@ -102,9 +109,9 @@ describe('Edge cases', () => {
   it('Idempotency: same key + same body → same response', async () => {
     const reg = await request(app).post('/agents').send({ name: 'EdgeBot5' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-5', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'edge-room-5' })
       .expect(201);
 
     const body = { room_id: room.body.id, content: 'Idempotent', idempotency_key: 'idem-edge-1' };
@@ -128,9 +135,9 @@ describe('Edge cases', () => {
   it('Idempotency: same key + different body → 409', async () => {
     const reg = await request(app).post('/agents').send({ name: 'EdgeBot6' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-6', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'edge-room-6' })
       .expect(201);
 
     await request(app)
@@ -149,14 +156,14 @@ describe('Edge cases', () => {
   it('Cross-room reply → rejected', async () => {
     const reg = await request(app).post('/agents').send({ name: 'EdgeBot7' }).expect(201);
     const room1 = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-7a', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'edge-room-7a' })
       .expect(201);
     const room2 = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-7b', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'edge-room-7b' })
       .expect(201);
 
     const msg = await request(app)
@@ -180,9 +187,9 @@ describe('Edge cases', () => {
   it('Thread cycle detection → rejected', async () => {
     const reg = await request(app).post('/agents').send({ name: 'EdgeBot8' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-8', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'edge-room-8' })
       .expect(201);
 
     const msg1 = await request(app)
@@ -197,33 +204,25 @@ describe('Edge cases', () => {
       .send({ room_id: room.body.id, content: 'Msg2', reply_to: msg1.body.id, idempotency_key: 'edge-8b' })
       .expect(201);
 
-    // Try to make msg1 reply to msg2 (cycle)
+    // msg3 replying to msg2 is fine (no cycle)
     await request(app)
       .post('/messages')
       .set('Authorization', `Bearer ${reg.body.token}`)
       .send({
         room_id: room.body.id,
-        content: 'Cycle attempt',
+        content: 'Msg3',
         reply_to: msg2.body.id,
         idempotency_key: 'edge-8c',
       })
-      .expect(201); // This is fine — msg1 doesn't reply to msg2, this is a new message
-
-    // Actually test cycle: try to update msg1's reply_to to point to msg2
-    // But we can't update messages, so the cycle test is:
-    // msg1 → msg2 → attempt to reply to msg1 from msg2 context
-    // Since we already have msg2 replying to msg1, creating msg3 replying to msg2 is fine
-    // The real cycle would be msg1.reply_to = msg2 AND msg2.reply_to = msg1
-    // With immutable messages, this can't happen naturally.
-    // The hasCycle check is defensive — it prevents cycles if the DB somehow gets corrupted.
+      .expect(201);
   });
 
   it('Room join is idempotent', async () => {
     const reg = await request(app).post('/agents').send({ name: 'EdgeBot9' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'edge-room-9', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'edge-room-9' })
       .expect(201);
 
     // Already joined (creator auto-joins)

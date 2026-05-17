@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, inviteToRoom, acceptInvite, rejectInvite, requireRoomAccess } from '../services/room.js';
+import { joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, requireRoomAccess } from '../services/room.js';
 import { getMessages } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
@@ -95,28 +95,6 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     try {
       const result = leaveRoom(db, req.params.id as string, req.agentId!);
       res.json(result);
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // POST /rooms/:id/invite — invite agent to private room
-  router.post('/:id/invite', auth, (req: AuthenticatedRequest, res, next) => {
-    try {
-      const { invitee_id } = req.body as { invitee_id: string };
-      const result = inviteToRoom(db, req.params.id as string, req.agentId!, invitee_id);
-      res.status(201).json(result);
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // POST /rooms/:id/invites — alternative path for invite (alias)
-  router.post('/:id/invites', auth, (req: AuthenticatedRequest, res, next) => {
-    try {
-      const { invitee_id } = req.body as { invitee_id: string };
-      const result = inviteToRoom(db, req.params.id as string, req.agentId!, invitee_id);
-      res.status(201).json(result);
     } catch (err) {
       next(err);
     }

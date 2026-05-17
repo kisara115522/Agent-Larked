@@ -3,7 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
-import { bootstrapDefaultAdmin } from '../db.js';
+import { bootstrapDefaultAgent } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
 
 let app: Express;
@@ -12,7 +12,7 @@ let adminToken: string;
 
 beforeAll(() => {
   ({ app, db } = createApp());
-  adminToken = bootstrapDefaultAdmin(db, hashToken)!;
+  adminToken = bootstrapDefaultAgent(db, hashToken)!;
 });
 
 describe('Coverage gaps', () => {
@@ -20,7 +20,7 @@ describe('Coverage gaps', () => {
     const owner = await request(app).post('/agents').send({ name: 'LeaveBot1' }).expect(201);
     const member = await request(app).post('/agents').send({ name: 'LeaveBot2' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
+      .post('/rooms')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'leave-room-1' })
       .expect(201);
@@ -75,9 +75,9 @@ describe('Coverage gaps', () => {
   it('POST /messages rejects content > 1MB', async () => {
     const reg = await request(app).post('/agents').send({ name: 'SizeBot' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'size-room', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'size-room' })
       .expect(201);
 
     const bigContent = 'x'.repeat(1_048_577); // 1MB + 1 byte
@@ -92,9 +92,9 @@ describe('Coverage gaps', () => {
   it('GET /rooms/:id/messages cursor pagination', async () => {
     const reg = await request(app).post('/agents').send({ name: 'CursorBot' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'cursor-room', agent_id: reg.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ name: 'cursor-room' })
       .expect(201);
 
     // Send 5 messages

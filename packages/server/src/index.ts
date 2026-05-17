@@ -1,4 +1,5 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,18 +7,13 @@ import { createDatabase, cleanupIdempotencyKeys } from './db.js';
 import { errorHandler } from './middleware/error.js';
 import { EventBus } from './sse/event-bus.js';
 import { agentsRouter } from './routes/agents.js';
-import { followsRouter } from './routes/follows.js';
-import { agentInvitesRouter, invitesActionsRouter } from './routes/invites.js';
-import { broadcastRouter, feedRouter } from './routes/broadcast.js';
 import { roomsRouter } from './routes/rooms.js';
 import { messagesRouter } from './routes/messages.js';
 import { reactionsRouter } from './routes/reactions.js';
 import { eventsRouter } from './routes/events.js';
-import { authRouter } from './routes/auth.js';
 import { directChatsRouter } from './routes/direct-chats.js';
-import { adminRouter } from './routes/admin.js';
-import { tasksRouter } from './routes/tasks.js';
-import { bootstrapDefaultAdmin } from './db.js';
+import { humanAuthRouter } from './routes/human-auth.js';
+import { bootstrapDefaultAgent } from './db.js';
 import { hashToken } from './middleware/auth.js';
 
 export function createApp(dbPath: string = ':memory:'): { app: express.Express; db: ReturnType<typeof createDatabase> } {
@@ -26,22 +22,16 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
 
   const app = express();
   app.use(express.json({ limit: '2mb' }));
+  app.use(cookieParser());
 
   // Routes
-  app.use('/auth', authRouter(db));
+  app.use('/human', humanAuthRouter(db));
   app.use('/agents', agentsRouter(db, eventBus));
-  app.use('/agents', followsRouter(db));
-  app.use('/agents', agentInvitesRouter(db));
-  app.use('/invites', invitesActionsRouter(db));
   app.use('/rooms', roomsRouter(db, eventBus));
   app.use('/messages', messagesRouter(db, eventBus));
   app.use('/direct-chats', directChatsRouter(db, eventBus));
   app.use('/messages', reactionsRouter(db, eventBus));
   app.use('/events', eventsRouter(db, eventBus));
-  app.use('/broadcast', broadcastRouter(db, eventBus));
-  app.use('/feed', feedRouter(db));
-  app.use('/admin', adminRouter(db, eventBus));
-  app.use('/tasks', tasksRouter(db, eventBus));
 
   // Error handler (must be last)
   app.use(errorHandler);
@@ -60,13 +50,13 @@ if (isMainModule) {
   const dbPath = process.env.DB_PATH ?? join(repoRoot, 'data', 'agentfeed.db');
   const { app, db } = createApp(dbPath);
 
-  // Bootstrap default admin agent 'kisara' if it does not exist
-  const adminToken = bootstrapDefaultAdmin(db, hashToken);
-  if (adminToken) {
+  // Bootstrap default agent 'kisara' if it does not exist
+  const kisaraToken = bootstrapDefaultAgent(db, hashToken);
+  if (kisaraToken) {
     const tokenFile = join(dirname(dbPath), 'kisara-token.txt');
     mkdirSync(dirname(tokenFile), { recursive: true });
-    writeFileSync(tokenFile, adminToken, { encoding: 'utf-8', mode: 0o600 });
-    console.log(`Default admin agent 'kisara' created. Agent token saved to ${tokenFile}`);
+    writeFileSync(tokenFile, kisaraToken, { encoding: 'utf-8', mode: 0o600 });
+    console.log(`Default agent 'kisara' created. Token saved to ${tokenFile}`);
   }
 
   // Idempotency key cleanup every hour

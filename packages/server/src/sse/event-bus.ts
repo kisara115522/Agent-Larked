@@ -21,7 +21,7 @@ export class EventBus {
   private clients = new Map<string, SSEClient>(); // agentId → client
   private subscriptions = new Map<string, Set<string>>(); // roomId → Set<agentId>
   private lastMessageOrder = 0;
-  private lastTaskEventOrder = 0;
+  private lastTaskEventTime = '';
   private poller: ReturnType<typeof setInterval> | null = null;
 
   addClient(agentId: string, res: Response): void {
@@ -139,9 +139,9 @@ export class EventBus {
     this.lastMessageOrder = row.max_order;
 
     const taskRow = db.prepare(
-      'SELECT COALESCE(MAX(created_order), 0) AS max_order FROM task_events',
-    ).get() as { max_order: number };
-    this.lastTaskEventOrder = taskRow.max_order;
+      "SELECT COALESCE(MAX(created_at), '') AS max_time FROM task_events",
+    ).get() as { max_time: string };
+    this.lastTaskEventTime = taskRow.max_time;
   }
 
   /** Start polling DB for new messages and task events (2s interval) */
@@ -176,6 +176,7 @@ export class EventBus {
       const event: SSERoomMessageEvent = {
         message_id: row.id,
         from: row.from_agent,
+        sender_type: 'agent',
         content: row.content,
         room_id: row.room_id,
         sequence: row.sequence,
@@ -192,34 +193,41 @@ export class EventBus {
 
   private pollTaskEvents(db: Database.Database): void {
     const rows = db.prepare(
-      `SELECT te.id, te.task_id, te.actor_id, te.type, te.from_status, te.to_status, te.created_order,
+      `SELECT te.id, te.task_id, te.actor_id, te.event_type, te.payload, te.created_at,
               t.room_id
        FROM task_events te
        JOIN tasks t ON t.id = te.task_id
-       WHERE te.created_order > ?
-       ORDER BY te.created_order ASC
+       WHERE te.created_at > ?
+       ORDER BY te.created_at ASC
        LIMIT 100`,
-    ).all(this.lastTaskEventOrder) as {
-      id: string; task_id: string; actor_id: string; type: string;
-      from_status: string | null; to_status: string | null; created_order: number; room_id: string;
+    ).all(this.lastTaskEventTime) as {
+      id: string; task_id: string; actor_id: string; event_type: string;
+      payload: string | null; created_at: string; room_id: string;
     }[];
 
     for (const row of rows) {
-      this.lastTaskEventOrder = row.created_order;
+      this.lastTaskEventTime = row.created_at;
 
-      if (row.type === 'status_changed' && row.to_status) {
-        const event: SSETaskStatusEvent = {
-          task_id: row.task_id,
-          room_id: row.room_id,
-          from_status: row.from_status as SSETaskStatusEvent['from_status'],
-          to_status: row.to_status as SSETaskStatusEvent['to_status'],
-          actor_id: row.actor_id,
-        };
-        const subs = this.subscriptions.get(row.room_id);
-        if (!subs) continue;
-        for (const agentId of subs) {
-          if (agentId === row.actor_id) continue;
-          this.send(agentId, 'task_status', event);
+      if (row.event_type === 'status_changed' && row.payload) {
+        try {
+          const { from_status, to_status } = JSON.parse(row.payload) as { from_status?: string; to_status?: string };
+          if (to_status) {
+            const event: SSETaskStatusEvent = {
+              task_id: row.task_id,
+              room_id: row.room_id,
+              from_status: (from_status ?? null) as SSETaskStatusEvent['from_status'],
+              to_status: to_status as SSETaskStatusEvent['to_status'],
+              actor_id: row.actor_id,
+            };
+            const subs = this.subscriptions.get(row.room_id);
+            if (!subs) continue;
+            for (const agentId of subs) {
+              if (agentId === row.actor_id) continue;
+              this.send(agentId, 'task_status', event);
+            }
+          }
+        } catch {
+          // Skip malformed payload
         }
       }
     }

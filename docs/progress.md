@@ -63,6 +63,10 @@
   - claude002（SDK）：lifecycle.ts（spawn/stop/wake/status）、human.ts（register/login/me）、identity 适配
   - claude003（GUI）：AgentListPage 新建、AgentPage 重写（spawn/stop/wake）、StatusIndicator v0.5 四态、Sidebar Agents 链接、CommandPage auth 修复、FeedPage 文字更新
   - 7 个细粒度 commit（GUI 部分）
+- **v0.5 环 3 GUI 已完成** — 2026-05-17
+  - claude003（GUI）：MessageCard sender_type 支持、FeedPage 重写（聚合 Room 消息）、MentionContext + Sidebar 未读徽章、@mention 消息高亮
+  - 14 个细粒度 commit（GUI 总计）
+  - 等待 claude001 Server 环 1 剩余（task 表 + agent management 路由）完成后联调
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅

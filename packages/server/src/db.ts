@@ -13,13 +13,12 @@ CREATE TABLE IF NOT EXISTS profiles (
   capabilities TEXT DEFAULT '[]',
   model TEXT DEFAULT '',
   owner TEXT DEFAULT '',
-  status TEXT DEFAULT 'offline',
+  status TEXT DEFAULT 'dormant',
   metadata TEXT DEFAULT '{}',
   token_hash TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  last_active_at TEXT,
-  is_admin INTEGER DEFAULT 0
+  last_active_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS rooms (
@@ -147,75 +146,142 @@ CREATE INDEX IF NOT EXISTS idx_direct_idempotency_expiry ON direct_idempotency_k
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  parent_task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'open',
-  priority TEXT NOT NULL DEFAULT 'normal',
+  status TEXT DEFAULT 'todo',  -- todo/in_progress/review/done/rejected/error
+  assigned_to TEXT REFERENCES profiles(id) ON DELETE SET NULL,
+  required_capabilities TEXT DEFAULT '[]',  -- JSON array
+  priority INTEGER DEFAULT 0,
+  retry_count INTEGER DEFAULT 0,
+  max_retries INTEGER DEFAULT 3,
+  message_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
   created_by TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
-  origin_message_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  completed_at TEXT,
-  cancelled_at TEXT
+  completed_at TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_tasks_room_status ON tasks(room_id, status, updated_at);
-CREATE INDEX IF NOT EXISTS idx_tasks_created_by ON tasks(created_by, updated_at);
-CREATE INDEX IF NOT EXISTS idx_tasks_origin_message ON tasks(origin_message_id);
-
-CREATE TABLE IF NOT EXISTS task_assignees (
-  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  assigned_by TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
-  assigned_at TEXT NOT NULL,
-  PRIMARY KEY (task_id, agent_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_task_assignees_agent ON task_assignees(agent_id, task_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_room ON tasks(room_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 
 CREATE TABLE IF NOT EXISTS task_events (
   id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  actor_id TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
-  type TEXT NOT NULL,
-  from_status TEXT,
-  to_status TEXT,
-  body TEXT DEFAULT '',
-  metadata TEXT DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  created_order INTEGER NOT NULL,
-  UNIQUE(created_order)
+  event_type TEXT NOT NULL,  -- created/assigned/started/progress/review/approved/rejected/failed/retry/completed
+  actor_id TEXT NOT NULL,
+  payload TEXT,  -- JSON
+  created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_task_events_task_order ON task_events(task_id, created_order);
-CREATE INDEX IF NOT EXISTS idx_task_events_actor ON task_events(actor_id, created_order);
+CREATE INDEX IF NOT EXISTS idx_task_events_task ON task_events(task_id);
 
 CREATE TABLE IF NOT EXISTS task_artifacts (
   id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  created_by TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
-  type TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
   name TEXT NOT NULL,
-  content TEXT,
-  uri TEXT,
-  mime_type TEXT DEFAULT '',
-  metadata TEXT DEFAULT '{}',
+  path TEXT NOT NULL,
+  content_type TEXT DEFAULT 'text/plain',
+  size INTEGER DEFAULT 0,
   created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_task_artifacts_task ON task_artifacts(task_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_task_artifacts_creator ON task_artifacts(created_by, created_at);
+CREATE INDEX IF NOT EXISTS idx_task_artifacts_task ON task_artifacts(task_id);
 
-CREATE TABLE IF NOT EXISTS task_idempotency_keys (
-  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  key TEXT NOT NULL,
-  request_hash TEXT NOT NULL,
-  response TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  PRIMARY KEY (agent_id, key)
+-- v0.5: Human identity (separate from agent profiles)
+CREATE TABLE IF NOT EXISTS humans (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  display_name TEXT DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_task_idempotency_expiry ON task_idempotency_keys(expires_at);
+-- v0.5: Human login sessions
+CREATE TABLE IF NOT EXISTS human_sessions (
+  id TEXT PRIMARY KEY,
+  human_id TEXT NOT NULL REFERENCES humans(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_human_sessions_token ON human_sessions(token);
+CREATE INDEX IF NOT EXISTS idx_human_sessions_expiry ON human_sessions(expires_at);
+
+-- v0.5: Agent Runtime registration
+CREATE TABLE IF NOT EXISTS agent_runtimes (
+  id TEXT PRIMARY KEY,
+  host TEXT NOT NULL,
+  port INTEGER NOT NULL,
+  callback_url TEXT NOT NULL,
+  callback_secret_hash TEXT NOT NULL,
+  capabilities TEXT DEFAULT '[]',
+  max_agents INTEGER DEFAULT 10,
+  status TEXT DEFAULT 'online',
+  last_heartbeat_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- v0.5: Agent spawn records
+CREATE TABLE IF NOT EXISTS agent_spawns (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  runtime_id TEXT NOT NULL REFERENCES agent_runtimes(id),
+  session_id TEXT,
+  status TEXT DEFAULT 'active',
+  spawned_at TEXT DEFAULT (datetime('now')),
+  last_active_at TEXT,
+  prompt TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_spawns_agent ON agent_spawns(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_spawns_status ON agent_spawns(status);
+
+-- v0.5: Token usage tracking
+CREATE TABLE IF NOT EXISTS token_usage (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  task_id TEXT,
+  input_tokens INTEGER NOT NULL,
+  output_tokens INTEGER NOT NULL,
+  cost_usd REAL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_usage_agent ON token_usage(agent_id);
+
+-- v0.5: Token budgets
+CREATE TABLE IF NOT EXISTS token_budgets (
+  agent_id TEXT PRIMARY KEY,
+  daily_limit INTEGER DEFAULT 100000,
+  monthly_limit INTEGER DEFAULT 3000000,
+  current_daily INTEGER DEFAULT 0,
+  current_monthly INTEGER DEFAULT 0,
+  last_reset_at TEXT
+);
+
+-- v0.5: Agent configuration
+CREATE TABLE IF NOT EXISTS agent_configs (
+  agent_id TEXT NOT NULL REFERENCES profiles(id),
+  config_type TEXT NOT NULL,
+  config_value TEXT NOT NULL,
+  is_global INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (agent_id, config_type)
+);
+
+-- v0.5: Global configuration
+CREATE TABLE IF NOT EXISTS global_configs (
+  config_type TEXT NOT NULL,
+  config_value TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (config_type)
+);
 
 `;
 
@@ -234,8 +300,9 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'rooms', 'visibility', "TEXT DEFAULT 'public'");
   migrateColumn(db, 'messages', 'broadcast', 'INTEGER DEFAULT 0');
   migrateColumn(db, 'profiles', 'last_active_at', 'TEXT');
-  migrateColumn(db, 'profiles', 'is_admin', 'INTEGER DEFAULT 0');
   migrateColumn(db, 'direct_messages', 'read_at', 'TEXT DEFAULT NULL');
+  // v0.5: sender_type for human/agent distinction
+  migrateColumn(db, 'messages', 'sender_type', "TEXT NOT NULL DEFAULT 'agent'");
   migrateRoomsCreatedByAuditField(db);
   migrateMessagesFromAgentHistoryField(db);
 
@@ -263,17 +330,15 @@ function migrateColumn(db: Database.Database, table: string, column: string, def
 export function cleanupIdempotencyKeys(db: Database.Database): number {
   const roomResult = db.prepare("DELETE FROM idempotency_keys WHERE expires_at < datetime('now')").run();
   const directResult = db.prepare("DELETE FROM direct_idempotency_keys WHERE expires_at < datetime('now')").run();
-  const taskResult = db.prepare("DELETE FROM task_idempotency_keys WHERE expires_at < datetime('now')").run();
-  return roomResult.changes + directResult.changes + taskResult.changes;
+  return roomResult.changes + directResult.changes;
 }
 
-/** Bootstrap default admin agent 'kisara'. Returns the agent token if newly created. */
-export function bootstrapDefaultAdmin(db: Database.Database, hashToken: (token: string) => string): string | null {
+/** Bootstrap default agent 'kisara'. Returns the agent token if newly created. */
+export function bootstrapDefaultAgent(db: Database.Database, hashToken: (token: string) => string): string | null {
   const now = new Date().toISOString();
-  const existingAdmin = db.prepare('SELECT id FROM profiles WHERE name = ?').get('kisara') as { id: string } | undefined;
+  const existing = db.prepare('SELECT id FROM profiles WHERE name = ?').get('kisara') as { id: string } | undefined;
 
-  if (existingAdmin) {
-    db.prepare('UPDATE profiles SET is_admin = 1, updated_at = ? WHERE id = ?').run(now, existingAdmin.id);
+  if (existing) {
     ensureReservedProfiles(db, now);
     return null;
   }
@@ -289,10 +354,9 @@ export function bootstrapDefaultAdmin(db: Database.Database, hashToken: (token: 
       display_name,
       token_hash,
       status,
-      is_admin,
       created_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, 'offline', 1, ?, ?)
+    ) VALUES (?, ?, ?, ?, 'dormant', ?, ?)
   `).run(id, 'kisara', 'kisara', tokenHash, now, now);
 
   ensureReservedProfiles(db, now);

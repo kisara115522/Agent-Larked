@@ -1,20 +1,16 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { randomBytes } from 'node:crypto';
 import { registerAgent, updateProfile, searchAgents, getProfile, cleanupStaleOnlineAgents } from '../services/identity.js';
-import { authMiddleware, type AuthenticatedRequest, hashToken } from '../middleware/auth.js';
-import { adminAuthMiddleware, type AdminRequest } from '../middleware/admin-auth.js';
+import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
-import type { BatchDeleteRequest, BatchDeleteResult, RegenerateTokenResponse } from '@flock/shared';
-import { deleteAgentCascade } from '../services/cleanup.js';
-import { assertMutableProfile } from '../services/reserved-profiles.js';
 
 export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
-  const adminAuth = adminAuthMiddleware(db);
+  const humanAuth = humanAuthMiddleware(db);
 
   // POST /agents — register (no auth required)
   router.post('/', (req, res, next) => {
@@ -50,7 +46,6 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
   router.patch('/:id', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       if (req.params.id !== req.agentId) {
-        // TODO: v0.6 RBAC — allow admin role to update any agent
         res.status(403).json({ error: { code: ErrorCode.FORBIDDEN, message: 'Cannot update another agent', retryable: false } });
         return;
       }
@@ -85,7 +80,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       const staleIds = cleanupStaleOnlineAgents(db);
       if (staleIds.length > 0 && eventBus) {
         for (const id of staleIds) {
-          eventBus.emitAgentStatus({ agent_id: id, status: 'offline' });
+          eventBus.emitAgentStatus({ agent_id: id, status: 'dormant' });
         }
       }
 
@@ -104,73 +99,133 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
     }
   });
 
-  // POST /agents/:id/token — regenerate token (admin-only)
-  router.post('/:id/token', adminAuth, (req: AdminRequest, res, next) => {
-    try {
-      assertMutableProfile(req.params.id as string);
-      const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(req.params.id) as { id: string } | undefined;
-      if (!existing) {
-        throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
-      }
+  // --- Human-auth routes (v0.5) ---
 
-      const newToken = randomBytes(32).toString('hex');
-      const newHash = hashToken(newToken);
-      const now = new Date().toISOString();
-
-      db.prepare('UPDATE profiles SET token_hash = ?, updated_at = ? WHERE id = ?').run(newHash, now, req.params.id);
-
-      const response: RegenerateTokenResponse = { id: req.params.id as string, token: newToken };
-      res.json(response);
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // DELETE /agents/:id — delete agent (admin-only)
-  router.delete('/:id', adminAuth, (req: AdminRequest, res, next) => {
+  // DELETE /agents/:id — delete agent (human auth)
+  router.delete('/:id', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
     try {
       const agentId = req.params.id as string;
-      assertMutableProfile(agentId);
       const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
       if (!existing) {
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
       }
 
-      deleteAgentCascade(db, agentId);
+      db.prepare('DELETE FROM profiles WHERE id = ?').run(agentId);
       res.json({ ok: true });
     } catch (err) {
       next(err);
     }
   });
 
-  // POST /agents/batch-delete — batch delete agents (admin-only)
-  router.post('/batch-delete', adminAuth, (req: AdminRequest, res, next) => {
+  // POST /agents/:id/spawn — spawn agent (human auth)
+  router.post('/:id/spawn', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
     try {
-      const { agent_ids } = req.body as BatchDeleteRequest;
-
-      if (!Array.isArray(agent_ids) || agent_ids.length === 0) {
-        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'agent_ids must be a non-empty array', false, 400);
+      const agentId = req.params.id as string;
+      const existing = db.prepare('SELECT id, status FROM profiles WHERE id = ?').get(agentId) as { id: string; status: string } | undefined;
+      if (!existing) {
+        throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
       }
 
-      const results: BatchDeleteResult[] = [];
+      // Create spawn record
+      const spawnId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const runtimeId = req.body.runtime_id ?? null;
+      const prompt = req.body.prompt ?? null;
 
-      for (const agentId of agent_ids) {
-        try {
-          assertMutableProfile(agentId);
-          const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
-          if (!existing) {
-            results.push({ id: agentId, success: false, error: 'Agent not found' });
-            continue;
-          }
+      db.prepare(`
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
+        VALUES (?, ?, ?, 'active', ?, ?, ?)
+      `).run(spawnId, agentId, runtimeId, now, now, prompt);
 
-          deleteAgentCascade(db, agentId);
-          results.push({ id: agentId, success: true });
-        } catch (err) {
-          results.push({ id: agentId, success: false, error: (err as Error).message });
-        }
+      // Update agent status
+      db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
+
+      if (eventBus) {
+        eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
       }
 
-      res.json({ results });
+      res.status(201).json({ spawn_id: spawnId, status: 'active' });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /agents/:id/stop — stop agent (human auth)
+  router.post('/:id/stop', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
+    try {
+      const agentId = req.params.id as string;
+      const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
+      if (!existing) {
+        throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
+      }
+
+      const now = new Date().toISOString();
+
+      // Mark active spawns as stopped
+      db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status = 'active'").run(now, agentId);
+
+      // Update agent status
+      db.prepare("UPDATE profiles SET status = 'dormant', updated_at = ? WHERE id = ?").run(now, agentId);
+
+      if (eventBus) {
+        eventBus.emitAgentStatus({ agent_id: agentId, status: 'dormant' });
+      }
+
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /agents/:id/wake — wake dormant agent (human auth)
+  router.post('/:id/wake', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
+    try {
+      const agentId = req.params.id as string;
+      const existing = db.prepare('SELECT id, status FROM profiles WHERE id = ?').get(agentId) as { id: string; status: string } | undefined;
+      if (!existing) {
+        throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
+      }
+
+      const now = new Date().toISOString();
+      const prompt = req.body.prompt ?? null;
+
+      // Create new spawn record for the wake
+      const spawnId = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO agent_spawns (id, agent_id, status, spawned_at, last_active_at, prompt)
+        VALUES (?, ?, 'active', ?, ?, ?)
+      `).run(spawnId, agentId, now, now, prompt);
+
+      // Update agent status
+      db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
+
+      if (eventBus) {
+        eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
+      }
+
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /agents/:id/status — get agent runtime status
+  router.get('/:id/status', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
+    try {
+      const agentId = req.params.id as string;
+      const profile = db.prepare('SELECT status, last_active_at FROM profiles WHERE id = ?').get(agentId) as { status: string; last_active_at: string | null } | undefined;
+      if (!profile) {
+        throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
+      }
+
+      const spawn = db.prepare("SELECT runtime_id, session_id FROM agent_spawns WHERE agent_id = ? AND status = 'active' ORDER BY spawned_at DESC LIMIT 1").get(agentId) as { runtime_id: string | null; session_id: string | null } | undefined;
+
+      res.json({
+        status: profile.status,
+        runtime_id: spawn?.runtime_id ?? null,
+        session_id: spawn?.session_id ?? null,
+        last_active_at: profile.last_active_at,
+      });
     } catch (err) {
       next(err);
     }

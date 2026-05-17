@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type Database from 'better-sqlite3';
-import type { Room, CreateRoomRequest, OkResponse, RoomWithMemberCount, ListRoomsResponse, GetRoomMembersResponse, Invite, InviteWithDetails, ListInvitesResponse, RoomVisibility } from '@flock/shared';
+import type { Room, CreateRoomRequest, OkResponse, RoomWithMemberCount, ListRoomsResponse, GetRoomMembersResponse, RoomVisibility } from '@flock/shared';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { rowToProfile } from './profile-utils.js';
@@ -41,16 +41,9 @@ export function joinRoom(db: Database.Database, roomId: string, agentId: string)
     throw new ServerError(ErrorCode.ROOM_NOT_FOUND, 'Room not found', false, 404);
   }
 
-  // Private rooms require an invite
+  // Private rooms are invite-only (v0.5: invite system removed, use room invites via human UI)
   if (room.visibility === 'private') {
-    const invite = db.prepare(
-      "SELECT id FROM room_invites WHERE room_id = ? AND invitee_id = ? AND status = 'pending'"
-    ).get(roomId, agentId) as { id: string } | undefined;
-    if (!invite) {
-      throw new ServerError(ErrorCode.ROOM_IS_PRIVATE, 'Cannot join a private room without an invite', false, 403);
-    }
-    // Accept the invite automatically on join
-    db.prepare("UPDATE room_invites SET status = 'accepted' WHERE id = ?").run(invite.id);
+    throw new ServerError(ErrorCode.ROOM_IS_PRIVATE, 'Cannot join a private room', false, 403);
   }
 
   const now = new Date().toISOString();
@@ -193,144 +186,3 @@ export function getRoomMembers(db: Database.Database, roomId: string): GetRoomMe
   return { members };
 }
 
-// --- Private Rooms: Invite functions ---
-
-export function inviteToRoom(db: Database.Database, roomId: string, inviterId: string, inviteeId: string): Invite {
-  // Check room exists
-  const room = db.prepare('SELECT id, created_by, visibility FROM rooms WHERE id = ?').get(roomId) as { id: string; created_by: string | null; visibility: string } | undefined;
-  if (!room) {
-    throw new ServerError(ErrorCode.ROOM_NOT_FOUND, 'Room not found', false, 404);
-  }
-
-  // Any room member can invite (not just creator)
-  if (!isRoomMember(db, roomId, inviterId)) {
-    throw new ServerError(ErrorCode.NOT_ROOM_ADMIN, 'Only room members can invite', false, 403);
-  }
-
-  // Cannot invite yourself
-  if (inviterId === inviteeId) {
-    throw new ServerError(ErrorCode.SELF_INVITE, 'Cannot invite yourself', false, 400);
-  }
-
-  // Check invitee exists
-  const invitee = db.prepare('SELECT id FROM profiles WHERE id = ?').get(inviteeId) as { id: string } | undefined;
-  if (!invitee) {
-    throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
-  }
-
-  // Check if already a member
-  const member = db.prepare('SELECT 1 FROM room_members WHERE room_id = ? AND agent_id = ?').get(roomId, inviteeId);
-  if (member) {
-    throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Agent is already a member of this room', false, 400);
-  }
-
-  const id = uuidv4();
-  const now = new Date().toISOString();
-
-  try {
-    db.prepare(`
-      INSERT INTO room_invites (id, room_id, inviter_id, invitee_id, status, created_at)
-      VALUES (?, ?, ?, ?, 'pending', ?)
-    `).run(id, roomId, inviterId, inviteeId, now);
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message.includes('UNIQUE constraint failed: room_invites.room_id, room_invites.invitee_id')) {
-      // Update existing invite to pending if it was rejected
-      const existing = db.prepare("SELECT id, status FROM room_invites WHERE room_id = ? AND invitee_id = ?").get(roomId, inviteeId) as { id: string; status: string } | undefined;
-      if (existing && existing.status !== 'pending') {
-        db.prepare("UPDATE room_invites SET status = 'pending', inviter_id = ? WHERE id = ?").run(inviterId, existing.id);
-        return {
-          id: existing.id,
-          room_id: roomId,
-          inviter_id: inviterId,
-          invitee_id: inviteeId,
-          status: 'pending',
-          created_at: now,
-        };
-      }
-      throw new ServerError(ErrorCode.INVITE_ALREADY_EXISTS, 'Invite already exists for this agent', false, 409);
-    }
-    throw err;
-  }
-
-  return {
-    id,
-    room_id: roomId,
-    inviter_id: inviterId,
-    invitee_id: inviteeId,
-    status: 'pending',
-    created_at: now,
-  };
-}
-
-export function acceptInvite(db: Database.Database, inviteId: string, agentId: string): OkResponse {
-  const invite = db.prepare("SELECT id, room_id, invitee_id, status FROM room_invites WHERE id = ?").get(inviteId) as { id: string; room_id: string; invitee_id: string; status: string } | undefined;
-  if (!invite) {
-    throw new ServerError(ErrorCode.INVITE_NOT_FOUND, 'Invite not found', false, 404);
-  }
-
-  if (invite.invitee_id !== agentId) {
-    throw new ServerError(ErrorCode.VALIDATION_ERROR, 'This invite is not for you', false, 403);
-  }
-
-  if (invite.status !== 'pending') {
-    throw new ServerError(ErrorCode.VALIDATION_ERROR, `Invite already ${invite.status}`, false, 400);
-  }
-
-  const now = new Date().toISOString();
-  db.prepare("UPDATE room_invites SET status = 'accepted' WHERE id = ?").run(inviteId);
-  db.prepare('INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at) VALUES (?, ?, ?)').run(invite.room_id, agentId, now);
-
-  return { ok: true };
-}
-
-export function rejectInvite(db: Database.Database, inviteId: string, agentId: string): OkResponse {
-  const invite = db.prepare("SELECT id, invitee_id, status FROM room_invites WHERE id = ?").get(inviteId) as { id: string; invitee_id: string; status: string } | undefined;
-  if (!invite) {
-    throw new ServerError(ErrorCode.INVITE_NOT_FOUND, 'Invite not found', false, 404);
-  }
-
-  if (invite.invitee_id !== agentId) {
-    throw new ServerError(ErrorCode.VALIDATION_ERROR, 'This invite is not for you', false, 403);
-  }
-
-  if (invite.status !== 'pending') {
-    throw new ServerError(ErrorCode.VALIDATION_ERROR, `Invite already ${invite.status}`, false, 400);
-  }
-
-  db.prepare("UPDATE room_invites SET status = 'rejected' WHERE id = ?").run(inviteId);
-
-  return { ok: true };
-}
-
-export function getInvites(db: Database.Database, agentId: string): ListInvitesResponse {
-  const rows = db.prepare(`
-    SELECT ri.*, r.name AS room_name, p.name AS inviter_name
-    FROM room_invites ri
-    JOIN rooms r ON r.id = ri.room_id
-    JOIN profiles p ON p.id = ri.inviter_id
-    WHERE ri.invitee_id = ? AND ri.status = 'pending'
-    ORDER BY ri.created_at DESC
-  `).all(agentId) as Array<{
-    id: string;
-    room_id: string;
-    inviter_id: string;
-    invitee_id: string;
-    status: string;
-    created_at: string;
-    room_name: string;
-    inviter_name: string;
-  }>;
-
-  const invites: InviteWithDetails[] = rows.map((r) => ({
-    id: r.id,
-    room_id: r.room_id,
-    inviter_id: r.inviter_id,
-    invitee_id: r.invitee_id,
-    status: r.status as 'pending',
-    created_at: r.created_at,
-    room_name: r.room_name,
-    inviter_name: r.inviter_name,
-  }));
-
-  return { invites };
-}

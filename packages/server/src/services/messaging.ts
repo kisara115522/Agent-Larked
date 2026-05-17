@@ -257,6 +257,7 @@ function rowToMessage(db: Database.Database, row: Record<string, unknown>): Mess
     from: fromAgent,
     from_name: profile?.name ?? '',
     from_display_name: profile?.display_name ?? '',
+    sender_type: 'agent',
     room_id: row.room_id as string,
     content: row.content as string,
     reply_to: row.reply_to as string | null,

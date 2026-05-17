@@ -3,7 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
-import { bootstrapDefaultAdmin } from '../db.js';
+import { bootstrapDefaultAgent } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
 
 let app: Express;
@@ -12,7 +12,7 @@ let adminToken: string;
 
 beforeAll(() => {
   ({ app, db } = createApp());
-  adminToken = bootstrapDefaultAdmin(db, hashToken)!;
+  adminToken = bootstrapDefaultAgent(db, hashToken)!;
 });
 
 describe('Concurrency', () => {
@@ -20,9 +20,9 @@ describe('Concurrency', () => {
     const agentA = await request(app).post('/agents').send({ name: 'ConcBotA' }).expect(201);
     const agentB = await request(app).post('/agents').send({ name: 'ConcBotB' }).expect(201);
     const room = await request(app)
-      .post('/admin/rooms')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({ name: 'concurrent-room', agent_id: agentA.body.id })
+      .post('/rooms')
+      .set('Authorization', `Bearer ${agentA.body.token}`)
+      .send({ name: 'concurrent-room' })
       .expect(201);
 
     await request(app)

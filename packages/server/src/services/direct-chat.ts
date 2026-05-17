@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import type Database from 'better-sqlite3';
 import type {
+  AgentStatus,
   DirectMessage,
   GetDirectMessagesQuery,
   GetDirectMessagesResponse,
@@ -95,7 +96,7 @@ export function sendDirectMessage(
 
     db.prepare('UPDATE direct_chats SET updated_at = ? WHERE id = ?').run(now, chat.id);
 
-    const response: SendDirectMessageResponse = { id, chat_id: chat.id, sequence, created_at: now };
+    const response: SendDirectMessageResponse = { id, sequence, created_at: now };
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     db.prepare(`
       INSERT INTO direct_idempotency_keys (agent_id, peer_id, key, request_hash, response, expires_at)
@@ -154,7 +155,7 @@ export function listDirectChats(db: Database.Database, agentId: string): ListDir
       const peer = db.prepare('SELECT name, display_name, status FROM profiles WHERE id = ?').get(peerId) as {
         name: string;
         display_name: string | null;
-        status: 'online' | 'busy' | 'idle' | 'offline';
+        status: string;
       };
       const lastRow = db.prepare(
         'SELECT * FROM direct_messages WHERE chat_id = ? ORDER BY sequence DESC LIMIT 1',
@@ -164,11 +165,10 @@ export function listDirectChats(db: Database.Database, agentId: string): ListDir
       ).get(chat.id, agentId) as { count: number };
 
       return {
-        chat_id: chat.id,
         peer_id: peerId,
         peer_name: peer.name,
         peer_display_name: peer.display_name ?? '',
-        peer_status: peer.status,
+        peer_status: peer.status as AgentStatus,
         unread_count: Number(unread.count),
         last_message: lastRow ? rowToDirectMessage(db, lastRow) : null,
         updated_at: chat.updated_at,
@@ -215,10 +215,10 @@ function rowToDirectMessage(db: Database.Database, row: Record<string, unknown>)
 
   return {
     id: row.id as string,
-    chat_id: row.chat_id as string,
     from,
     from_name: fromProfile?.name ?? '',
     from_display_name: fromProfile?.display_name ?? '',
+    sender_type: 'agent',
     to,
     to_name: toProfile?.name ?? '',
     to_display_name: toProfile?.display_name ?? '',

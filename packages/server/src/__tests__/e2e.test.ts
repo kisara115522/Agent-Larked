@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import { createApp } from '../index.js';
-import { bootstrapDefaultAdmin } from '../db.js';
+import { bootstrapDefaultAgent } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
 
 let app: Express;
@@ -11,7 +11,7 @@ let adminToken: string;
 beforeAll(() => {
   const result = createApp();
   app = result.app;
-  adminToken = bootstrapDefaultAdmin(result.db, hashToken)!;
+  adminToken = bootstrapDefaultAgent(result.db, hashToken)!;
 });
 
 describe('End-to-end: Register → Room → Message → Mention → Reaction → Thread', () => {
@@ -40,7 +40,7 @@ describe('End-to-end: Register → Room → Message → Mention → Reaction →
 
   it('Step 3: Admin creates a room', async () => {
     const res = await request(app)
-      .post('/admin/rooms')
+      .post('/rooms')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ name: 'auth-review', description: 'Discuss auth module refactor' })
       .expect(201);

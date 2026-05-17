@@ -3,6 +3,7 @@ export enum ErrorCode {
   VALIDATION_ERROR = 1000,
   NOT_FOUND = 1001,
   FORBIDDEN = 1002,
+  INVALID_TOKEN = 1005,
   IDEMPOTENCY_CONFLICT = 1003,
   DUPLICATE_NAME = 1004,
 
@@ -57,6 +58,7 @@ const ERROR_MESSAGES: Record<ErrorCode, { message: string; retryable: boolean }>
   [ErrorCode.VALIDATION_ERROR]: { message: 'Validation error', retryable: false },
   [ErrorCode.NOT_FOUND]: { message: 'Resource not found', retryable: false },
   [ErrorCode.FORBIDDEN]: { message: 'Forbidden', retryable: false },
+  [ErrorCode.INVALID_TOKEN]: { message: 'Invalid or expired token', retryable: false },
   [ErrorCode.IDEMPOTENCY_CONFLICT]: { message: 'Idempotency key conflict', retryable: false },
   [ErrorCode.DUPLICATE_NAME]: { message: 'Name already taken', retryable: false },
 

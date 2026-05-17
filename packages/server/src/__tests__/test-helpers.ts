@@ -1,7 +1,7 @@
 import request from 'supertest';
 import type { Express } from 'express';
 import { createApp } from '../index.js';
-import { bootstrapDefaultAdmin } from '../db.js';
+import { bootstrapDefaultAgent } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
 
 export interface TestContext {
@@ -13,7 +13,7 @@ export interface TestContext {
 /** Create app and bootstrap admin agent. Returns context with the admin agent token for test use. */
 export function createTestContext(): TestContext {
   const { app, db } = createApp();
-  const adminToken = bootstrapDefaultAdmin(db, hashToken)!;
+  const adminToken = bootstrapDefaultAgent(db, hashToken)!;
   const adminRow = db.prepare('SELECT id FROM profiles WHERE name = ? AND is_admin = 1').get('kisara') as { id: string };
   return { app, adminToken, adminId: adminRow.id };
 }
@@ -21,7 +21,7 @@ export function createTestContext(): TestContext {
 /** Create a room using admin agent token. Returns room id. */
 export async function createRoomAsAdmin(app: Express, adminToken: string, name: string, visibility = 'public'): Promise<string> {
   const res = await request(app)
-    .post('/admin/rooms')
+    .post('/rooms')
     .set('Authorization', `Bearer ${adminToken}`)
     .send({ name, visibility })
     .expect(201);

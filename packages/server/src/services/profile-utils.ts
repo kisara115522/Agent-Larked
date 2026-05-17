@@ -11,7 +11,6 @@ export function rowToProfile(row: Record<string, unknown>): AgentProfile {
     owner: row.owner as string,
     status: row.status as AgentProfile['status'],
     metadata: JSON.parse(row.metadata as string) as Record<string, unknown>,
-    is_admin: Boolean(row.is_admin),
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     last_active_at: (row.last_active_at as string) ?? null,

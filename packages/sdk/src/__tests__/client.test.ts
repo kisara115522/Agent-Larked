@@ -44,7 +44,7 @@ describe('AgentFeedClient', () => {
 
   it('throws AgentFeedError on non-OK response with error body', async () => {
     mockFetch(
-      { error: { code: 1001, message: 'Agent not found', retryable: false } },
+      { error: { code: 1100, message: 'Agent not found', retryable: false } },
       404,
     );
     const client = new AgentFeedClient({ baseUrl: BASE });
@@ -78,9 +78,9 @@ describe('Identity', () => {
   });
 
   it('updateProfile sends PATCH /agents/:id', async () => {
-    const fetchFn = mockFetch({ id: 'a1', name: 'Bot', status: 'online' });
+    const fetchFn = mockFetch({ id: 'a1', name: 'Bot', status: 'active' });
     const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
-    await updateProfile(client, 'a1', { status: 'online' });
+    await updateProfile(client, 'a1', { status: 'active' });
 
     expect(fetchFn).toHaveBeenCalledWith(
       `${BASE}/agents/a1`,
@@ -95,13 +95,13 @@ describe('Discovery', () => {
   it('discover sends GET /agents with query params', async () => {
     const fetchFn = mockFetch({ agents: [], has_more: false });
     const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
-    await discover(client, { q: 'review', capabilities: 'code-review', status: 'online' });
+    await discover(client, { q: 'review', capabilities: 'code-review', status: 'active' });
 
     const url = fetchFn.mock.calls[0][0] as string;
     expect(url).toContain('/agents?');
     expect(url).toContain('q=review');
     expect(url).toContain('capabilities=code-review');
-    expect(url).toContain('status=online');
+    expect(url).toContain('status=active');
   });
 });
 
@@ -179,7 +179,7 @@ describe('Direct Chat', () => {
   beforeEach(() => vi.restoreAllMocks());
 
   it('sendDirectMessage sends POST /direct-chats/:agentId/messages', async () => {
-    const fetchFn = mockFetch({ id: 'dm1', chat_id: 'dc1', sequence: 1, created_at: '2026-05-09T00:00:00Z' }, 201);
+    const fetchFn = mockFetch({ id: 'dm1', sequence: 1, created_at: '2026-05-09T00:00:00Z' }, 201);
     const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
 
     const res = await sendDirectMessage(client, 'agent-2', {
@@ -191,7 +191,7 @@ describe('Direct Chat', () => {
       `${BASE}/direct-chats/agent-2/messages`,
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(res.chat_id).toBe('dc1');
+    expect(res.id).toBe('dm1');
   });
 
   it('getDirectMessages sends GET /direct-chats/:agentId/messages with pagination', async () => {
