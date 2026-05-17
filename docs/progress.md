@@ -160,6 +160,13 @@
   - 环 5: Task CRUD + 状态机 + SSE + 任务分配通知 + 超时重试 ✅
   - 环 6: Token 预算 + 配置 API ✅
 - **当前状态：** v0.5 全部 6 环后端+前端+MCP 完成，可进行端到端验收
+- **SDK Task 模块 + CLI 清理** — 2026-05-18（claude003）
+  - `cde9746` feat(sdk): task CRUD（createTask/listTasks/getTask/appendTaskEvent/addTaskArtifact）+ getMe() + 移除死代码 CLI 命令（broadcast/feed/follow/invite）+ 修复 discover.ts v0.5 status 类型
+  - `7217af3` fix(web): TaskBoardPage 低优先级标签（-1）
+  - `146cd6c` fix(web): TaskDetailModal 低优先级标签
+  - `ca34ce9` fix(sdk): listAgents 返回类型匹配 server 响应
+  - SDK + CLI + Server + Web 全部编译通过，0 TS 错误
+  - 200 server tests 全通过
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
