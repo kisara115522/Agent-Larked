@@ -27,7 +27,7 @@ export function CreateRoomModal({ token, onClose, onCreated }: CreateRoomModalPr
       onCreated();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create room');
+      setError(err instanceof Error ? err.message : '创建失败');
     } finally {
       setCreating(false);
     }
@@ -36,14 +36,14 @@ export function CreateRoomModal({ token, onClose, onCreated }: CreateRoomModalPr
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-surface border border-border rounded-lg shadow-xl w-80 p-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-semibold mb-3">Create Room</h3>
+        <h3 className="text-sm font-semibold mb-3">创建 Room</h3>
 
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleCreate()}
-          placeholder="Room name"
+          placeholder="Room 名称"
           autoFocus
           className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
         />
@@ -52,12 +52,12 @@ export function CreateRoomModal({ token, onClose, onCreated }: CreateRoomModalPr
           type="text"
           value={description}
           onChange={e => setDescription(e.target.value)}
-          placeholder="Description (optional)"
+          placeholder="描述（可选）"
           className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
         />
 
         <div className="flex gap-2 mb-3">
-          {(['public', 'private'] as const).map(v => (
+          {([['public', '公开'], ['private', '私有']] as const).map(([v, label]) => (
             <button
               key={v}
               onClick={() => setVisibility(v)}
@@ -67,7 +67,7 @@ export function CreateRoomModal({ token, onClose, onCreated }: CreateRoomModalPr
                   : 'bg-surface-elevated text-text-muted border border-border'
               }`}
             >
-              {v}
+              {label}
             </button>
           ))}
         </div>
@@ -79,14 +79,14 @@ export function CreateRoomModal({ token, onClose, onCreated }: CreateRoomModalPr
             onClick={onClose}
             className="flex-1 px-3 py-2 text-sm text-text-muted rounded-lg hover:bg-surface-elevated transition-colors"
           >
-            Cancel
+            取消
           </button>
           <button
             onClick={handleCreate}
             disabled={!name.trim() || creating}
             className="flex-1 px-3 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {creating ? '...' : 'Create'}
+            {creating ? '...' : '创建'}
           </button>
         </div>
       </div>

@@ -180,7 +180,7 @@ export function RoomPage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">Loading messages...</p>
+        <p className="text-sm text-text-muted">加载中...</p>
       </div>
     );
   }

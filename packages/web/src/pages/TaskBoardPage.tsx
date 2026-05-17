@@ -99,7 +99,7 @@ export function TaskBoardPage() {
   };
 
   if (loading) {
-    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">Loading...</p></div>;
+    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">加载中...</p></div>;
   }
 
   return (
