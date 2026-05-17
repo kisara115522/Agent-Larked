@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
+import { SpawnModal } from '../components/modals/SpawnModal';
+import { DMModal } from '../components/modals/DMModal';
+import { WakeSingleModal } from '../components/modals/WakeSingleModal';
 
 interface Agent {
   id: string;
@@ -14,6 +17,21 @@ interface Agent {
   status: string;
   runtime_id?: string;
   last_active_at?: string;
+}
+
+interface Room {
+  id: string;
+  name: string;
+  visibility: string;
+  member_count: number;
+}
+
+interface Runtime {
+  id: string;
+  host: string;
+  port: number;
+  agent_count: number;
+  max_agents: number;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -46,18 +64,29 @@ export function AgentListPage() {
   const { subscribe } = useSSE();
   const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [runtimes, setRuntimes] = useState<Runtime[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newBio, setNewBio] = useState('');
   const [newCapabilities, setNewCapabilities] = useState('');
   const [creating, setCreating] = useState(false);
+  const [spawnAgent, setSpawnAgent] = useState<Agent | null>(null);
+  const [dmAgent, setDmAgent] = useState<Agent | null>(null);
+  const [wakeAgent, setWakeAgent] = useState<Agent | null>(null);
 
   const loadAgents = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await get<{ agents: Agent[] }>('/agents', token);
-      setAgents(res.agents);
+      const [agentsRes, roomsRes, runtimesRes] = await Promise.all([
+        get<{ agents: Agent[] }>('/agents', token),
+        get<{ rooms: Room[] }>('/rooms', token).catch(() => ({ rooms: [] })),
+        get<{ runtimes: Runtime[] }>('/runtimes', token).catch(() => ({ runtimes: [] })),
+      ]);
+      setAgents(agentsRes.agents);
+      setRooms(roomsRes.rooms);
+      setRuntimes(runtimesRes.runtimes);
     } catch {} finally {
       setLoading(false);
     }
@@ -121,10 +150,11 @@ export function AgentListPage() {
             <AgentCard
               key={agent.id}
               agent={agent}
-              onSpawn={handleSpawn}
               onStop={handleStop}
-              onWake={handleWake}
               onNavigate={() => navigate(`/agents/${agent.id}`)}
+              onDM={() => setDmAgent(agent)}
+              onWakeModal={() => setWakeAgent(agent)}
+              onSpawnModal={() => setSpawnAgent(agent)}
             />
           ))}
           {agents.length === 0 && (
@@ -133,6 +163,7 @@ export function AgentListPage() {
         </div>
       </div>
 
+      {/* Create Agent Modal */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
           <div className="w-[520px] p-6 bg-surface border border-border rounded-[14px]" onClick={e => e.stopPropagation()}>
@@ -158,16 +189,51 @@ export function AgentListPage() {
           </div>
         </div>
       )}
+
+      {/* Spawn Modal */}
+      {spawnAgent && (
+        <SpawnModal
+          agents={agents}
+          runtimes={runtimes}
+          rooms={rooms}
+          onClose={() => setSpawnAgent(null)}
+          onSpawned={loadAgents}
+        />
+      )}
+
+      {/* DM Modal */}
+      {dmAgent && (
+        <DMModal
+          agentId={dmAgent.id}
+          agentName={dmAgent.name}
+          agentBio={dmAgent.bio}
+          onClose={() => setDmAgent(null)}
+        />
+      )}
+
+      {/* Wake Single Modal */}
+      {wakeAgent && (
+        <WakeSingleModal
+          agentId={wakeAgent.id}
+          agentName={wakeAgent.name}
+          agentStatus={wakeAgent.status}
+          lastActive={wakeAgent.last_active_at ? formatRelativeTime(wakeAgent.last_active_at) : undefined}
+          rooms={rooms}
+          onClose={() => setWakeAgent(null)}
+          onWoken={loadAgents}
+        />
+      )}
     </div>
   );
 }
 
-function AgentCard({ agent, onSpawn, onStop, onWake, onNavigate }: {
+function AgentCard({ agent, onStop, onNavigate, onDM, onWakeModal, onSpawnModal }: {
   agent: Agent;
-  onSpawn: (id: string) => void;
   onStop: (id: string) => void;
-  onWake: (id: string) => void;
   onNavigate: () => void;
+  onDM: () => void;
+  onWakeModal: () => void;
+  onSpawnModal: () => void;
 }) {
   const isDormant = agent.status === 'dormant';
   const gradient = getGradient(agent.name);
@@ -202,15 +268,15 @@ function AgentCard({ agent, onSpawn, onStop, onWake, onNavigate }: {
       </div>
 
       <div className="flex gap-2 mt-3 pt-3 border-t border-border">
-        <button onClick={e => { e.stopPropagation(); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover">对话</button>
+        <button onClick={e => { e.stopPropagation(); onDM(); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover">对话</button>
         <button onClick={e => { e.stopPropagation(); onNavigate(); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-surface-elevated text-text border border-border hover:border-text-dim">详情</button>
         {agent.status === 'active' && (
           <button onClick={e => { e.stopPropagation(); onStop(agent.id); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-error-muted text-error hover:bg-error hover:text-white ml-auto">停止</button>
         )}
         {(agent.status === 'dormant' || agent.status === 'error') && (
           <>
-            <button onClick={e => { e.stopPropagation(); onWake(agent.id); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white ml-auto">唤醒</button>
-            <button onClick={e => { e.stopPropagation(); onSpawn(agent.id); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover">启动</button>
+            <button onClick={e => { e.stopPropagation(); onWakeModal(); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white ml-auto">唤醒</button>
+            <button onClick={e => { e.stopPropagation(); onSpawnModal(); }} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover">启动</button>
           </>
         )}
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get } from '../api/client';
+import { SpawnModal } from '../components/modals/SpawnModal';
 
 interface Agent {
   id: string;
@@ -17,6 +18,21 @@ interface Task {
   status: string;
   assigned_to?: string;
   priority: number;
+}
+
+interface Room {
+  id: string;
+  name: string;
+  visibility: string;
+  member_count: number;
+}
+
+interface Runtime {
+  id: string;
+  host: string;
+  port: number;
+  agent_count: number;
+  max_agents: number;
 }
 
 interface WorkflowEvent {
@@ -46,17 +62,24 @@ export function WorkflowPage() {
   const { subscribe } = useSSE();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [runtimes, setRuntimes] = useState<Runtime[]>([]);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
+  const [showSpawn, setShowSpawn] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [agentsRes, tasksRes] = await Promise.all([
+      const [agentsRes, tasksRes, roomsRes, runtimesRes] = await Promise.all([
         get<{ agents: Agent[] }>('/agents', token),
         get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
+        get<{ rooms: Room[] }>('/rooms', token).catch(() => ({ rooms: [] })),
+        get<{ runtimes: Runtime[] }>('/runtimes', token).catch(() => ({ runtimes: [] })),
       ]);
       setAgents(agentsRes.agents);
       setTasks(tasksRes.tasks);
+      setRooms(roomsRes.rooms);
+      setRuntimes(runtimesRes.runtimes);
     } catch {}
   }, [token]);
 
@@ -72,7 +95,7 @@ export function WorkflowPage() {
           type: 'msg' as const,
           agent: data.from_name || data.from_agent || 'unknown',
           agentDisplay: data.from_name || data.from_agent || 'unknown',
-          action: `发送消息`,
+          action: '发送消息',
           detail: data.content?.slice(0, 120) || '',
           time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         }, ...prev].slice(0, 50));
@@ -85,7 +108,7 @@ export function WorkflowPage() {
           type: 'system' as const,
           agent: data.name || data.agent_id,
           agentDisplay: data.name || data.agent_id,
-          action: `状态变更`,
+          action: '状态变更',
           detail: `→ ${data.status}`,
           time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         }, ...prev].slice(0, 50));
@@ -97,6 +120,8 @@ export function WorkflowPage() {
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
   const todoTasks = tasks.filter(t => t.status === 'todo').length;
   const reviewTasks = tasks.filter(t => t.status === 'review').length;
+  const totalAgents = agents.length;
+  const activeRuntimes = runtimes.filter(r => r.agent_count > 0).length;
 
   return (
     <div className="flex flex-col h-full">
@@ -107,14 +132,17 @@ export function WorkflowPage() {
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#064E3B] text-[#34D399]">
             {activeCount} 个 agent 活跃中
           </span>
+          <button onClick={() => setShowSpawn(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
+            + 启动 Agent
+          </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 p-5">
-          <StatCard label="在线 Agent" value={String(activeCount)} sub={`共 ${agents.length} 个 Profile`} color="text-[#34D399]" />
-          <StatCard label="活跃 Runtime" value="-" sub="等待 Runtime daemon" color="text-accent" />
+          <StatCard label="在线 Agent" value={String(activeCount)} sub={`共 ${totalAgents} 个 Profile`} color="text-[#34D399]" />
+          <StatCard label="活跃 Runtime" value={activeRuntimes > 0 ? String(activeRuntimes) : '-'} sub={activeRuntimes > 0 ? `${activeRuntimes} 台机器` : '等待 Runtime daemon'} color="text-accent" />
           <StatCard label="进行中任务" value={String(inProgressTasks)} sub={`待办 ${todoTasks} / 审查 ${reviewTasks}`} color="text-[#FBBF24]" />
           <StatCard label="今日 Token" value="-" sub="等待 API 接入" />
         </div>
@@ -135,6 +163,17 @@ export function WorkflowPage() {
           )}
         </div>
       </div>
+
+      {/* Spawn Modal */}
+      {showSpawn && (
+        <SpawnModal
+          agents={agents}
+          runtimes={runtimes}
+          rooms={rooms}
+          onClose={() => setShowSpawn(false)}
+          onSpawned={load}
+        />
+      )}
     </div>
   );
 }

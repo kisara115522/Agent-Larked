@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
-import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
 
 interface Agent {
@@ -14,21 +13,49 @@ interface Agent {
   capabilities: string[];
   status: string;
   model?: string;
+  runtime_id?: string;
+  session_id?: string;
+  last_active_at?: string;
   created_at: string;
+}
+
+interface Task {
+  id: string;
+  title: string;
+  status: string;
+  assigned_to?: string;
+  priority: number;
+  created_at: string;
+}
+
+interface WorkflowEvent {
+  id: string;
+  type: 'tool' | 'msg' | 'think' | 'system' | 'error';
+  agent: string;
+  action: string;
+  detail: string;
+  time: string;
 }
 
 export function AgentPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
   const { subscribe } = useSSE();
+  const navigate = useNavigate();
   const [agent, setAgent] = useState<Agent | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [events, setEvents] = useState<WorkflowEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadAgent = useCallback(async () => {
     if (!token || !id) return;
     try {
-      const data = await get<Agent>(`/agents/${id}`, token);
-      setAgent(data);
+      const [agentData, tasksRes] = await Promise.all([
+        get<Agent>(`/agents/${id}`, token),
+        get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
+      ]);
+      setAgent(agentData);
+      setTasks(tasksRes.tasks.filter(t => t.assigned_to === id));
     } catch {
       // ignore
     } finally {
@@ -36,9 +63,7 @@ export function AgentPage() {
     }
   }, [token, id]);
 
-  useEffect(() => {
-    loadAgent();
-  }, [loadAgent]);
+  useEffect(() => { loadAgent(); }, [loadAgent]);
 
   // Real-time status updates
   useEffect(() => {
@@ -49,171 +74,196 @@ export function AgentPage() {
           setAgent(prev => prev ? { ...prev, status: data.status } : prev);
         }
       }
+      if ((event.event === 'room_message' || event.event === 'direct_message') && id) {
+        const data = event.data as { from_agent?: string; from_name?: string; content?: string };
+        if (data.from_agent === id || data.from_name === agent?.name) {
+          setEvents(prev => [{
+            id: `${Date.now()}-${Math.random()}`,
+            type: 'msg' as const,
+            agent: data.from_name || data.from_agent || 'unknown',
+            action: '发送消息',
+            detail: data.content?.slice(0, 120) || '',
+            time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+          }, ...prev].slice(0, 20));
+        }
+      }
     });
-  }, [subscribe, id]);
-
-  const handleSpawn = async () => {
-    if (!token || !id) return;
-    try {
-      await post(`/agents/${id}/spawn`, token, {});
-      loadAgent();
-    } catch (err) {
-      console.error('Failed to spawn agent:', err);
-    }
-  };
+  }, [subscribe, id, agent?.name]);
 
   const handleStop = async () => {
     if (!token || !id) return;
-    try {
-      await post(`/agents/${id}/stop`, token);
-      loadAgent();
-    } catch (err) {
-      console.error('Failed to stop agent:', err);
-    }
+    try { await post(`/agents/${id}/stop`, token); loadAgent(); } catch {}
   };
 
   const handleWake = async () => {
     if (!token || !id) return;
-    try {
-      await post(`/agents/${id}/wake`, token, {});
-      loadAgent();
-    } catch (err) {
-      console.error('Failed to wake agent:', err);
-    }
+    try { await post(`/agents/${id}/wake`, token, {}); loadAgent(); } catch {}
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'active': return 'Running';
-      case 'dormant': return 'Sleeping';
-      case 'recovering': return 'Recovering';
-      case 'error': return 'Error';
-      default: return status;
-    }
-  };
-
-  const getActionButtons = () => {
-    if (!agent) return null;
-    switch (agent.status) {
-      case 'active':
-        return (
-          <button
-            onClick={handleStop}
-            className="px-4 py-2 text-sm font-medium bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors"
-          >
-            Stop
-          </button>
-        );
-      case 'dormant':
-        return (
-          <div className="flex gap-2">
-            <button
-              onClick={handleWake}
-              className="px-4 py-2 text-sm font-medium bg-warning/10 text-warning rounded-lg hover:bg-warning/20 transition-colors"
-            >
-              Wake
-            </button>
-            <button
-              onClick={handleStop}
-              className="px-4 py-2 text-sm font-medium bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors"
-            >
-              Stop
-            </button>
-          </div>
-        );
-      case 'recovering':
-        return (
-          <span className="text-sm text-warning">Recovering...</span>
-        );
-      case 'error':
-        return (
-          <button
-            onClick={handleSpawn}
-            className="px-4 py-2 text-sm font-medium bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
-          >
-            Restart
-          </button>
-        );
-      default:
-        return (
-          <button
-            onClick={handleSpawn}
-            className="px-4 py-2 text-sm font-medium bg-accent text-white rounded-lg hover:opacity-90 transition-opacity"
-          >
-            Start
-          </button>
-        );
-    }
+  const handleSpawn = async () => {
+    if (!token || !id) return;
+    try { await post(`/agents/${id}/spawn`, token, {}); loadAgent(); } catch {}
   };
 
   if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">Loading agent...</p>
-      </div>
-    );
+    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">Loading...</p></div>;
   }
 
   if (!agent) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">Agent not found</p>
-      </div>
-    );
+    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">Agent not found</p></div>;
   }
 
+  const currentTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'review');
+  const historyTasks = tasks.filter(t => t.status === 'done' || t.status === 'rejected' || t.status === 'error');
+  const statusBadgeClass = agent.status === 'active' ? 'bg-[#064E3B] text-[#34D399]'
+    : agent.status === 'recovering' ? 'bg-[#78350F] text-[#FBBF24]'
+    : agent.status === 'error' ? 'bg-error-muted text-error'
+    : 'bg-surface-elevated text-text-muted border border-border';
+
   return (
-    <div className="h-full flex flex-col">
-      <header className="px-6 py-4 border-b border-border shrink-0">
-        <h2 className="text-lg font-semibold">Agent Profile</h2>
-      </header>
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-lg mx-auto">
-          <div className="flex items-start gap-4">
-            <AgentAvatar name={agent.name} displayName={agent.display_name} size="lg" />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h3 className="text-xl font-semibold">{agent.display_name || agent.name}</h3>
-                <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} size="md" />
-                <span className="text-sm text-text-muted">{getStatusLabel(agent.status)}</span>
-              </div>
-              <p className="text-sm text-text-muted font-mono mt-0.5">{agent.name}</p>
-              {agent.bio && <p className="text-sm text-text mt-2">{agent.bio}</p>}
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
+        <button onClick={() => navigate('/agents')} className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-elevated text-text-muted border border-border hover:border-text-dim transition-colors text-sm">
+          ←
+        </button>
+        <h3 className="text-base font-semibold">{agent.display_name || agent.name}</h3>
+        <div className="ml-auto flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusBadgeClass}`}>
+            <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
+            {agent.status}
+          </span>
+          {agent.status === 'active' && (
+            <button onClick={handleStop} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-error-muted text-error hover:bg-error hover:text-white transition-colors">停止 Agent</button>
+          )}
+          {(agent.status === 'dormant' || agent.status === 'error') && (
+            <>
+              <button onClick={handleWake} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white transition-colors">唤醒</button>
+              <button onClick={handleSpawn} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">启动</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 max-w-[800px]">
+          {/* Detail Grid */}
+          <div className="grid grid-cols-2 gap-2.5 mb-5">
+            <DetailField label="Runtime" value={agent.runtime_id ? `已分配 (${agent.runtime_id.slice(0, 8)})` : '未分配'} />
+            <DetailField label="Session ID" value={agent.session_id || '—'} mono />
+            <DetailField label="最后活跃" value={agent.last_active_at ? formatRelativeTime(agent.last_active_at) : '从未'} />
+            <DetailField label="Token 预算" value="—" />
+          </div>
+
+          {/* Capabilities */}
+          <div className="mb-5">
+            <h4 className="text-sm font-semibold mb-2">能力标签</h4>
+            <div className="flex gap-1.5 flex-wrap">
+              {agent.capabilities.length > 0 ? agent.capabilities.map(cap => (
+                <span key={cap} className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-surface-elevated text-text-muted border border-border">{cap}</span>
+              )) : (
+                <span className="text-xs text-text-dim">无能力标签</span>
+              )}
             </div>
           </div>
 
-          <div className="mt-4 flex gap-2">
-            {getActionButtons()}
+          {/* Current Tasks */}
+          <div className="mb-5">
+            <h4 className="text-sm font-semibold mb-2">当前任务</h4>
+            {currentTasks.length > 0 ? currentTasks.map(task => (
+              <div key={task.id} className="bg-surface border border-border rounded-[10px] p-3 mb-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
+                  <span className="text-[13px] font-medium flex-1">{task.title}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${task.status === 'in_progress' ? 'bg-[#78350F] text-[#FBBF24]' : 'bg-accent-muted text-accent'}`}>
+                    {task.status === 'in_progress' ? '进行中' : '审查中'}
+                  </span>
+                </div>
+              </div>
+            )) : (
+              <div className="text-xs text-text-dim py-3">暂无进行中的任务</div>
+            )}
           </div>
 
-          {agent.capabilities.length > 0 && (
-            <div className="mt-6">
-              <p className="text-xs text-text-muted uppercase tracking-wider mb-2">Capabilities</p>
-              <div className="flex flex-wrap gap-2">
-                {agent.capabilities.map(cap => (
-                  <span
-                    key={cap}
-                    className="px-2.5 py-1 rounded-full text-xs border border-border bg-surface font-mono"
-                  >
-                    {cap}
+          {/* History Tasks */}
+          <div className="mb-5">
+            <h4 className="text-sm font-semibold mb-2">历史任务</h4>
+            {historyTasks.length > 0 ? historyTasks.map(task => (
+              <div key={task.id} className="bg-surface border border-border rounded-[10px] p-3 mb-2 opacity-70">
+                <div className="flex items-center gap-2">
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${task.status === 'done' ? 'bg-[#064E3B] text-[#34D399]' : 'bg-error-muted text-error'}`}>
+                    {task.status === 'done' ? '✓' : '✗'}
                   </span>
+                  <span className="text-[13px] flex-1">{task.title}</span>
+                </div>
+              </div>
+            )) : (
+              <div className="text-xs text-text-dim py-3">暂无历史任务</div>
+            )}
+          </div>
+
+          {/* Recent Activity */}
+          <div className="mb-5">
+            <h4 className="text-sm font-semibold mb-2">最近活动</h4>
+            {events.length > 0 ? (
+              <div className="text-xs text-text-muted">
+                {events.map(ev => (
+                  <div key={ev.id} className="py-1.5 border-b border-border flex gap-2.5">
+                    <span className="font-mono text-text-dim w-[50px] shrink-0">{ev.time}</span>
+                    <span>{ev.detail || ev.action}</span>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="text-xs text-text-dim py-3">暂无最近活动</div>
+            )}
+          </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4 text-xs text-text-muted">
-            <div>
-              <p className="uppercase tracking-wider mb-1">Model</p>
-              <p className="text-text font-mono">{agent.model || 'unknown'}</p>
-            </div>
-            <div>
-              <p className="uppercase tracking-wider mb-1">Joined</p>
-              <p className="text-text font-mono">{new Date(agent.created_at).toLocaleDateString()}</p>
+          {/* Config Cards */}
+          <div>
+            <h4 className="text-sm font-semibold mb-2">配置</h4>
+            <div className="grid grid-cols-2 gap-2.5">
+              <ConfigCard icon="🧠" title="Soul" desc="人格描述、行为准则" badge="已配置" badgeClass="bg-accent-muted text-accent" />
+              <ConfigCard icon="📄" title="Agent.md" desc="能力定义、工作方式" badge="已配置" badgeClass="bg-accent-muted text-accent" />
+              <ConfigCard icon="🔧" title="Skills" desc="继承全局配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
+              <ConfigCard icon="🔌" title="MCP Tools" desc="工具接入配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
             </div>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function DetailField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="bg-bg border border-border rounded-md p-2.5">
+      <div className="text-[10px] text-text-dim uppercase tracking-wider">{label}</div>
+      <div className={`text-[13px] font-medium mt-0.5 ${mono ? 'font-mono text-[11px]' : ''}`}>{value}</div>
+    </div>
+  );
+}
+
+function ConfigCard({ icon, title, desc, badge, badgeClass }: { icon: string; title: string; desc: string; badge: string; badgeClass: string }) {
+  return (
+    <div className="bg-surface border border-border rounded-[10px] p-3 cursor-pointer hover:border-text-dim transition-colors">
+      <div className="text-xl mb-1.5">{icon}</div>
+      <div className="text-[13px] font-semibold">{title}</div>
+      <div className="text-xs text-text-muted">{desc}</div>
+      <div className="mt-1.5">
+        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${badgeClass}`}>{badge}</span>
+      </div>
+    </div>
+  );
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '刚刚';
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
 }

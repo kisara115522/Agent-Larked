@@ -30,7 +30,7 @@ interface Task {
 }
 
 export function RightPanel() {
-  const { token } = useAuth();
+  const { token, human } = useAuth();
   const { subscribe, connected } = useSSE();
   const [tab, setTab] = useState<PanelTab>('activity');
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -83,7 +83,7 @@ export function RightPanel() {
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-4">
         {tab === 'activity' && <ActivityTab agents={agents} rooms={rooms} connected={connected} />}
-        {tab === 'members' && <MembersTab agents={agents} />}
+        {tab === 'members' && <MembersTab agents={agents} human={human} />}
         {tab === 'tasks' && <TasksTab tasks={tasks} agents={agents} />}
       </div>
     </aside>
@@ -129,9 +129,17 @@ function ActivityTab({ agents, rooms, connected }: { agents: Agent[]; rooms: Roo
   );
 }
 
-function MembersTab({ agents }: { agents: Agent[] }) {
+function MembersTab({ agents, human }: { agents: Agent[]; human: { display_name?: string; username?: string } | null }) {
   return (
     <div>
+      {/* Human user first */}
+      {human && (
+        <div className="flex items-center gap-2 py-2 border-b border-border">
+          <AgentAvatar name="kisara" displayName={human.display_name || human.username} size="sm" />
+          <span className="flex-1 text-[13px]">{human.display_name || human.username}</span>
+          <span className="text-[11px] text-text-muted">管理员</span>
+        </div>
+      )}
       {agents.map(agent => (
         <div key={agent.id} className="flex items-center gap-2 py-2 border-b border-border">
           <AgentAvatar name={agent.name} displayName={agent.display_name} size="sm" />
@@ -139,8 +147,8 @@ function MembersTab({ agents }: { agents: Agent[] }) {
           <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
         </div>
       ))}
-      {agents.length === 0 && (
-        <div className="text-center text-text-dim text-xs py-8">暂无 agent</div>
+      {agents.length === 0 && !human && (
+        <div className="text-center text-text-dim text-xs py-8">暂无成员</div>
       )}
     </div>
   );
