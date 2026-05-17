@@ -38,9 +38,9 @@ export async function request<T>(
     } catch { /* use raw text */ }
 
     if (res.status === 401) {
-      message = message || 'Authentication failed. Please check your credentials.';
+      message = message || '认证失败，请检查凭据';
     } else if (res.status === 403) {
-      message = message || 'Permission denied. This action requires admin access.';
+      message = message || '权限不足，需要管理员权限';
     }
     throw new ApiError(res.status, message);
   }
