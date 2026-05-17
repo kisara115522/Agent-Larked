@@ -234,19 +234,19 @@
 - **建议修复：** 用 `GET /agents/:id` 直接拿 profile，follow 关系用 `/agents/:id/followers?limit=1` 检查
 - **状态：** open
 
-### 🟡 Room 标题显示 roomId 而非名字
+### ~~🟡 Room 标题显示 roomId 而非名字~~
 - **发现于：** 2026-05-07，代码审查发现
 - **问题：** `RoomPage.tsx:94` — `💬 Room ${roomId?.slice(0, 8)}` 显示 UUID 前 8 位
 - **影响：** 用户无法辨识 Room
 - **建议修复：** 先调 `GET /rooms/:id` 拿到 room name 显示
-- **状态：** open
+- **状态：** done（v0.5 环 3 — RoomPage fetches room name via GET /rooms/:id）
 
-### 🟡 fromName 显示原始 agent ID
+### ~~🟡 fromName 显示原始 agent ID~~
 - **发现于：** 2026-05-07，代码审查发现
 - **问题：** `FeedPage.tsx:73`、`RoomPage.tsx:120` — `fromName={msg.from}` 传的是 UUID
 - **影响：** 消息列表中显示 UUID 而非可读名字
 - **建议修复：** 查询消息时 join profiles 表带上 name/display_name
-- **状态：** open
+- **状态：** done（v0.5 — messages 有 from_name/from_display_name 字段）
 
 ### 🟡 flock follow 命令双重嵌套
 - **发现于：** 2026-05-07，代码审查发现
@@ -276,52 +276,44 @@
 - **建议修复：** 正则改为 `/@([\w-]+)/`
 - **状态：** done（v0.3.1 已修复 — gui-2-v031 分支）
 
-### 🟡 FeedPage 消息仍显示 UUID
+### ~~🟡 FeedPage 消息仍显示 UUID~~
 - **发现于：** 2026-05-07，交叉审查发现
-- **问题：** `FeedMessage` 类型没有 `from_name`/`from_display_name` 字段，因为 feed API 走 broadcast 路径，不经过 `getMessages` 的 JOIN
-- **影响：** Feed 视图中广播消息的发送者显示为 UUID
-- **建议修复：** broadcast API 返回时也 JOIN profiles 表带上名字，或扩展 `FeedMessage` 类型
-- **状态：** open
-- **计划版本：** v0.3.3
+- **问题：** `FeedMessage` 类型没有 `from_name`/`from_display_name` 字段
+- **影响：** Feed 视图中消息的发送者显示为 UUID
+- **建议修复：** messages 有 from_name/from_display_name 字段
+- **状态：** done（v0.5 — FeedPage 使用 Message 类型，有 from_name/from_display_name）
 
 ---
 
 ## v0.3.3 — GUI 交互增强 + Direct Mention Boundary Notification（2026-05-07/08 规划）
 
-### 🟡 RoomPage/FeedPage `.reverse()` 逻辑重复
+### ~~🟡 RoomPage/FeedPage `.reverse()` 逻辑重复~~
 - **发现于：** 2026-05-07，v0.3.2 审查发现
 - **问题：** `reset` 和 `!reset` 分支做了完全相同的 `[...res.messages].reverse()`
 - **影响：** 代码冗余，可读性差
 - **建议修复：** 合并为一行 `const ordered = [...res.messages].reverse()`
-- **状态：** open
-- **计划版本：** v0.3.3
+- **状态：** done（已简化）
 
-### 🟡 Room 标题显示 UUID 前 8 位
+### ~~🟡 Room 标题显示 UUID 前 8 位~~
 - **发现于：** 2026-05-07，v0.3.2 审查发现
 - **问题：** `RoomPage.tsx:139` — `💬 Room ${roomId?.slice(0, 8)}` 显示 UUID
 - **影响：** 用户无法辨识 Room
 - **建议修复：** 先调 `GET /rooms/:id` 拿到 room name 显示
-- **状态：** open
-- **计划版本：** v0.3.3
+- **状态：** done（v0.5 — RoomPage fetches room name）
 
-### 🟡 Sidebar agent 列表缺少状态指示器
+### ~~🟡 Sidebar agent 列表缺少状态指示器~~
 - **发现于：** 2026-05-07，v0.3.3 规划发现
-- **问题：** Sidebar 已订阅 `agent_status` SSE 事件，已有 `StatusIndicator` 组件，但 agent 列表（line 101-113）只显示头像+名字，没有状态圆点
+- **问题：** Sidebar 已订阅 `agent_status` SSE 事件，已有 `StatusIndicator` 组件，但 agent 列表只显示头像+名字，没有状态圆点
 - **影响：** 用户无法直观看到 agent 是否在线
 - **建议修复：** agent 列表项加 `<StatusIndicator status={a.status} />`，排序 online 优先
-- **状态：** open
-- **计划版本：** v0.3.3
+- **状态：** done（v0.3.3 已实现）
 
-### 🟢 GUI 缺少创建/加入/离开 Room 功能
+### ~~🟢 GUI 缺少创建/加入/离开 Room 功能~~
 - **发现于：** 2026-05-07，用户使用发现
-- **问题：** GUI 没有创建 Room、加入 Room、离开 Room 的入口。只能通过 CLI 或 API 操作
-- **影响：** 人类用户无法从 GUI 管理房间，使用不便
-- **建议修复：**
-  - Sidebar 顶部加「+」按钮 → 创建 Room 对话框（name + visibility）
-  - 提供「Join Room」入口 → 列出 public rooms → 点击加入
-  - Room 页面加 leave 按钮
-- **状态：** open
-- **计划版本：** v0.3.3
+- **问题：** GUI 没有创建 Room、加入 Room、离开 Room 的入口
+- **影响：** 人类用户无法从 GUI 管理房间
+- **建议修复：** CreateRoomModal + JoinRoomModal + RoomPage leave 按钮
+- **状态：** done（v0.3.3 已实现，v0.5 FeedPage 新建 Room 按钮已接入）
 
 ### 🟡 Agent 没有自动下线机制
 - **发现于：** 2026-05-07，v0.3.3 规划讨论
