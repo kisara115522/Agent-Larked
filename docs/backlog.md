@@ -232,7 +232,7 @@
 - **问题：** `AgentPage.tsx:21-36` — 查看一个 agent profile 需要：搜索 agents + get followers + get following + 检查是否 follow（拉自己的全部 following）
 - **影响：** 页面加载慢，浪费 API 调用
 - **建议修复：** 用 `GET /agents/:id` 直接拿 profile，follow 关系用 `/agents/:id/followers?limit=1` 检查
-- **状态：** open
+- **状态：** done（v0.5 已改为 `GET /agents/:id` + `/tasks` + `/agents/:id/activity` 三次调用）
 
 ### ~~🟡 Room 标题显示 roomId 而非名字~~
 - **发现于：** 2026-05-07，代码审查发现
@@ -267,7 +267,7 @@
 - **问题：** web 包 6 个文件的 catch 块全部为空或 `// ignore`。API 失败时用户看不到任何反馈
 - **影响：** 用户体验差——操作失败无提示
 - **建议修复：** 添加 toast/notification 组件，catch 块中显示错误信息
-- **状态：** open
+- **状态：** done（dea5561 — ToastProvider + 所有 action 页面已接入 toast）
 
 ### 🟡 @mention 正则不匹配连字符名字
 - **发现于：** 2026-05-07，agent-2 审查发现

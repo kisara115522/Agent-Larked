@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
+import { useToast } from '../components/ui/Toast';
 import { TaskDetailModal } from '../components/modals/TaskDetailModal';
 
 interface Task {
@@ -55,6 +56,7 @@ export function TaskBoardPage() {
   const [newPriority, setNewPriority] = useState(1);
   const [creating, setCreating] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const { toast } = useToast();
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -92,10 +94,11 @@ export function TaskBoardPage() {
         room_id: newRoom || undefined,
         priority: newPriority,
       });
+      toast('任务创建成功', 'success');
       setNewTitle('');
       setShowCreate(false);
       load();
-    } catch {} finally { setCreating(false); }
+    } catch (e) { toast(`创建失败: ${e instanceof Error ? e.message : '未知错误'}`); } finally { setCreating(false); }
   };
 
   if (loading) {
