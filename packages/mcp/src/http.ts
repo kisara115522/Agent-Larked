@@ -19,8 +19,29 @@ export interface HttpMcpHandlerOptions {
 export function createHttpMcpHandler(options: HttpMcpHandlerOptions) {
   const { db, resolveAgentId } = options;
 
+  const SESSION_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+
   // Store transports by session ID for stateful mode
   const transports = new Map<string, StreamableHTTPServerTransport>();
+  const lastActivity = new Map<string, number>();
+
+  // Periodic cleanup of idle sessions
+  const cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, activity] of lastActivity) {
+      if (now - activity > SESSION_IDLE_MS) {
+        const transport = transports.get(sessionId);
+        if (transport) {
+          transport.close();
+          transports.delete(sessionId);
+        }
+        lastActivity.delete(sessionId);
+      }
+    }
+  }, 60_000); // Check every minute
+
+  // Prevent the timer from keeping the process alive
+  if (cleanupInterval.unref) cleanupInterval.unref();
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     // Extract Bearer token from Authorization header
@@ -63,6 +84,11 @@ export function createHttpMcpHandler(options: HttpMcpHandlerOptions) {
 
     let transport = sessionId ? transports.get(sessionId) : undefined;
 
+    // Update activity timestamp for existing sessions
+    if (transport && sessionId) {
+      lastActivity.set(sessionId, Date.now());
+    }
+
     if (!transport) {
       // Create new transport for this session
       transport = new StreamableHTTPServerTransport({
@@ -85,11 +111,13 @@ export function createHttpMcpHandler(options: HttpMcpHandlerOptions) {
       // Store transport by session ID
       if (transport.sessionId) {
         transports.set(transport.sessionId, transport);
+        lastActivity.set(transport.sessionId, Date.now());
 
         // Clean up on close
         transport.onclose = () => {
           if (transport?.sessionId) {
             transports.delete(transport.sessionId);
+            lastActivity.delete(transport.sessionId);
           }
         };
       }
