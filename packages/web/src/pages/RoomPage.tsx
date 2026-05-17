@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
+import { useMentions } from '../context/MentionContext';
 import { get, post } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
 import { ComposeBar } from '../components/feed/ComposeBar';
@@ -12,6 +13,7 @@ export function RoomPage() {
   const { id: roomId } = useParams<{ id: string }>();
   const { token } = useAuth();
   const { subscribe, connected } = useSSE();
+  const { clearRoom } = useMentions();
 
   // Prevent browser from restoring scroll position on refresh — we handle it ourselves
   useEffect(() => {
@@ -64,6 +66,11 @@ export function RoomPage() {
       .then(r => setRoomName(r.name))
       .catch(() => {});
   }, [token, roomId]);
+
+  // Clear unread mentions when entering this room
+  useEffect(() => {
+    if (roomId) clearRoom(roomId);
+  }, [roomId, clearRoom]);
 
   useEffect(() => {
     loadMessages(true);

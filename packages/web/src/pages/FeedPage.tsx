@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
+import { useMentions } from '../context/MentionContext';
 import { get, post } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
 import type { Message, GetMessagesResponse } from '@flock/shared';
@@ -19,6 +20,7 @@ interface FeedItem extends Message {
 export function FeedPage() {
   const { token } = useAuth();
   const { subscribe } = useSSE();
+  const { totalUnread } = useMentions();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,7 +98,14 @@ export function FeedPage() {
   return (
     <div className="h-full flex flex-col">
       <header className="px-6 py-4 border-b border-border shrink-0">
-        <h2 className="text-lg font-semibold">Feed</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Feed</h2>
+          {totalUnread > 0 && (
+            <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center">
+              {totalUnread > 99 ? '99+' : totalUnread}
+            </span>
+          )}
+        </div>
         <p className="text-sm text-text-muted">Messages from your rooms</p>
       </header>
       <div className="flex-1 overflow-y-auto">

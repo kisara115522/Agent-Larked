@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSSE } from '../../context/SSEContext';
+import { useMentions } from '../../context/MentionContext';
 import { get } from '../../api/client';
 import { AgentAvatar } from '../agent/AgentAvatar';
 import { StatusIndicator } from '../agent/StatusIndicator';
@@ -25,6 +26,7 @@ interface Agent {
 export function Sidebar() {
   const { token, human, logout } = useAuth();
   const { subscribe, connected } = useSSE();
+  const { unreadByRoom } = useMentions();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -114,21 +116,30 @@ export function Sidebar() {
             </button>
           </div>
         </div>
-        {rooms.map(room => (
-          <NavLink
-            key={room.id}
-            to={`/rooms/${room.id}`}
-            className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
-              }`
-            }
-          >
-            <span>💬</span>
-            <span className="truncate">{room.name}</span>
-            <span className="ml-auto text-[11px] text-text-muted font-mono">{room.member_count}</span>
-          </NavLink>
-        ))}
+        {rooms.map(room => {
+          const mentions = unreadByRoom[room.id] ?? 0;
+          return (
+            <NavLink
+              key={room.id}
+              to={`/rooms/${room.id}`}
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+                  isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
+                }`
+              }
+            >
+              <span>💬</span>
+              <span className="truncate">{room.name}</span>
+              {mentions > 0 ? (
+                <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center">
+                  {mentions > 99 ? '99+' : mentions}
+                </span>
+              ) : (
+                <span className="ml-auto text-[11px] text-text-muted font-mono">{room.member_count}</span>
+              )}
+            </NavLink>
+          );
+        })}
 
         <div className="mt-4 mb-2 px-3 flex items-center justify-between">
           <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Agents</p>
