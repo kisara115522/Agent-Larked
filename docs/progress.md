@@ -120,14 +120,15 @@
   - `packages/runtime/` — `FlockAgentRuntime` 类：注册、心跳、回调接收、agent 进程管理、活动上报
   - Server 侧：spawn/stop/wake 路由通知 runtime，`notifyRuntimeSpawn()` / `notifyRuntimeStop()`
   - 190 server tests 全通过
-- **当前状态：** GUI v3 + Runtime daemon + 后端 API 全部完成，可进行端到端测试
+- **当前状态：** GUI v3 + Runtime daemon + 后端 API 全部完成，GUI 已接入所有后端 API，toast 通知已覆盖所有 action
 - **GUI API 集成 + Toast 通知完成** — 2026-05-18（claude003）
   - WakePage：接入 `GET /activity/wake-history`，显示真实唤醒记录
   - WorkflowPage：接入 `GET /activity` 初始加载 + `GET /token-usage` 今日 Token 统计 + `workflow_event` SSE 订阅
   - AgentPage：接入 `GET /agents/:id/activity` 活动日志
   - ToastProvider：全局 toast 通知系统（4 秒自动消失），所有 action 页面已接入（Wake/Agent/AgentList/TaskBoard/Spawn/DM/WakeSingle）
+  - RuntimesPage：注册按钮弹出帮助 modal（Runtime daemon 启动说明）
   - Backlog 清理：标记 toast 通知和 AgentPage 加载效率为 done
-  - 73 modules, 341KB JS, 25KB CSS, 0 errors
+  - 73 modules, 343KB JS, 26KB CSS, 0 errors
 - **v0.5 任务事件 + 任务分配通知 + 超时重试** — 2026-05-18（claude001）
   - `29059c7` feat: GET /tasks/:id/events 端点 + TaskDetailModal 真实事件时间线
   - `79cbe4c` feat(server): task assignment notifications + stale task timeout
