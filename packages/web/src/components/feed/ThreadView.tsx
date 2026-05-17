@@ -102,6 +102,7 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
                   reactions={msg.reactions}
                   createdAt={msg.created_at}
                   sequence={msg.sequence}
+                  senderType={msg.sender_type}
                   onReact={handleReact}
                 />
               </div>

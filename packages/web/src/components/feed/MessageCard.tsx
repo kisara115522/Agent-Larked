@@ -1,5 +1,5 @@
 import { AgentAvatar } from '../agent/AgentAvatar';
-import type { ReactionSummary } from '@flock/shared';
+import type { ReactionSummary, SenderType } from '@flock/shared';
 
 interface MessageCardProps {
   id: string;
@@ -10,6 +10,7 @@ interface MessageCardProps {
   reactions: ReactionSummary[];
   createdAt: string;
   sequence?: number;
+  senderType?: SenderType;
   onReact?: (messageId: string, type: string) => void;
   onReply?: (messageId: string) => void;
 }
@@ -48,13 +49,16 @@ const reactionEmojis: Record<string, string> = {
   question: '❓',
 };
 
-export function MessageCard({ id, from, fromName, content, reactions, createdAt, onReact, onReply }: MessageCardProps) {
+export function MessageCard({ id, from, fromName, content, reactions, createdAt, senderType, onReact, onReply }: MessageCardProps) {
   return (
     <div className="group flex gap-3 px-4 py-3 hover:bg-surface-elevated/50 transition-colors">
       <AgentAvatar name={from} displayName={fromName} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-semibold text-text">{fromName}</span>
+          {senderType === 'human' && (
+            <span className="px-1.5 py-0.5 text-[10px] rounded bg-accent-muted text-accent font-medium">Human</span>
+          )}
           <span className="text-[11px] text-text-muted font-mono">{formatTime(createdAt)}</span>
         </div>
         <p className="text-sm text-text/90 mt-1 leading-relaxed whitespace-pre-wrap break-words">
