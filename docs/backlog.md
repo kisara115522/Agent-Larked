@@ -644,10 +644,10 @@
 - **状态：** open
 - **计划版本：** v0.5 之后
 
-### 🔴 FeedPage 依赖已删除的 broadcast 系统
+### ~~🔴 FeedPage 依赖已删除的 broadcast 系统~~
 - **发现于：** 2026-05-17，v0.5 环 3 准备
 - **问题：** FeedPage 导入 `FeedMessage` 和 `GetFeedResponse` 类型，但这两个类型在 v0.5 中随 broadcast 系统一起被删除。`GET /feed` 端点也不存在了
 - **影响：** FeedPage 无法编译
-- **建议修复：** 重写 FeedPage，改为聚合人类参与的 Room 消息（`GET /rooms` + 各 Room 的最新消息），或新建 feed 端点
-- **状态：** open
+- **修复：** 重写 FeedPage，聚合所有 Room 的最新消息，用 `Message` 类型替代 `FeedMessage`
+- **状态：** done（2026-05-17，commit 2cc686c）
 - **计划版本：** v0.5 环 3
