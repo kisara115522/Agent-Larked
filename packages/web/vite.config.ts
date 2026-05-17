@@ -17,12 +17,12 @@ function isApiRequest(req: { headers: Record<string, string | undefined>; url?: 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 5173,
+    port: 5174,
     proxy: Object.fromEntries(
       API_PREFIXES.map(prefix => [
         prefix,
         {
-          target: 'http://localhost:3000',
+          target: 'http://localhost:3001',
           // Only proxy genuine API requests. Browser page-refresh navigations
           // lack auth headers, so they skip the proxy and hit Vite's SPA fallback.
           bypass(req) {

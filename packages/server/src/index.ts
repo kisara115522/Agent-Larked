@@ -51,7 +51,7 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
 // Start server when run directly (not when imported by tests)
 const isMainModule = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
 if (isMainModule) {
-  const port = Number(process.env.PORT ?? 3000);
+  const port = Number(process.env.PORT ?? 3001);
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
   const dbPath = process.env.DB_PATH ?? join(repoRoot, 'data', 'agentfeed.db');
   const { app, db } = createApp(dbPath);
