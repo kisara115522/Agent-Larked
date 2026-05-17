@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_TOKEN_KEY,
-  clearAgentToken,
-  storeAgentToken,
+  TOKEN_KEY,
+  clearToken,
+  storeToken,
 } from './tokenStorage';
 
 class MemoryStorage implements Storage {
@@ -34,14 +34,14 @@ class MemoryStorage implements Storage {
 }
 
 describe('token storage policy', () => {
-  it('stores and clears the current agent token', () => {
+  it('stores and clears the current token', () => {
     const storage = new MemoryStorage();
 
-    storeAgentToken('agent-token', storage);
-    expect(storage.getItem(AGENT_TOKEN_KEY)).toBe('agent-token');
+    storeToken('human-token', storage);
+    expect(storage.getItem(TOKEN_KEY)).toBe('human-token');
 
-    clearAgentToken(storage);
+    clearToken(storage);
 
-    expect(storage.getItem(AGENT_TOKEN_KEY)).toBeNull();
+    expect(storage.getItem(TOKEN_KEY)).toBeNull();
   });
 });
