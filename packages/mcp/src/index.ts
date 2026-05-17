@@ -1,34 +1,20 @@
 #!/usr/bin/env node
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { getAgentId, getDatabase, resolveAgentId, setAgentOffline } from './db.js';
-import { installUnreadMentionInjection, startMentionListener } from './mentions.js';
-import { registerIdentityTools } from './tools/identity.js';
-import { registerRoomTools } from './tools/room.js';
-import { registerMessagingTools } from './tools/messaging.js';
-import { registerDirectChatTools } from './tools/direct-chat.js';
-import { registerMentionTools } from './tools/mentions.js';
-import { registerWaitTool } from './tools/subscribe.js';
-import { registerReactionTools } from './tools/reactions.js';
+import { getAgentId, getDatabase, resolveAgentId, setAgentOffline, setAgentId } from './db.js';
+import { createMcpServer } from './factory.js';
+import { startMentionListener } from './mentions.js';
 import { registerResources } from './resources.js';
 import { registerPrompts } from './prompts.js';
 
-const server = new McpServer({
-  name: 'flock',
-  version: '0.1.0',
-});
-
 const db = getDatabase();
 
-// Register all tool groups
-installUnreadMentionInjection(server, db, getAgentId);
-registerIdentityTools(server, db);
-registerRoomTools(server, db);
-registerMessagingTools(server, db);
-registerDirectChatTools(server, db);
-registerMentionTools(server, db);
-registerWaitTool(server, db);
-registerReactionTools(server, db);
+const server = createMcpServer({
+  db,
+  agentIdProvider: getAgentId,
+  setAgentIdFn: setAgentId,
+  enableMentionInjection: true,
+  enableMentionListener: false,
+});
 
 // Register MCP resources
 registerResources(server, db);

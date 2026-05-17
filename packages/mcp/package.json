@@ -5,8 +5,14 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./factory": "./dist/factory.js",
+    "./http": "./dist/http.js"
+  },
   "scripts": {
     "build": "tsc",
+    "start:http": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
