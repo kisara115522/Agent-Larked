@@ -79,17 +79,7 @@ export function MessageCard({ id, from, fromName, content, mentions, reactions, 
               </button>
             ))}
             {onReact && (
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                {Object.entries(reactionEmojis).map(([type, emoji]) => (
-                  <button
-                    key={type}
-                    onClick={() => onReact(id, type)}
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs hover:bg-surface-elevated transition-colors"
-                    title={type}
-                  >
-                    {emoji}
-                  </button>
-                ))}
+              <div className="flex gap-1">
                 {onReply && (
                   <button
                     onClick={() => onReply(id)}
@@ -99,6 +89,18 @@ export function MessageCard({ id, from, fromName, content, mentions, reactions, 
                     💬
                   </button>
                 )}
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                  {Object.entries(reactionEmojis).map(([type, emoji]) => (
+                    <button
+                      key={type}
+                      onClick={() => onReact(id, type)}
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs hover:bg-surface-elevated transition-colors"
+                      title={type}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
