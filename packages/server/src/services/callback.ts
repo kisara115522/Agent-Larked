@@ -217,6 +217,47 @@ export function notifyRuntimeSpawn(
 }
 
 /**
+ * Notify an assigned agent about a new task (wake if dormant).
+ * Called when a task is created or updated with an assigned_to field.
+ */
+export function notifyTaskAssignment(
+  db: Database.Database,
+  agentId: string,
+  taskId: string,
+  taskTitle: string,
+  roomId: string,
+): void {
+  // Find active spawn for this agent
+  const spawn = db.prepare(
+    "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? AND status = 'active' ORDER BY spawned_at DESC LIMIT 1",
+  ).get(agentId) as { runtime_id: string } | undefined;
+
+  if (!spawn) return;
+
+  const runtime = db.prepare(
+    'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
+  ).get(spawn.runtime_id) as RuntimeRow | undefined;
+
+  if (!runtime || runtime.status !== 'online') return;
+
+  const room = db.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string } | undefined;
+  const roomName = room?.name ?? roomId;
+
+  const event: RuntimeCallbackEvent = {
+    type: 'wake',
+    prompt: `你有一个新任务: "${taskTitle}"。请查看任务详情并开始处理。`,
+    room_id: roomId,
+    room_name: roomName,
+  };
+
+  sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
+    console.error(`[callback] Failed to notify agent ${agentId} about task assignment:`, err);
+  });
+
+  logWakeEvent(db, agentId, 'system', 'task_assignment', roomId, taskTitle);
+}
+
+/**
  * Notify a runtime to stop an agent.
  * Called when POST /agents/:id/stop is invoked.
  */

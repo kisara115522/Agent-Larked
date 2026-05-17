@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import { createTask, getTask, listTasks, updateTask } from '../services/task.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
+import { notifyTaskAssignment } from '../services/callback.js';
 
 export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
@@ -12,6 +13,11 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
   router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       const result = createTask(db, req.agentId!, req.body);
+
+      // Notify assigned agent
+      if (result.assigned_to) {
+        notifyTaskAssignment(db, result.assigned_to, result.id, result.title, result.room_id);
+      }
 
       // Emit SSE event
       eventBus.emitTaskCreated(
@@ -91,8 +97,14 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
   router.patch('/:id', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       const taskId = req.params.id as string;
-      const oldStatus = req.body.status ? getTask(db, taskId).status : undefined;
+      const oldTask = getTask(db, taskId);
+      const oldStatus = req.body.status ? oldTask.status : undefined;
       const result = updateTask(db, taskId, req.agentId!, req.body);
+
+      // Notify newly assigned agent
+      if (req.body.assigned_to && req.body.assigned_to !== oldTask.assigned_to) {
+        notifyTaskAssignment(db, req.body.assigned_to, result.id, result.title, result.room_id);
+      }
 
       // Emit SSE event for status change
       if (req.body.status && oldStatus) {

@@ -236,3 +236,51 @@ function rowToTask(row: Record<string, unknown>): TaskInfo {
     completed_at: row.completed_at as string | null,
   };
 }
+
+/**
+ * Check for stale tasks stuck in 'in_progress' beyond the timeout.
+ * Tasks that exceed the timeout are retried (if retries remain) or marked as 'error'.
+ * Returns the IDs of tasks that were marked as stale.
+ */
+export function checkStaleTasks(
+  db: Database.Database,
+  timeoutMs: number = 30 * 60 * 1000, // Default: 30 minutes
+): string[] {
+  const cutoff = new Date(Date.now() - timeoutMs).toISOString();
+  const staleTasks = db.prepare(`
+    SELECT id, title, room_id, assigned_to, retry_count, max_retries
+    FROM tasks
+    WHERE status = 'in_progress' AND updated_at < ?
+  `).all(cutoff) as { id: string; title: string; room_id: string; assigned_to: string | null; retry_count: number; max_retries: number }[];
+
+  const now = new Date().toISOString();
+  const staleIds: string[] = [];
+
+  for (const task of staleTasks) {
+    if (task.retry_count < task.max_retries) {
+      // Retry: increment retry_count, reset to todo
+      db.prepare(`
+        UPDATE tasks SET status = 'todo', retry_count = retry_count + 1, updated_at = ? WHERE id = ?
+      `).run(now, task.id);
+
+      db.prepare(`
+        INSERT INTO task_events (id, task_id, event_type, actor_id, payload, created_at)
+        VALUES (?, ?, 'retry', NULL, ?, ?)
+      `).run(uuidv4(), task.id, JSON.stringify({ reason: 'timeout', retry_count: task.retry_count + 1 }), now);
+    } else {
+      // Max retries exceeded: mark as error
+      db.prepare(`
+        UPDATE tasks SET status = 'error', updated_at = ? WHERE id = ?
+      `).run(now, task.id);
+
+      db.prepare(`
+        INSERT INTO task_events (id, task_id, event_type, actor_id, payload, created_at)
+        VALUES (?, ?, 'failed', NULL, ?, ?)
+      `).run(uuidv4(), task.id, JSON.stringify({ reason: 'max_retries_exceeded' }), now);
+    }
+
+    staleIds.push(task.id);
+  }
+
+  return staleIds;
+}
