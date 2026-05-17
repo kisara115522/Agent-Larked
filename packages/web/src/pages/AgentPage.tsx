@@ -110,7 +110,7 @@ export function AgentPage() {
   }
 
   if (!agent) {
-    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">Agent not found</p></div>;
+    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">未找到 Agent</p></div>;
   }
 
   const currentTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'review');
