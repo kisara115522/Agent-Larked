@@ -867,14 +867,14 @@ agent 调用 flock_post(room_id, content)
 
 ### 6 环实施计划
 
-| 环 | 周期 | 内容 | 交付物 | kisara 验收 |
-|---|---|---|---|---|
-| **环 1** | 1 周 | 清理 + 地基 | 人类登录、删旧代码（Task/Admin/Follow/Broadcast） | 登录能用、页面干净、无报错 |
-| **环 2** | 1.5 周 | Agent 生命周期 | Runtime 骨架 + spawn/stop + GUI | GUI 操作 spawn/stop，agent 在 Room 对话 |
-| **环 3** | 1 周 | 实时消息 + 唤醒 | Tool boundary 注入 + @mention 唤醒 | agent 边干活边收到消息 |
-| **环 4** | 1 周 | 跨机器 | 多 Runtime + Streamable HTTP MCP | 两台机器各跑一个 Runtime |
-| **环 5** | 1.5 周 | Harness 任务系统 | 状态机 + 任务派发 + 任务看板 | 创建任务 → 派给 agent → 完成 → 看板更新 |
-| **环 6** | 1 周 | Token 控制 + 配置 | Token 预算 + 配置编辑器 + Skills/MCP 选择器 | 编辑 agent 配置，看到 token 消耗 |
+| 环 | 周期 | 内容 | 交付物 | kisara 验收 | 状态 |
+|---|---|---|---|---|---|
+| **环 1** | 1 周 | 清理 + 地基 | 人类登录、删旧代码（Task/Admin/Follow/Broadcast） | 登录能用、页面干净、无报错 | ✅ |
+| **环 2** | 1.5 周 | Agent 生命周期 | Runtime 骨架 + spawn/stop + GUI | GUI 操作 spawn/stop，agent 在 Room 对话 | ✅ |
+| **环 3** | 1 周 | 实时消息 + 唤醒 | Tool boundary 注入 + @mention 唤醒 | agent 边干活边收到消息 | 待开始 |
+| **环 4** | 1 周 | 跨机器 | 多 Runtime + Streamable HTTP MCP | 两台机器各跑一个 Runtime | 待开始 |
+| **环 5** | 1.5 周 | Harness 任务系统 | 状态机 + 任务派发 + 任务看板 | 创建任务 → 派给 agent → 完成 → 看板更新 | 待开始 |
+| **环 6** | 1 周 | Token 控制 + 配置 | Token 预算 + 配置编辑器 + Skills/MCP 选择器 | 编辑 agent 配置，看到 token 消耗 | 待开始 |
 
 ### 测试策略
 

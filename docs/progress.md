@@ -114,7 +114,13 @@
   - 全中文 UI：所有 Loading/No messages/Send/Cancel/Create/Join/Close 等均已翻译
   - CSS tokens：新增 fadeUp keyframe、text-dim (#5A5A66)、accent-hover (#2563EB)
   - 30+ 个 GUI commit，build 72 modules, 336KB JS, 25KB CSS
-- **当前状态：** GUI v3 设计稿全部实现（含消息样式+全中文 UI），Runtime daemon 仍待实现
+- **v0.5 Runtime daemon 完成** — 2026-05-18（claude001）
+  - `b8b2f50` feat(runtime): Agent Runtime daemon package（6 个源文件）
+  - `82d6236` feat(server): spawn/stop/wake callback notifications to runtime
+  - `packages/runtime/` — `FlockAgentRuntime` 类：注册、心跳、回调接收、agent 进程管理、活动上报
+  - Server 侧：spawn/stop/wake 路由通知 runtime，`notifyRuntimeSpawn()` / `notifyRuntimeStop()`
+  - 190 server tests 全通过
+- **当前状态：** GUI v3 + Runtime daemon + 后端 API 全部完成，可进行端到端测试
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
