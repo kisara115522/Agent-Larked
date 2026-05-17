@@ -16,6 +16,7 @@ import { humanAuthRouter } from './routes/human-auth.js';
 import { runtimesRouter } from './routes/runtimes.js';
 import { tasksRouter } from './routes/tasks.js';
 import { configsRouter } from './routes/configs.js';
+import { activityRouter } from './routes/activity.js';
 import { bootstrapDefaultAgent } from './db.js';
 import { hashToken } from './middleware/auth.js';
 
@@ -38,6 +39,7 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   app.use('/direct-chats', directChatsRouter(db, eventBus));
   app.use('/messages', reactionsRouter(db, eventBus));
   app.use('/events', eventsRouter(db, eventBus));
+  app.use('/activity', activityRouter(db));
 
   // Error handler (must be last)
   app.use(errorHandler);

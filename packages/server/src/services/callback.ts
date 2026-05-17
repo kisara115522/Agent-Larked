@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 
 export interface CallbackEvent {
@@ -15,6 +15,21 @@ interface RuntimeRow {
   callback_url: string;
   callback_secret: string | null;
   status: string;
+}
+
+/** Log a wake event to the wake_events table */
+function logWakeEvent(
+  db: Database.Database,
+  agentId: string,
+  triggeredBy: string,
+  triggerType: string,
+  roomId?: string,
+  prompt?: string,
+): void {
+  db.prepare(`
+    INSERT INTO wake_events (id, agent_id, triggered_by, trigger_type, room_id, prompt, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(randomUUID(), agentId, triggeredBy, triggerType, roomId ?? null, prompt ?? null, new Date().toISOString());
 }
 
 /** Compute HMAC-SHA256 signature for a callback payload */
@@ -109,6 +124,9 @@ export function wakeMentionedAgents(
     sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
       console.error(`[callback] Failed to wake agent ${agentId} via runtime ${runtime.id}:`, err);
     });
+
+    // Log wake event
+    logWakeEvent(db, agentId, senderName, 'mention', roomId);
   }
 }
 
@@ -154,5 +172,8 @@ export function wakeRoomAgents(
     sendCallbackWithRetry(runtime, agent_id, event).catch((err) => {
       console.error(`[callback] Failed to wake agent ${agent_id} via runtime ${runtime_id}:`, err);
     });
+
+    // Log wake event
+    logWakeEvent(db, agent_id, senderName, 'broadcast', roomId);
   }
 }

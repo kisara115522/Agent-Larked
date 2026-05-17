@@ -284,6 +284,33 @@ CREATE TABLE IF NOT EXISTS global_configs (
   PRIMARY KEY (config_type)
 );
 
+-- v0.5: Wake event history
+CREATE TABLE IF NOT EXISTS wake_events (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  triggered_by TEXT NOT NULL,  -- agent_id or 'system'
+  trigger_type TEXT NOT NULL,  -- 'mention' | 'manual' | 'broadcast' | 'spawn'
+  room_id TEXT REFERENCES rooms(id) ON DELETE SET NULL,
+  prompt TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_wake_events_agent ON wake_events(agent_id);
+CREATE INDEX IF NOT EXISTS idx_wake_events_created ON wake_events(created_at);
+
+-- v0.5: Agent activity logs (workflow timeline)
+CREATE TABLE IF NOT EXISTS agent_activity_logs (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  activity_type TEXT NOT NULL,  -- 'tool_call' | 'thinking' | 'message' | 'system' | 'error' | 'status_change'
+  detail TEXT DEFAULT '',       -- human-readable description
+  metadata TEXT DEFAULT '{}',   -- JSON: tool name, file path, token usage, etc.
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_logs_agent ON agent_activity_logs(agent_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON agent_activity_logs(created_at);
+
 `;
 
 export function createDatabase(path: string = ':memory:'): Database.Database {

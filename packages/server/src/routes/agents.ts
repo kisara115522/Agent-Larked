@@ -203,6 +203,12 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
       }
 
+      // Log wake event
+      db.prepare(`
+        INSERT INTO wake_events (id, agent_id, triggered_by, trigger_type, prompt, created_at)
+        VALUES (?, ?, ?, 'manual', ?, ?)
+      `).run(crypto.randomUUID(), agentId, req.humanId!, prompt, now);
+
       res.json({ ok: true });
     } catch (err) {
       next(err);
@@ -226,6 +232,82 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         session_id: spawn?.session_id ?? null,
         last_active_at: profile.last_active_at,
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /agents/:id/wake-history — wake event history
+  router.get('/:id/wake-history', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
+    try {
+      const agentId = req.params.id as string;
+      const limit = req.query.limit ? Math.min(Number(req.query.limit), 100) : 50;
+      const rows = db.prepare(`
+        SELECT w.*, p.display_name AS triggered_by_name
+        FROM wake_events w
+        LEFT JOIN profiles p ON p.id = w.triggered_by
+        WHERE w.agent_id = ?
+        ORDER BY w.created_at DESC
+        LIMIT ?
+      `).all(agentId, limit);
+      res.json({ events: rows });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /agents/:id/activity — agent activity logs (workflow timeline)
+  router.get('/:id/activity', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
+    try {
+      const agentId = req.params.id as string;
+      const limit = req.query.limit ? Math.min(Number(req.query.limit), 200) : 50;
+      const cursor = req.query.cursor as string | undefined;
+      const params: unknown[] = [agentId];
+      let where = 'WHERE agent_id = ?';
+      if (cursor) {
+        where += ' AND created_at < ?';
+        params.push(cursor);
+      }
+      params.push(limit + 1);
+      const rows = db.prepare(`
+        SELECT * FROM agent_activity_logs ${where} ORDER BY created_at DESC LIMIT ?
+      `).all(...params) as Record<string, unknown>[];
+      const hasMore = rows.length > limit;
+      const logs = rows.slice(0, limit).map(r => ({
+        ...r,
+        metadata: r.metadata ? JSON.parse(r.metadata as string) : {},
+      }));
+      res.json({
+        logs,
+        has_more: hasMore,
+        next_cursor: hasMore && logs.length > 0 ? logs[logs.length - 1].created_at : null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /agents/:id/activity — log agent activity (for Runtime daemon to report)
+  router.post('/:id/activity', auth, (req: AuthenticatedRequest, res, next) => {
+    try {
+      const agentId = req.params.id as string;
+      const { activity_type, detail, metadata } = req.body;
+      if (!activity_type) {
+        res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'activity_type is required' } });
+        return;
+      }
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO agent_activity_logs (id, agent_id, activity_type, detail, metadata, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, agentId, activity_type, detail ?? '', JSON.stringify(metadata ?? {}), now);
+
+      if (eventBus) {
+        eventBus.emitWorkflowEvent({ agent_id: agentId, activity_type, detail: detail ?? '', metadata: metadata ?? {}, created_at: now });
+      }
+
+      res.status(201).json({ id, agent_id: agentId, activity_type, detail, metadata, created_at: now });
     } catch (err) {
       next(err);
     }

@@ -124,6 +124,12 @@ export class EventBus {
     }
   }
 
+  emitWorkflowEvent(event: { agent_id: string; activity_type: string; detail: string; metadata: unknown; created_at: string }): void {
+    for (const [agentId, _client] of this.clients) {
+      this.send(agentId, 'workflow_event', event);
+    }
+  }
+
   private send(agentId: string, eventType: string, data: unknown): void {
     const client = this.clients.get(agentId);
     if (!client) return; // Agent offline, skip (best-effort)
