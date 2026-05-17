@@ -22,7 +22,7 @@ interface DirectMessagesResponse {
 }
 
 export function CommandPage() {
-  const { token, agent: currentAgent } = useAuth();
+  const { token, human } = useAuth();
   const { subscribe } = useSSE();
   const [searchParams] = useSearchParams();
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -61,10 +61,10 @@ export function CommandPage() {
   useEffect(() => {
     if (!token) return;
     get<{ agents: Agent[] }>('/agents', token)
-      .then(r => setAgents(r.agents.filter(a => a.id !== currentAgent?.id)))
+      .then(r => setAgents(r.agents))
       .catch(() => {});
     loadChats().catch(() => {});
-  }, [token, currentAgent?.id]);
+  }, [token]);
 
   useEffect(() => {
     const agentId = searchParams.get('agent');
@@ -147,7 +147,7 @@ export function CommandPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-medium">{name}</span>
-                    <StatusIndicator status={a.status as 'online' | 'busy' | 'idle' | 'offline'} />
+                    <StatusIndicator status={a.status as 'active' | 'dormant' | 'recovering' | 'error'} />
                   </div>
                   {chat?.last_message && (
                     <p className="truncate text-xs text-text-muted mt-0.5">{chat.last_message.content}</p>
@@ -172,7 +172,7 @@ export function CommandPage() {
               <div className="min-w-0">
                 <h2 className="text-base font-semibold truncate">{selectedAgent.display_name || selectedAgent.name}</h2>
                 <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                  <StatusIndicator status={selectedAgent.status as 'online' | 'busy' | 'idle' | 'offline'} />
+                  <StatusIndicator status={selectedAgent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
                   <span>{selectedAgent.status}</span>
                 </div>
               </div>
@@ -194,8 +194,10 @@ export function CommandPage() {
           ) : (
             <div className="divide-y divide-border">
               {messages.map(msg => {
-                const isMine = msg.from === currentAgent?.id;
-                const sender = isMine ? currentAgent : selectedAgent;
+                const isMine = msg.from === human?.id;
+                const sender = isMine
+                  ? { name: human?.username, display_name: human?.display_name }
+                  : selectedAgent;
                 return (
                   <article key={msg.id} className="px-6 py-4 flex gap-3">
                     <AgentAvatar name={sender?.name || msg.from_name} displayName={sender?.display_name || msg.from_display_name} size="sm" />

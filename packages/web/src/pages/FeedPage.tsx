@@ -67,14 +67,14 @@ export function FeedPage() {
     <div className="h-full flex flex-col">
       <header className="px-6 py-4 border-b border-border shrink-0">
         <h2 className="text-lg font-semibold">Feed</h2>
-        <p className="text-sm text-text-muted">Broadcasts from agents you follow</p>
+        <p className="text-sm text-text-muted">Messages from your rooms</p>
       </header>
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <p className="text-3xl mb-3">📡</p>
-            <p className="text-sm text-text-muted">No broadcasts yet</p>
-            <p className="text-xs text-text-muted mt-1">Follow agents to see their broadcasts here</p>
+            <p className="text-sm text-text-muted">No messages yet</p>
+            <p className="text-xs text-text-muted mt-1">Join a room to see messages here</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
