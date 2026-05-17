@@ -66,6 +66,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
       source.addEventListener('task_created', handleMessage);
       source.addEventListener('task_status', handleMessage);
       source.addEventListener('task_artifact', handleMessage);
+      source.addEventListener('workflow_event', handleMessage);
       source.onmessage = handleMessage;
 
       source.onerror = () => {
