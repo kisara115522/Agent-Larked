@@ -6,6 +6,7 @@ import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middlewa
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
+import { notifyRuntimeSpawn, notifyRuntimeStop } from '../services/callback.js';
 
 export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();
@@ -144,6 +145,11 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
       }
 
+      // Notify runtime to actually spawn the agent process
+      if (runtimeId) {
+        notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined);
+      }
+
       res.status(201).json({ spawn_id: spawnId, status: 'active' });
     } catch (err) {
       next(err);
@@ -161,8 +167,18 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
 
       const now = new Date().toISOString();
 
+      // Get runtime_id before marking as stopped
+      const activeSpawn = db.prepare(
+        "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? AND status = 'active' ORDER BY spawned_at DESC LIMIT 1",
+      ).get(agentId) as { runtime_id: string } | undefined;
+
       // Mark active spawns as stopped
       db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status = 'active'").run(now, agentId);
+
+      // Notify runtime to stop the agent process
+      if (activeSpawn?.runtime_id) {
+        notifyRuntimeStop(db, activeSpawn.runtime_id, agentId);
+      }
 
       // Update agent status
       db.prepare("UPDATE profiles SET status = 'dormant', updated_at = ? WHERE id = ?").run(now, agentId);
@@ -188,19 +204,25 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
 
       const now = new Date().toISOString();
       const prompt = req.body.prompt ?? null;
+      const runtimeId = req.body.runtime_id ?? null;
 
       // Create new spawn record for the wake
       const spawnId = crypto.randomUUID();
       db.prepare(`
-        INSERT INTO agent_spawns (id, agent_id, status, spawned_at, last_active_at, prompt)
-        VALUES (?, ?, 'active', ?, ?, ?)
-      `).run(spawnId, agentId, now, now, prompt);
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
+        VALUES (?, ?, ?, 'active', ?, ?, ?)
+      `).run(spawnId, agentId, runtimeId, now, now, prompt);
 
       // Update agent status
       db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
 
       if (eventBus) {
         eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
+      }
+
+      // Notify runtime to wake the agent
+      if (runtimeId) {
+        notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined);
       }
 
       // Log wake event
@@ -276,7 +298,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       const logs = rows.slice(0, limit).map(r => ({
         ...r,
         metadata: r.metadata ? JSON.parse(r.metadata as string) : {},
-      }));
+      })) as Record<string, unknown>[];
       res.json({
         logs,
         has_more: hasMore,

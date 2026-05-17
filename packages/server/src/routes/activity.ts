@@ -37,7 +37,7 @@ export function activityRouter(db: Database.Database): Router {
       const logs = rows.slice(0, limit).map(r => ({
         ...r,
         metadata: r.metadata ? JSON.parse(r.metadata as string) : {},
-      }));
+      })) as Record<string, unknown>[];
       res.json({
         logs,
         has_more: hasMore,

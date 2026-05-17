@@ -10,6 +10,15 @@ export interface CallbackEvent {
   excerpt: string;
 }
 
+export interface RuntimeCallbackEvent {
+  type: 'spawn' | 'stop' | 'wake';
+  prompt?: string;
+  room_id?: string;
+  room_name?: string;
+  sender_name?: string;
+  excerpt?: string;
+}
+
 interface RuntimeRow {
   id: string;
   callback_url: string;
@@ -41,7 +50,7 @@ function signPayload(secret: string, body: string): string {
 async function sendCallbackWithRetry(
   runtime: RuntimeRow,
   agentId: string,
-  event: CallbackEvent,
+  event: CallbackEvent | RuntimeCallbackEvent,
   maxRetries = 3,
 ): Promise<boolean> {
   if (!runtime.callback_secret) return false;
@@ -176,4 +185,60 @@ export function wakeRoomAgents(
     // Log wake event
     logWakeEvent(db, agent_id, senderName, 'broadcast', roomId);
   }
+}
+
+/**
+ * Notify a runtime to spawn an agent.
+ * Called when POST /agents/:id/spawn is invoked.
+ */
+export function notifyRuntimeSpawn(
+  db: Database.Database,
+  runtimeId: string,
+  agentId: string,
+  prompt?: string,
+): void {
+  const runtime = db.prepare(
+    'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
+  ).get(runtimeId) as RuntimeRow | undefined;
+
+  if (!runtime || runtime.status !== 'online') {
+    console.warn(`[callback] Runtime ${runtimeId} not found or offline, cannot spawn agent ${agentId}`);
+    return;
+  }
+
+  const event: RuntimeCallbackEvent = {
+    type: 'spawn',
+    prompt: prompt ?? undefined,
+  };
+
+  sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
+    console.error(`[callback] Failed to notify runtime ${runtimeId} to spawn agent ${agentId}:`, err);
+  });
+}
+
+/**
+ * Notify a runtime to stop an agent.
+ * Called when POST /agents/:id/stop is invoked.
+ */
+export function notifyRuntimeStop(
+  db: Database.Database,
+  runtimeId: string,
+  agentId: string,
+): void {
+  const runtime = db.prepare(
+    'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
+  ).get(runtimeId) as RuntimeRow | undefined;
+
+  if (!runtime || runtime.status !== 'online') {
+    console.warn(`[callback] Runtime ${runtimeId} not found or offline, cannot stop agent ${agentId}`);
+    return;
+  }
+
+  const event: RuntimeCallbackEvent = {
+    type: 'stop',
+  };
+
+  sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
+    console.error(`[callback] Failed to notify runtime ${runtimeId} to stop agent ${agentId}:`, err);
+  });
 }
