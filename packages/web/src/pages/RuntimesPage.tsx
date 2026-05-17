@@ -17,6 +17,7 @@ interface Runtime {
 export function RuntimesPage() {
   const { token } = useAuth();
   const [runtimes, setRuntimes] = useState<Runtime[]>([]);
+  const [showHelp, setShowHelp] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -33,7 +34,7 @@ export function RuntimesPage() {
       <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
         <h3 className="text-base font-semibold">Runtime 管理</h3>
         <div className="ml-auto">
-          <button className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
+          <button onClick={() => setShowHelp(true)} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
             + 注册新 Runtime
           </button>
         </div>
@@ -74,6 +75,34 @@ export function RuntimesPage() {
           )}
         </div>
       </div>
+
+      {/* Help Modal */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowHelp(false)}>
+          <div className="w-[520px] p-6 bg-surface border border-border rounded-[14px]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">注册新 Runtime</h3>
+            <p className="text-sm text-text-muted mb-4">
+              Runtime daemon 启动后会自动注册到 Flock Server。无需手动注册。
+            </p>
+            <div className="bg-bg border border-border rounded p-4 font-mono text-xs leading-relaxed mb-4">
+              <div className="text-text-dim mb-2"># 在目标机器上启动 Runtime daemon</div>
+              <div>AGENT_TOKEN=&lt;your-token&gt; \</div>
+              <div>CALLBACK_PORT=4000 \</div>
+              <div>npx tsx packages/runtime/src/index.ts</div>
+            </div>
+            <div className="text-xs text-text-muted space-y-1.5">
+              <p>• Runtime 启动后自动向 Server 注册，无需手动操作</p>
+              <p>• 心跳间隔默认 30 秒，Server 通过心跳判断 Runtime 是否在线</p>
+              <p>• spawn/wake 请求会自动路由到可用的 Runtime</p>
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setShowHelp(false)} className="px-4 py-2 rounded-full text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
