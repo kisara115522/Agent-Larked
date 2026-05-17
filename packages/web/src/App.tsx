@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SSEProvider } from './context/SSEContext';
 import { MentionProvider } from './context/MentionContext';
+import { ToastProvider } from './components/ui/Toast';
 import { Sidebar } from './components/layout/Sidebar';
 import { RightPanel } from './components/layout/RightPanel';
 import { LoginPage } from './pages/LoginPage';
@@ -66,7 +67,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppLayout />
+        <ToastProvider>
+          <AppLayout />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
+import { useToast } from '../components/ui/Toast';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
 
 interface Agent {
@@ -101,19 +102,21 @@ export function AgentPage() {
     });
   }, [subscribe, id, agent?.name]);
 
+  const { toast } = useToast();
+
   const handleStop = async () => {
     if (!token || !id) return;
-    try { await post(`/agents/${id}/stop`, token); loadAgent(); } catch {}
+    try { await post(`/agents/${id}/stop`, token); toast('Agent 已停止', 'success'); loadAgent(); } catch (e) { toast(`停止失败: ${e instanceof Error ? e.message : '未知错误'}`); }
   };
 
   const handleWake = async () => {
     if (!token || !id) return;
-    try { await post(`/agents/${id}/wake`, token, {}); loadAgent(); } catch {}
+    try { await post(`/agents/${id}/wake`, token, {}); toast('唤醒成功', 'success'); loadAgent(); } catch (e) { toast(`唤醒失败: ${e instanceof Error ? e.message : '未知错误'}`); }
   };
 
   const handleSpawn = async () => {
     if (!token || !id) return;
-    try { await post(`/agents/${id}/spawn`, token, {}); loadAgent(); } catch {}
+    try { await post(`/agents/${id}/spawn`, token, {}); toast('启动成功', 'success'); loadAgent(); } catch (e) { toast(`启动失败: ${e instanceof Error ? e.message : '未知错误'}`); }
   };
 
   if (loading) {

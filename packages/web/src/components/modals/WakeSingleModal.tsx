@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { post } from '../../api/client';
+import { useToast } from '../ui/Toast';
 
 const AGENT_GRADIENTS: Record<string, string> = {
   claude001: '#10B981,#059669',
@@ -38,6 +39,7 @@ export function WakeSingleModal({ agentId, agentName, agentStatus, lastActive, r
   const [prompt, setPrompt] = useState('');
   const [selectedRoom, setSelectedRoom] = useState(rooms[0]?.id || '');
   const [waking, setWaking] = useState(false);
+  const { toast } = useToast();
 
   const handleWake = async () => {
     if (!token) return;
@@ -47,10 +49,11 @@ export function WakeSingleModal({ agentId, agentName, agentStatus, lastActive, r
         prompt: prompt.trim() || undefined,
         room_id: selectedRoom || undefined,
       });
+      toast('唤醒成功', 'success');
       onWoken();
       onClose();
-    } catch {
-      // ignore
+    } catch (e) {
+      toast(`唤醒失败: ${e instanceof Error ? e.message : '未知错误'}`);
     } finally {
       setWaking(false);
     }

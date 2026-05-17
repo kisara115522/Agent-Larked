@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { post } from '../../api/client';
+import { useToast } from '../ui/Toast';
 
 interface Agent {
   id: string;
@@ -35,6 +36,7 @@ export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
   const [prompt, setPrompt] = useState('');
   const [selectedRoom, setSelectedRoom] = useState(rooms[0]?.id || '');
   const [spawning, setSpawning] = useState(false);
+  const { toast } = useToast();
 
   const handleSpawn = async () => {
     if (!token || !selectedAgent) return;
@@ -45,10 +47,11 @@ export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
         prompt: prompt.trim() || undefined,
         room_id: selectedRoom || undefined,
       });
+      toast('Agent 启动成功', 'success');
       onSpawned();
       onClose();
-    } catch {
-      // ignore
+    } catch (e) {
+      toast(`启动失败: ${e instanceof Error ? e.message : '未知错误'}`);
     } finally {
       setSpawning(false);
     }

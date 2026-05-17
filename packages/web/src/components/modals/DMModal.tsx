@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { post } from '../../api/client';
+import { useToast } from '../ui/Toast';
 
 const AGENT_GRADIENTS: Record<string, string> = {
   claude001: '#10B981,#059669',
@@ -38,6 +39,7 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,8 +63,8 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
 
     try {
       await post(`/agents/${agentId}/dm`, token, { content: text });
-    } catch {
-      // ignore
+    } catch (e) {
+      toast(`发送失败: ${e instanceof Error ? e.message : '未知错误'}`);
     } finally {
       setSending(false);
     }

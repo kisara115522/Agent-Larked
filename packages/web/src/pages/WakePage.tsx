@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { get, post } from '../api/client';
+import { useToast } from '../components/ui/Toast';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { WakeSingleModal } from '../components/modals/WakeSingleModal';
 
@@ -35,6 +36,7 @@ export function WakePage() {
   const [wakeHistory, setWakeHistory] = useState<WakeEvent[]>([]);
   const [selectedRoom, setSelectedRoom] = useState('');
   const [wakeAgent, setWakeAgent] = useState<Agent | null>(null);
+  const { toast } = useToast();
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -59,16 +61,22 @@ export function WakePage() {
     if (!token || !selectedRoom) return;
     try {
       await post(`/rooms/${selectedRoom}/broadcast-wake`, token, {});
+      toast('Broadcast 唤醒已发送', 'success');
       load();
-    } catch {}
+    } catch (e) {
+      toast(`唤醒失败: ${e instanceof Error ? e.message : '未知错误'}`);
+    }
   };
 
   const handleQuickWake = async (agentId: string) => {
     if (!token) return;
     try {
       await post(`/agents/${agentId}/wake`, token, {});
+      toast('唤醒成功', 'success');
       load();
-    } catch {}
+    } catch (e) {
+      toast(`唤醒失败: ${e instanceof Error ? e.message : '未知错误'}`);
+    }
   };
 
   return (
