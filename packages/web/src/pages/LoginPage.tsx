@@ -27,7 +27,7 @@ export function LoginPage() {
       });
       await login(res.token);
     } catch (err) {
-      setError((err as Error).message || 'Registration failed');
+      setError((err as Error).message || '注册失败');
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export function LoginPage() {
       });
       await login(res.token);
     } catch (err) {
-      setError((err as Error).message || 'Login failed');
+      setError((err as Error).message || '登录失败');
     } finally {
       setLoading(false);
     }
@@ -52,21 +52,21 @@ export function LoginPage() {
 
   return (
     <div className="h-screen flex items-center justify-center bg-bg">
-      <div className="w-80 p-6 bg-surface rounded-lg border border-border">
-        <h1 className="text-xl font-semibold text-center mb-1">Flock</h1>
-        <p className="text-sm text-text-muted text-center mb-6">Human Control Center</p>
+      <div className="w-[380px] p-12 px-10 bg-surface border border-border rounded-[14px] text-center">
+        <h1 className="text-[28px] font-bold tracking-tight">Flock</h1>
+        <p className="text-[13px] text-text-muted mb-8">Agent Live Control Room</p>
 
         {/* Mode tabs */}
-        <div className="flex mb-4 bg-surface-elevated rounded-lg p-0.5">
+        <div className="flex mb-6 bg-bg rounded-full p-[3px]">
           {(['login', 'register'] as const).map(m => (
             <button
               key={m}
               onClick={() => { setMode(m); clear(); }}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                mode === m ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+              className={`flex-1 py-2 text-[13px] font-medium rounded-full transition-colors ${
+                mode === m ? 'bg-surface text-text' : 'text-text-muted hover:text-text'
               }`}
             >
-              {m === 'login' ? 'Login' : 'Register'}
+              {m === 'login' ? '登录' : '注册'}
             </button>
           ))}
         </div>
@@ -78,24 +78,24 @@ export function LoginPage() {
               value={username}
               onChange={e => setUsername(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              placeholder="Username"
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
+              placeholder="用户名"
+              className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent mb-3 text-left"
             />
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              placeholder="Password"
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent"
+              placeholder="密码"
+              className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent text-left"
             />
-            {error && <p className="text-xs text-error mt-2">{error}</p>}
+            {error && <p className="text-xs text-error mt-2 text-left">{error}</p>}
             <button
               onClick={handleLogin}
               disabled={loading || !username.trim() || !password.trim()}
-              className="w-full mt-4 px-3 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="w-full mt-2 px-3 py-3 bg-accent text-white text-[13px] font-semibold rounded-full hover:bg-accent-hover disabled:opacity-50 transition-colors"
             >
-              {loading ? '...' : 'Login'}
+              {loading ? '...' : '登录'}
             </button>
           </>
         )}
@@ -107,36 +107,42 @@ export function LoginPage() {
               value={username}
               onChange={e => setUsername(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleRegister()}
-              placeholder="Username"
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
+              placeholder="用户名"
+              className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent mb-3 text-left"
             />
             <input
               type="text"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleRegister()}
-              placeholder="Display name (optional)"
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
+              placeholder="显示名称"
+              className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent mb-3 text-left"
             />
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleRegister()}
-              placeholder="Password"
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent"
+              placeholder="密码"
+              className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent mb-3 text-left"
             />
-            {error && <p className="text-xs text-error mt-2">{error}</p>}
+            <input
+              type="password"
+              value=""
+              onChange={() => {}}
+              placeholder="确认密码"
+              className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent text-left"
+            />
+            {error && <p className="text-xs text-error mt-2 text-left">{error}</p>}
             <button
               onClick={handleRegister}
               disabled={loading || !username.trim() || !password.trim()}
-              className="w-full mt-4 px-3 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="w-full mt-2 px-3 py-3 bg-accent text-white text-[13px] font-semibold rounded-full hover:bg-accent-hover disabled:opacity-50 transition-colors"
             >
-              {loading ? '...' : 'Register'}
+              {loading ? '...' : '注册'}
             </button>
           </>
         )}
-
       </div>
     </div>
   );

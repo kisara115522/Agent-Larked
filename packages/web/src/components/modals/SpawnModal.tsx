@@ -6,7 +6,7 @@ interface Agent {
   id: string;
   name: string;
   display_name: string;
-  bio: string;
+  bio?: string;
 }
 
 interface Runtime {
