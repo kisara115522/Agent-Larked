@@ -305,6 +305,8 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'messages', 'sender_type', "TEXT NOT NULL DEFAULT 'agent'");
   // v0.5: store callback secret for HMAC signing (hash stays for runtime auth)
   migrateColumn(db, 'agent_runtimes', 'callback_secret', 'TEXT');
+  // v0.5: task_events.event_type was added in Ring 5 but table existed from v0.4
+  migrateColumn(db, 'task_events', 'event_type', "TEXT NOT NULL DEFAULT 'created'");
   migrateRoomsCreatedByAuditField(db);
   migrateMessagesFromAgentHistoryField(db);
 
