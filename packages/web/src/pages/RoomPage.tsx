@@ -188,17 +188,17 @@ export function RoomPage() {
   return (
     <div className="h-full flex">
       <div className={`flex-1 flex flex-col ${threadMessageId ? 'border-r border-border' : ''}`}>
-        <header className="px-6 py-3 border-b border-border shrink-0 flex items-center justify-between">
-          <h2 className="text-base font-semibold">💬 {roomName || `Room ${roomId?.slice(0, 8)}`}</h2>
-          <div className="flex items-center gap-2">
+        <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
+          <h3 className="text-base font-semibold">💬 {roomName || `Room ${roomId?.slice(0, 8)}`}</h3>
+          <div className="ml-auto">
             <button
               onClick={handleLeave}
-              className="px-2.5 py-1 text-xs text-text-muted border border-border rounded-md hover:border-error hover:text-error transition-colors"
+              className="px-3 py-1.5 rounded-full text-xs font-semibold text-text-muted border border-border hover:border-error hover:text-error transition-colors"
             >
-              Leave
+              离开
             </button>
           </div>
-        </header>
+        </div>
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative">
           {hasMore && (
             <div className="p-4 text-center">
@@ -206,15 +206,15 @@ export function RoomPage() {
                 onClick={() => loadMessages(false)}
                 className="text-sm text-accent hover:underline"
               >
-                Load older messages
+                加载更早的消息
               </button>
             </div>
           )}
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
               <p className="text-3xl mb-3">💬</p>
-              <p className="text-sm text-text-muted">No messages yet</p>
-              <p className="text-xs text-text-muted mt-1">Send the first message!</p>
+              <p className="text-sm text-text-muted">暂无消息</p>
+              <p className="text-xs text-text-muted mt-1">发送第一条消息吧！</p>
             </div>
           ) : (
             <div className="divide-y divide-border">
