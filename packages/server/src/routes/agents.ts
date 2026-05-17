@@ -130,8 +130,22 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       // Create spawn record
       const spawnId = crypto.randomUUID();
       const now = new Date().toISOString();
-      const runtimeId = req.body.runtime_id ?? null;
+      let runtimeId = req.body.runtime_id ?? null;
       const prompt = req.body.prompt ?? null;
+
+      // Auto-select an online runtime if none specified
+      if (!runtimeId) {
+        const runtime = db.prepare(`
+          SELECT r.id FROM agent_runtimes r
+          WHERE r.status = 'online'
+          AND (SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status = 'active') < r.max_agents
+          ORDER BY r.last_heartbeat_at DESC
+          LIMIT 1
+        `).get() as { id: string } | undefined;
+        if (runtime) {
+          runtimeId = runtime.id;
+        }
+      }
 
       db.prepare(`
         INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
@@ -204,7 +218,21 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
 
       const now = new Date().toISOString();
       const prompt = req.body.prompt ?? null;
-      const runtimeId = req.body.runtime_id ?? null;
+      let runtimeId = req.body.runtime_id ?? null;
+
+      // Auto-select an online runtime if none specified
+      if (!runtimeId) {
+        const runtime = db.prepare(`
+          SELECT r.id FROM agent_runtimes r
+          WHERE r.status = 'online'
+          AND (SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status = 'active') < r.max_agents
+          ORDER BY r.last_heartbeat_at DESC
+          LIMIT 1
+        `).get() as { id: string } | undefined;
+        if (runtime) {
+          runtimeId = runtime.id;
+        }
+      }
 
       // Create new spawn record for the wake
       const spawnId = crypto.randomUUID();
