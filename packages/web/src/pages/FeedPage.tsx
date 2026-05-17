@@ -1,30 +1,60 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
-import type { FeedMessage, GetFeedResponse } from '@flock/shared';
+import type { Message, GetMessagesResponse } from '@flock/shared';
+
+interface Room {
+  id: string;
+  name: string;
+  member_count: number;
+}
+
+interface FeedItem extends Message {
+  room_name: string;
+}
 
 export function FeedPage() {
   const { token } = useAuth();
   const { subscribe } = useSSE();
-  const [messages, setMessages] = useState<FeedMessage[]>([]);
+  const navigate = useNavigate();
+  const [messages, setMessages] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasMore, setHasMore] = useState(false);
-  const cursorRef = useRef<number | null>(null);
 
-  const loadFeed = useCallback(async (reset = false) => {
+  const loadFeed = useCallback(async () => {
     if (!token) return;
     try {
-      const params = new URLSearchParams();
-      params.set('limit', '30');
-      if (!reset && cursorRef.current !== null) params.set('cursor', String(cursorRef.current));
-      const res = await get<GetFeedResponse>(`/feed?${params}`, token);
-      // API returns DESC; reverse so newest is at bottom
-      const ordered = [...res.messages].reverse();
-      setMessages(prev => reset ? ordered : [...ordered, ...prev]);
-      setHasMore(res.has_more);
-      cursorRef.current = res.next_cursor;
+      // 1. Get all rooms
+      const { rooms } = await get<{ rooms: Room[] }>('/rooms', token);
+      if (rooms.length === 0) {
+        setMessages([]);
+        return;
+      }
+
+      // 2. Fetch recent messages from each room (5 per room)
+      const results = await Promise.allSettled(
+        rooms.map(room =>
+          get<GetMessagesResponse>(`/rooms/${room.id}/messages?limit=5`, token)
+            .then(res => ({ room, messages: res.messages }))
+        )
+      );
+
+      // 3. Combine and sort by created_at DESC
+      const allMessages: FeedItem[] = [];
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          for (const msg of result.value.messages) {
+            allMessages.push({
+              ...msg,
+              room_name: result.value.room.name,
+            });
+          }
+        }
+      }
+      allMessages.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      setMessages(allMessages.slice(0, 50));
     } catch {
       // ignore
     } finally {
@@ -33,14 +63,14 @@ export function FeedPage() {
   }, [token]);
 
   useEffect(() => {
-    loadFeed(true);
+    loadFeed();
   }, [token, loadFeed]);
 
-  // SSE: refresh feed on new broadcasts or mentions
+  // SSE: refresh feed on new messages or mentions
   useEffect(() => {
     return subscribe((event) => {
       if (event.event === 'room_message' || event.event === 'mention') {
-        loadFeed(true);
+        loadFeed();
       }
     });
   }, [subscribe, loadFeed]);
@@ -49,7 +79,7 @@ export function FeedPage() {
     if (!token) return;
     try {
       await post(`/messages/${messageId}/reactions`, token, { type });
-      loadFeed(true);
+      loadFeed();
     } catch {
       // ignore
     }
@@ -72,35 +102,35 @@ export function FeedPage() {
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <p className="text-3xl mb-3">📡</p>
+            <p className="text-3xl mb-3">💬</p>
             <p className="text-sm text-text-muted">No messages yet</p>
             <p className="text-xs text-text-muted mt-1">Join a room to see messages here</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
             {messages.map(msg => (
-              <MessageCard
-                key={msg.id}
-                id={msg.id}
-                from={msg.from}
-                fromName={msg.from_display_name || msg.from_name || msg.from}
-                content={msg.content}
-                mentions={msg.mentions}
-                reactions={msg.reactions}
-                createdAt={msg.created_at}
-                onReact={handleReact}
-              />
+              <div key={msg.id}>
+                <div className="px-4 pt-2 pb-0">
+                  <button
+                    onClick={() => navigate(`/rooms/${msg.room_id}`)}
+                    className="text-[10px] text-accent font-medium uppercase tracking-wider hover:underline"
+                  >
+                    {msg.room_name}
+                  </button>
+                </div>
+                <MessageCard
+                  id={msg.id}
+                  from={msg.from}
+                  fromName={msg.from_display_name || msg.from_name || msg.from}
+                  content={msg.content}
+                  mentions={msg.mentions}
+                  reactions={msg.reactions}
+                  createdAt={msg.created_at}
+                  senderType={msg.sender_type}
+                  onReact={handleReact}
+                />
+              </div>
             ))}
-          </div>
-        )}
-        {hasMore && (
-          <div className="p-4 text-center">
-            <button
-              onClick={() => loadFeed(false)}
-              className="text-sm text-accent hover:underline"
-            >
-              Load more
-            </button>
           </div>
         )}
       </div>
