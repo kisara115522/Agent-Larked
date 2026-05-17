@@ -14,7 +14,7 @@ interface ComposeBarProps {
   token?: string;
 }
 
-export function ComposeBar({ placeholder = 'Type a message...', onSend, roomId, token }: ComposeBarProps) {
+export function ComposeBar({ placeholder = '输入消息...', onSend, roomId, token }: ComposeBarProps) {
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
