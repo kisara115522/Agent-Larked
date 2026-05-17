@@ -1,159 +1,158 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
-import { listTasks, createTask, updateTask } from '../api/tasks';
-import { get } from '../api/client';
-import type { Task, TaskStatus } from '@flock/shared';
+import { get, post } from '../api/client';
+import { TaskDetailModal } from '../components/modals/TaskDetailModal';
+
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  assigned_to?: string;
+  priority: number;
+  room_id?: string;
+  created_at: string;
+}
+
+interface Agent {
+  id: string;
+  name: string;
+  display_name: string;
+}
 
 interface Room {
   id: string;
   name: string;
 }
 
-const columns: { status: TaskStatus; label: string; color: string }[] = [
-  { status: 'todo', label: 'To Do', color: 'bg-text-muted' },
-  { status: 'in_progress', label: 'In Progress', color: 'bg-accent' },
-  { status: 'review', label: 'Review', color: 'bg-warning' },
-  { status: 'done', label: 'Done', color: 'bg-success' },
+const COLUMNS: { status: string; label: string; icon: string; color: string }[] = [
+  { status: 'todo', label: '待办', icon: '📋', color: 'bg-text-dim' },
+  { status: 'in_progress', label: '进行中', icon: '⚡', color: 'bg-[#FBBF24]' },
+  { status: 'review', label: '审查中', icon: '👀', color: 'bg-accent' },
+  { status: 'done', label: '完成', icon: '✅', color: 'bg-[#34D399]' },
+  { status: 'rejected', label: '退回', icon: '🚫', color: 'bg-[#FBBF24]' },
+  { status: 'error', label: '错误', icon: '❌', color: 'bg-error' },
 ];
 
-const priorityBadge: Record<string, { label: string; cls: string }> = {
-  urgent: { label: 'URGENT', cls: 'bg-error/10 text-error' },
-  high: { label: 'HIGH', cls: 'bg-warning/10 text-warning' },
-  normal: { label: '', cls: '' },
-  low: { label: 'LOW', cls: 'bg-text-muted/10 text-text-muted' },
+const PRIORITY_LABEL: Record<number, string> = { 0: '低', 1: '中', 2: '高' };
+const PRIORITY_BADGE: Record<number, string> = {
+  0: 'bg-[#064E3B] text-[#34D399]',
+  1: 'bg-[#78350F] text-[#FBBF24]',
+  2: 'bg-error-muted text-error',
 };
 
 export function TaskBoardPage() {
   const { token } = useAuth();
   const { subscribe } = useSSE();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [selectedRoom, setSelectedRoom] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newRoom, setNewRoom] = useState('');
-  const [newPriority, setNewPriority] = useState<string>('normal');
+  const [newPriority, setNewPriority] = useState(1);
+  const [creating, setCreating] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
-  const loadTasks = useCallback(async () => {
+  const load = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await listTasks(token, selectedRoom || undefined);
-      setTasks(res.tasks);
-    } catch {
-      // API may not be ready yet
-    } finally {
+      const [tasksRes, agentsRes, roomsRes] = await Promise.all([
+        get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
+        get<{ agents: Agent[] }>('/agents', token).catch(() => ({ agents: [] })),
+        get<{ rooms: Room[] }>('/rooms', token).catch(() => ({ rooms: [] })),
+      ]);
+      setTasks(tasksRes.tasks);
+      setAgents(agentsRes.agents);
+      setRooms(roomsRes.rooms);
+      if (roomsRes.rooms.length > 0 && !newRoom) setNewRoom(roomsRes.rooms[0].id);
+    } catch {} finally {
       setLoading(false);
     }
-  }, [token, selectedRoom]);
+  }, [token, newRoom]);
 
-  useEffect(() => {
-    if (!token) return;
-    get<{ rooms: Room[] }>('/rooms', token)
-      .then(r => {
-        setRooms(r.rooms);
-        if (r.rooms.length > 0 && !newRoom) setNewRoom(r.rooms[0].id);
-      })
-      .catch(() => {});
-  }, [token]);
+  useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
-
-  // SSE: refresh on task events
   useEffect(() => {
     return subscribe(event => {
       if (event.event === 'task_created' || event.event === 'task_status') {
-        loadTasks();
+        load();
       }
     });
-  }, [subscribe, loadTasks]);
+  }, [subscribe, load]);
 
   const handleCreate = async () => {
-    if (!token || !newTitle.trim() || !newRoom) return;
+    if (!token || !newTitle.trim()) return;
+    setCreating(true);
     try {
-      await createTask(token, {
-        room_id: newRoom,
+      await post('/tasks', token, {
         title: newTitle.trim(),
-        priority: newPriority as Task['priority'],
+        room_id: newRoom || undefined,
+        priority: newPriority,
       });
       setNewTitle('');
       setShowCreate(false);
-      await loadTasks();
-    } catch {
-      // ignore
-    }
+      load();
+    } catch {} finally { setCreating(false); }
   };
 
-  const handleStatusChange = async (taskId: string, status: TaskStatus) => {
+  const handleStatusChange = async (taskId: string, status: string) => {
     if (!token) return;
     try {
-      await updateTask(token, taskId, { status });
-      await loadTasks();
-    } catch {
-      // ignore
-    }
+      await post(`/tasks/${taskId}`, token, { status });
+      load();
+    } catch {}
   };
 
   if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">Loading tasks...</p>
-      </div>
-    );
+    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">Loading...</p></div>;
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <header className="px-6 py-4 border-b border-border shrink-0 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Task Board</h2>
-          <p className="text-sm text-text-muted">Track agent tasks across rooms</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedRoom}
-            onChange={e => setSelectedRoom(e.target.value)}
-            className="px-2 py-1 text-xs bg-surface-elevated border border-border rounded-md text-text"
-          >
-            <option value="">All rooms</option>
-            {rooms.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="px-3 py-1.5 text-xs font-medium bg-accent text-white rounded-md hover:opacity-90 transition-opacity"
-          >
-            + New Task
+    <div className="flex flex-col h-full">
+      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
+        <h3 className="text-base font-semibold">任务看板</h3>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-text-muted">v0.5</span>
+          <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
+            + 创建任务
           </button>
         </div>
-      </header>
+      </div>
 
-      <div className="flex-1 overflow-x-auto p-4">
-        <div className="flex gap-4 h-full min-w-[800px]">
-          {columns.map(col => {
+      <div className="flex-1 overflow-x-auto">
+        <div className="grid grid-cols-6 gap-3.5 p-4 min-w-[1000px]">
+          {COLUMNS.map(col => {
             const colTasks = tasks.filter(t => t.status === col.status);
             return (
-              <div key={col.status} className="flex-1 flex flex-col min-w-[200px]">
-                <div className="flex items-center gap-2 mb-3 px-1">
-                  <span className={`w-2 h-2 rounded-full ${col.color}`} />
-                  <h3 className="text-sm font-medium text-text">{col.label}</h3>
-                  <span className="text-xs text-text-muted font-mono">{colTasks.length}</span>
+              <div key={col.status} className="bg-bg border border-border rounded-[10px] flex flex-col min-h-[400px]">
+                <div className="p-2.5 px-3.5 border-b border-border flex items-center gap-2 shrink-0">
+                  <h4 className="text-[13px] font-semibold flex-1">{col.icon} {col.label}</h4>
+                  <span className="text-[11px] text-text-dim bg-surface px-2 py-0.5 rounded-full">{colTasks.length}</span>
                 </div>
-                <div className="flex-1 overflow-y-auto space-y-2">
+                <div className="flex-1 overflow-y-auto p-2">
                   {colTasks.map(task => (
-                    <TaskCard
+                    <div
                       key={task.id}
-                      task={task}
-                      onStatusChange={handleStatusChange}
-                    />
+                      onClick={() => setSelectedTask(task)}
+                      className="bg-surface border border-border rounded-[10px] p-3 mb-2 cursor-pointer hover:border-text-dim transition-colors"
+                    >
+                      <div className="text-[13px] font-medium mb-1.5">{task.title}</div>
+                      <div className="flex items-center gap-2 text-[11px] text-text-muted">
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${PRIORITY_BADGE[task.priority] || PRIORITY_BADGE[1]}`}>
+                          {PRIORITY_LABEL[task.priority] || '中'}
+                        </span>
+                        {task.assigned_to && (
+                          <span>{agents.find(a => a.id === task.assigned_to)?.display_name || task.assigned_to.slice(0, 8)}</span>
+                        )}
+                      </div>
+                    </div>
                   ))}
                   {colTasks.length === 0 && (
-                    <div className="p-3 text-xs text-text-muted text-center border border-dashed border-border rounded-lg">
-                      No tasks
+                    <div className="text-center text-text-dim text-xs py-6">
+                      {col.status === 'error' ? '超时/预算超限的任务' : '暂无任务'}
                     </div>
                   )}
                 </div>
@@ -163,94 +162,47 @@ export function TaskBoardPage() {
         </div>
       </div>
 
+      {/* Create Task Modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
-          <div className="w-96 p-5 bg-surface rounded-lg border border-border" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold mb-3">Create Task</h3>
-            <input
-              value={newTitle}
-              onChange={e => setNewTitle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreate()}
-              placeholder="Task title"
-              autoFocus
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
-            />
-            <select
-              value={newRoom}
-              onChange={e => setNewRoom(e.target.value)}
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text mb-2"
-            >
-              {rooms.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-            <select
-              value={newPriority}
-              onChange={e => setNewPriority(e.target.value)}
-              className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text mb-3"
-            >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowCreate(false)}
-                className="px-3 py-1.5 text-xs text-text-muted hover:text-text transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreate}
-                disabled={!newTitle.trim()}
-                className="px-3 py-1.5 text-xs font-medium bg-accent text-white rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                Create
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
+          <div className="w-[480px] p-6 bg-surface border border-border rounded-[14px]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">创建任务</h3>
+            <div className="mb-4">
+              <label className="block text-xs text-text-muted mb-1">任务标题</label>
+              <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="任务标题" className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent" />
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs text-text-muted mb-1">Room</label>
+              <select value={newRoom} onChange={e => setNewRoom(e.target.value)} className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text focus:border-accent">
+                {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs text-text-muted mb-1">优先级</label>
+              <select value={newPriority} onChange={e => setNewPriority(Number(e.target.value))} className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text focus:border-accent">
+                <option value={0}>低</option>
+                <option value={1}>中</option>
+                <option value={2}>高</option>
+              </select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-text-muted hover:text-text">取消</button>
+              <button onClick={handleCreate} disabled={creating || !newTitle.trim()} className="px-4 py-2 text-sm font-semibold bg-accent text-white rounded-full hover:bg-accent-hover disabled:opacity-50">
+                {creating ? '创建中...' : '创建'}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-function TaskCard({ task, onStatusChange }: { task: Task; onStatusChange: (id: string, status: TaskStatus) => void }) {
-  const badge = priorityBadge[task.priority] ?? priorityBadge.normal;
-  const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = {
-    todo: 'in_progress',
-    in_progress: 'review',
-    review: 'done',
-  };
-  const next = nextStatus[task.status];
-
-  return (
-    <div className="p-3 bg-surface border border-border rounded-lg hover:border-accent/30 transition-colors group">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm text-text font-medium leading-snug">{task.title}</p>
-        {badge.label && (
-          <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-bold rounded ${badge.cls}`}>
-            {badge.label}
-          </span>
-        )}
-      </div>
-      {task.description && (
-        <p className="text-xs text-text-muted mt-1 line-clamp-2">{task.description}</p>
+      {/* Task Detail Modal */}
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          agents={agents}
+          onClose={() => setSelectedTask(null)}
+        />
       )}
-      <div className="flex items-center justify-between mt-2">
-        <span className="text-[10px] text-text-muted font-mono">
-          {task.assigned_to ? task.assigned_to.slice(0, 8) : 'unassigned'}
-        </span>
-        {next && (
-          <button
-            onClick={() => onStatusChange(task.id, next)}
-            className="opacity-0 group-hover:opacity-100 px-2 py-0.5 text-[10px] font-medium bg-accent/10 text-accent rounded transition-opacity"
-          >
-            {next === 'in_progress' ? 'Start' : next === 'review' ? 'Review' : 'Done'}
-          </button>
-        )}
-      </div>
     </div>
   );
 }
