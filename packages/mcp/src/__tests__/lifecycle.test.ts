@@ -52,7 +52,7 @@ describe('MCP agent lifecycle', () => {
     // After resolveAgentId, status should still be online from registerAgent
     // but the MCP startup no longer calls setAgentOnline
     const afterRegister = db.prepare('SELECT status FROM profiles WHERE id = ?').get(agent.id) as { status: string };
-    expect(afterRegister.status).toBe('online'); // from registerAgent default
+    expect(afterRegister.status).toBe('active'); // from registerAgent default (v0.5 status model)
 
     // Simulate what happens when MCP starts without calling setAgentOnline
     // The agent's status should be whatever it was before (not forced online by MCP)
