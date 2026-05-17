@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { sendMessage, getThread } from '../services/messaging.js';
+import { wakeMentionedAgents } from '../services/callback.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 
@@ -13,7 +14,7 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
     try {
       const result = sendMessage(db, req.agentId!, req.body);
 
-      // Emit mention events
+      // Emit mention events via SSE
       if (req.body.mentions && req.body.mentions.length > 0) {
         eventBus.emitMention(
           {
@@ -26,10 +27,20 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
           req.body.mentions,
           req.agentId!,
         );
+
+        // Wake dormant mentioned agents via runtime callback
+        const senderProfile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(req.agentId!) as { name: string } | undefined;
+        wakeMentionedAgents(
+          db,
+          req.body.mentions,
+          req.body.room_id,
+          result.id,
+          senderProfile?.name ?? '',
+          req.body.content.slice(0, 200),
+        );
       }
 
       // room_message SSE events are now handled by DB poller (cross-process bridge)
-      // Mention events are still emitted immediately (targeted, not room-scoped)
 
       res.status(201).json(result);
     } catch (err) {

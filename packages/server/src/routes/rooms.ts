@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, requireRoomAccess } from '../services/room.js';
-import { getMessages } from '../services/messaging.js';
+import { getMessages, sendMessage } from '../services/messaging.js';
+import { wakeRoomAgents } from '../services/callback.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
@@ -11,6 +13,7 @@ import { ServerError } from '../middleware/error.js';
 export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
+  const humanAuth = humanAuthMiddleware(db);
 
   // POST /rooms — create room (any authenticated agent)
   router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
@@ -80,10 +83,20 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     }
   });
 
-  // POST /rooms/:id/join
+  // POST /rooms/:id/join (agent or human)
   router.post('/:id/join', auth, (req: AuthenticatedRequest, res, next) => {
     try {
       const result = joinRoom(db, req.params.id as string, req.agentId!);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /rooms/:id/join (human auth)
+  router.post('/:id/join/human', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
+    try {
+      const result = joinRoom(db, req.params.id as string, req.humanId!);
       res.json(result);
     } catch (err) {
       next(err);
@@ -111,6 +124,30 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
         cursor: req.query.cursor ? Number(req.query.cursor) : undefined,
       });
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /rooms/:id/messages — human sends message (triggers broadcast wake)
+  router.post('/:id/messages', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
+    try {
+      const roomId = req.params.id as string;
+      requireRoomAccess(db, roomId, req.humanId!);
+
+      const result = sendMessage(db, req.humanId!, {
+        room_id: roomId,
+        content: req.body.content,
+        idempotency_key: req.body.idempotency_key ?? `human-${req.humanId}-${Date.now()}`,
+        mentions: req.body.mentions,
+        reply_to: req.body.reply_to,
+      }, 'human');
+
+      // Broadcast wake: notify all dormant agents in the room
+      const human = db.prepare('SELECT display_name FROM humans WHERE id = ?').get(req.humanId!) as { display_name: string } | undefined;
+      wakeRoomAgents(db, roomId, req.humanId!, human?.display_name ?? 'Human', req.body.content?.slice(0, 200) ?? '');
+
+      res.status(201).json(result);
     } catch (err) {
       next(err);
     }

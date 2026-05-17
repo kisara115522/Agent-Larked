@@ -20,6 +20,7 @@ export function sendMessage(
   db: Database.Database,
   agentId: string,
   req: SendMessageRequest,
+  senderType: 'agent' | 'human' = 'agent',
 ): SendMessageResponse {
   // 1. Room must exist
   const room = db.prepare('SELECT id FROM rooms WHERE id = ?').get(req.room_id);
@@ -93,9 +94,9 @@ export function sendMessage(
     const createdOrder = orderRow.next_order;
 
     db.prepare(`
-      INSERT INTO messages (id, from_agent, room_id, content, reply_to, sequence, created_at, created_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, agentId, req.room_id, req.content, req.reply_to ?? null, sequence, now, createdOrder);
+      INSERT INTO messages (id, from_agent, room_id, content, reply_to, sequence, created_at, created_order, sender_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, agentId, req.room_id, req.content, req.reply_to ?? null, sequence, now, createdOrder, senderType);
 
     // Insert mentions
     if (req.mentions && req.mentions.length > 0) {
@@ -257,7 +258,7 @@ function rowToMessage(db: Database.Database, row: Record<string, unknown>): Mess
     from: fromAgent,
     from_name: profile?.name ?? '',
     from_display_name: profile?.display_name ?? '',
-    sender_type: 'agent',
+    sender_type: (row.sender_type as 'agent' | 'human') ?? 'agent',
     room_id: row.room_id as string,
     content: row.content as string,
     reply_to: row.reply_to as string | null,

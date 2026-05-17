@@ -303,6 +303,8 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'direct_messages', 'read_at', 'TEXT DEFAULT NULL');
   // v0.5: sender_type for human/agent distinction
   migrateColumn(db, 'messages', 'sender_type', "TEXT NOT NULL DEFAULT 'agent'");
+  // v0.5: store callback secret for HMAC signing (hash stays for runtime auth)
+  migrateColumn(db, 'agent_runtimes', 'callback_secret', 'TEXT');
   migrateRoomsCreatedByAuditField(db);
   migrateMessagesFromAgentHistoryField(db);
 

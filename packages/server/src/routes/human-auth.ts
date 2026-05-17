@@ -41,6 +41,12 @@ export function humanAuthRouter(db: Database.Database): Router {
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(id, username, passwordHash, display_name || username, now, now);
 
+      // Create a profile entry so human can send messages (FK from_agent requires it)
+      db.prepare(`
+        INSERT OR IGNORE INTO profiles (id, name, display_name, token_hash, status, created_at, updated_at)
+        VALUES (?, ?, ?, 'human-no-login', 'active', ?, ?)
+      `).run(id, username, display_name || username, now, now);
+
       db.prepare(`
         INSERT INTO human_sessions (id, human_id, token, expires_at, created_at)
         VALUES (?, ?, ?, ?, ?)
