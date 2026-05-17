@@ -3,14 +3,16 @@ import type Database from 'better-sqlite3';
 import { sendMessage, getThread } from '../services/messaging.js';
 import { wakeMentionedAgents } from '../services/callback.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 
 export function messagesRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
+  const flexAuth = flexAuthMiddleware(db);
 
   // POST /messages — send message
-  router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
+  router.post('/', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = sendMessage(db, req.agentId!, req.body);
 
@@ -49,7 +51,7 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
   });
 
   // GET /messages/:id/thread — get thread
-  router.get('/:id/thread', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/:id/thread', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = getThread(db, req.params.id as string);
       res.json(result);

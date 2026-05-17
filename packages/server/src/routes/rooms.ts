@@ -17,8 +17,8 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   const humanAuth = humanAuthMiddleware(db);
   const flexAuth = flexAuthMiddleware(db);
 
-  // POST /rooms — create room (any authenticated agent)
-  router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
+  // POST /rooms — create room (any authenticated user)
+  router.post('/', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -86,7 +86,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // POST /rooms/:id/join (agent or human)
-  router.post('/:id/join', auth, (req: AuthenticatedRequest, res, next) => {
+  router.post('/:id/join', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = joinRoom(db, req.params.id as string, req.agentId!);
       res.json(result);
@@ -106,7 +106,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // POST /rooms/:id/leave
-  router.post('/:id/leave', auth, (req: AuthenticatedRequest, res, next) => {
+  router.post('/:id/leave', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = leaveRoom(db, req.params.id as string, req.agentId!);
       res.json(result);

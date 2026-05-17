@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { addReaction } from '../services/messaging.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 
 export function reactionsRouter(
@@ -10,9 +11,10 @@ export function reactionsRouter(
 ): Router {
   const router = Router();
   const auth = authMiddleware(db);
+  const flexAuth = flexAuthMiddleware(db);
 
   // POST /messages/:id/reactions
-  router.post('/:id/reactions', auth, (req: AuthenticatedRequest, res, next) => {
+  router.post('/:id/reactions', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const { reaction, created } = addReaction(db, req.agentId!, req.params.id as string, req.body);
 
