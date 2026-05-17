@@ -1,0 +1,22 @@
+{
+  "name": "@flock/agent-runtime",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@flock/shared": "*",
+    "express": "^4.21.0",
+    "cookie-parser": "^1.4.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/cookie-parser": "^1.4.8",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
