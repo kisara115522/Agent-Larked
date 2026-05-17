@@ -103,17 +103,9 @@ export function AgentListPage() {
     });
   }, [subscribe]);
 
-  const handleSpawn = async (agentId: string) => {
-    if (!token) return;
-    try { await post(`/agents/${agentId}/spawn`, token, {}); loadAgents(); } catch {}
-  };
   const handleStop = async (agentId: string) => {
     if (!token) return;
     try { await post(`/agents/${agentId}/stop`, token); loadAgents(); } catch {}
-  };
-  const handleWake = async (agentId: string) => {
-    if (!token) return;
-    try { await post(`/agents/${agentId}/wake`, token, {}); loadAgents(); } catch {}
   };
   const handleCreate = async () => {
     if (!token || !newName.trim()) return;
