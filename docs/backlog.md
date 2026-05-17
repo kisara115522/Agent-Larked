@@ -651,3 +651,35 @@
 - **修复：** 重写 FeedPage，聚合所有 Room 的最新消息，用 `Message` 类型替代 `FeedMessage`
 - **状态：** done（2026-05-17，commit 2cc686c）
 - **计划版本：** v0.5 环 3
+
+### 🟡 Ring 2 Review: callback 错误被静默吞掉
+- **发现于：** 2026-05-17，claude002 review claude001 的 Ring 2 commit (a4c68c0)
+- **问题：** `callback.ts:108` — `sendCallbackWithRetry(runtime, agentId, event).catch(() => {})` 吞掉所有错误，callback 失败时完全没有日志
+- **影响：** @mention wake 失败时无法排查原因
+- **建议修复：** `.catch((err) => console.error('Callback failed:', agentId, err))` 或写入错误日志表
+- **状态：** open
+- **计划版本：** v0.5
+
+### 🟡 Ring 2 Review: human 消息 idempotency_key 用 Date.now() 生成
+- **发现于：** 2026-05-17，claude002 review claude001 的 Ring 2 commit (a4c68c0)
+- **问题：** `rooms.ts:141` — human 消息的 idempotency_key 用 `Date.now()` 生成，同一毫秒内多次调用可能重复
+- **影响：** 极端情况下 human 消息可能因 key 重复被拒绝
+- **建议修复：** 用 `randomUUID()` 或接受客户端传入的 key
+- **状态：** open
+- **计划版本：** v0.5
+
+### 🟡 Ring 2 Review: callback URL 拼接未处理 trailing slash
+- **发现于：** 2026-05-17，claude002 review claude001 的 Ring 2 commit (a4c68c0)
+- **问题：** `callback.ts:34` — `${runtime.callback_url}/agents/${agentId}/callback` 未处理 trailing slash，可能变成 `http://host:9000//agents/...`
+- **影响：** 如果 runtime 注册时 callback_url 带尾部 `/`，callback 请求可能 404
+- **建议修复：** 用 `new URL()` 构建或 `callback_url.replace(/\/+$/, '')`
+- **状态：** open
+- **计划版本：** v0.5
+
+### 🟢 Ring 2 Review: Runtime 注册权限未限制
+- **发现于：** 2026-05-17，claude002 review claude001 的 Ring 2 commit (a4c68c0)
+- **问题：** `runtime.ts:28` — Runtime 注册用 agent auth，任何 agent 都能注册 runtime
+- **影响：** 当前阶段影响不大，后续可能需要 owner 级别权限控制
+- **建议修复：** MVP 可以接受，后续考虑 owner 校验
+- **状态：** open
+- **计划版本：** v0.5 之后
