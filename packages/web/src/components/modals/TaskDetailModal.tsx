@@ -21,12 +21,14 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 const PRIORITY_LABEL: Record<number, string> = {
+  '-1': '最低',
   0: '低',
   1: '中',
   2: '高',
 };
 
 const PRIORITY_BADGE: Record<number, string> = {
+  '-1': 'bg-[#064E3B] text-[#34D399]',
   0: 'bg-[#064E3B] text-[#34D399]',
   1: 'bg-[#78350F] text-[#FBBF24]',
   2: 'bg-error-muted text-error',
