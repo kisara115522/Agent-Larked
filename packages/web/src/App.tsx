@@ -10,6 +10,7 @@ import { AgentPage } from './pages/AgentPage';
 import { AgentListPage } from './pages/AgentListPage';
 import { CommandPage } from './pages/CommandPage';
 import { TaskBoardPage } from './pages/TaskBoardPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 function AppLayout() {
   const { token, loading } = useAuth();
@@ -39,6 +40,7 @@ function AppLayout() {
               <Route path="/agents/:id" element={<AgentPage />} />
               <Route path="/command" element={<CommandPage />} />
             <Route path="/tasks" element={<TaskBoardPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>

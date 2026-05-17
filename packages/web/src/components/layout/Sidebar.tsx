@@ -193,6 +193,20 @@ export function Sidebar() {
           ))}
       </nav>
 
+      <div className="p-2 border-t border-border">
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+              isActive ? 'bg-accent-muted text-accent' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
+            }`
+          }
+        >
+          <span>⚙</span>
+          <span>Settings</span>
+        </NavLink>
+      </div>
+
       <NavLink
         to="/command"
         className={({ isActive }) =>
