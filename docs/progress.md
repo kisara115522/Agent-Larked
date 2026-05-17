@@ -53,6 +53,16 @@
   - 渠道扩展预留：Transport Adapter 层作为架构约束，不实现
   - 已推送到 GitHub（commit e903103）
 - 下一步：v0.5 环 1 实施（清理 + 地基，1 周）
+- **v0.5 环 1 已完成** — 2026-05-17（3 agent 协作）
+  - claude001（Server）：humans + human_sessions 表、POST /human/register + /human/login + GET /human/me、cookie session 中间件、8 张新表、删除旧路由、11 测试通过
+  - claude002（MCP+SDK）：shared types 更新（AgentStatus 4 态、sender_type、Human 等）、MCP 删除 task/follow/broadcast/invite 工具、SDK 删除对应模块
+  - claude003（GUI）：LoginPage 人类登录、AuthContext human 认证、tokenStorage 重命名、删除 AdminPage/RoomManagePage/TaskPanel、Sidebar human 显示、RoomPage 移除 TaskPanel
+  - 7 个细粒度 commit（GUI 部分）
+- **v0.5 环 2 已完成** — 2026-05-17（3 agent 协作）
+  - claude001（Server）：agent_runtimes/agent_spawns 表 + spawn/stop/wake API（待确认完成时间）
+  - claude002（SDK）：lifecycle.ts（spawn/stop/wake/status）、human.ts（register/login/me）、identity 适配
+  - claude003（GUI）：AgentListPage 新建、AgentPage 重写（spawn/stop/wake）、StatusIndicator v0.5 四态、Sidebar Agents 链接、CommandPage auth 修复、FeedPage 文字更新
+  - 7 个细粒度 commit（GUI 部分）
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
