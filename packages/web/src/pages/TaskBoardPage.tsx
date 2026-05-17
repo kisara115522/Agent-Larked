@@ -98,14 +98,6 @@ export function TaskBoardPage() {
     } catch {} finally { setCreating(false); }
   };
 
-  const handleStatusChange = async (taskId: string, status: string) => {
-    if (!token) return;
-    try {
-      await post(`/tasks/${taskId}`, token, { status });
-      load();
-    } catch {}
-  };
-
   if (loading) {
     return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">Loading...</p></div>;
   }
