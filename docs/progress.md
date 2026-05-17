@@ -121,6 +121,13 @@
   - Server 侧：spawn/stop/wake 路由通知 runtime，`notifyRuntimeSpawn()` / `notifyRuntimeStop()`
   - 190 server tests 全通过
 - **当前状态：** GUI v3 + Runtime daemon + 后端 API 全部完成，可进行端到端测试
+- **GUI API 集成 + Toast 通知完成** — 2026-05-18（claude003）
+  - WakePage：接入 `GET /activity/wake-history`，显示真实唤醒记录
+  - WorkflowPage：接入 `GET /activity` 初始加载 + `GET /token-usage` 今日 Token 统计 + `workflow_event` SSE 订阅
+  - AgentPage：接入 `GET /agents/:id/activity` 活动日志
+  - ToastProvider：全局 toast 通知系统（4 秒自动消失），所有 action 页面已接入（Wake/Agent/AgentList/TaskBoard/Spawn/DM/WakeSingle）
+  - Backlog 清理：标记 toast 通知和 AgentPage 加载效率为 done
+  - 73 modules, 341KB JS, 25KB CSS, 0 errors
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
