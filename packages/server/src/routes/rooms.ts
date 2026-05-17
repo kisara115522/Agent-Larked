@@ -6,6 +6,7 @@ import { getMessages, sendMessage } from '../services/messaging.js';
 import { wakeRoomAgents } from '../services/callback.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
+import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
@@ -14,6 +15,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
   const humanAuth = humanAuthMiddleware(db);
+  const flexAuth = flexAuthMiddleware(db);
 
   // POST /rooms — create room (any authenticated agent)
   router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
@@ -56,8 +58,8 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     }
   });
 
-  // GET /rooms — list all rooms (public + private rooms the agent is a member of)
-  router.get('/', auth, (req: AuthenticatedRequest, res, next) => {
+  // GET /rooms — list all rooms (public + private rooms the agent/human is a member of)
+  router.get('/', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const rawLimit = req.query.limit ? Number(req.query.limit) : undefined;
       const limit = rawLimit !== undefined && Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
@@ -73,7 +75,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // GET /rooms/:id/members — list room members
-  router.get('/:id/members', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/:id/members', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       requireRoomAccess(db, req.params.id as string, req.agentId!);
       const result = getRoomMembers(db, req.params.id as string);
@@ -114,7 +116,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // GET /rooms/:id/messages — get room messages
-  router.get('/:id/messages', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/:id/messages', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       requireRoomAccess(db, req.params.id as string, req.agentId!);
       const rawLimit = req.query.limit ? Number(req.query.limit) : undefined;
@@ -154,7 +156,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // GET /rooms/:id — room details (must be after /:id/members and /:id/messages)
-  router.get('/:id', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/:id', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       requireRoomAccess(db, req.params.id as string, req.agentId!);
       const result = getRoom(db, req.params.id as string);
@@ -164,14 +166,14 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     }
   });
 
-  // POST /rooms/:id/subscribe
-  router.post('/:id/subscribe', auth, (req: AuthenticatedRequest, res) => {
+  // POST /rooms/:id/subscribe (accepts both agent and human tokens)
+  router.post('/:id/subscribe', flexAuth, (req: FlexAuthenticatedRequest, res) => {
     eventBus.subscribe(req.agentId!, req.params.id as string);
     res.json({ ok: true });
   });
 
-  // POST /rooms/:id/unsubscribe
-  router.post('/:id/unsubscribe', auth, (req: AuthenticatedRequest, res) => {
+  // POST /rooms/:id/unsubscribe (accepts both agent and human tokens)
+  router.post('/:id/unsubscribe', flexAuth, (req: FlexAuthenticatedRequest, res) => {
     eventBus.unsubscribe(req.agentId!, req.params.id as string);
     res.json({ ok: true });
   });

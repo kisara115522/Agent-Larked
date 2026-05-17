@@ -2,14 +2,16 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
+import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 
 export function configsRouter(db: Database.Database): Router {
   const router = Router();
   const auth = authMiddleware(db);
   const humanAuth = humanAuthMiddleware(db);
+  const flexAuth = flexAuthMiddleware(db);
 
   // GET /token-budgets — get token budget for an agent
-  router.get('/token-budgets', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/token-budgets', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const agentId = req.query.agent_id as string || req.agentId!;
       const row = db.prepare(
@@ -42,7 +44,7 @@ export function configsRouter(db: Database.Database): Router {
   });
 
   // GET /token-usage — get token usage for an agent
-  router.get('/token-usage', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/token-usage', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const agentId = req.query.agent_id as string || req.agentId!;
       const limit = Math.min(Number(req.query.limit) || 50, 200);
@@ -68,7 +70,7 @@ export function configsRouter(db: Database.Database): Router {
   });
 
   // GET /configs — get agent configs
-  router.get('/configs', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/configs', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const agentId = req.agentId!;
       const rows = db.prepare(
@@ -97,7 +99,7 @@ export function configsRouter(db: Database.Database): Router {
   });
 
   // PATCH /configs — update agent config
-  router.patch('/configs', auth, (req: AuthenticatedRequest, res, next) => {
+  router.patch('/configs', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const agentId = req.agentId!;
       const { config_type, config_value } = req.body;

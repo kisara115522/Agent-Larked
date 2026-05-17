@@ -70,6 +70,27 @@ export function FeedPage() {
     loadFeed();
   }, [token, loadFeed]);
 
+  // Subscribe to all rooms for real-time SSE events
+  useEffect(() => {
+    if (!token) return;
+    let roomIds: string[] = [];
+
+    get<{ rooms: Room[] }>('/rooms', token)
+      .then(({ rooms }) => {
+        roomIds = rooms.map(r => r.id);
+        for (const roomId of roomIds) {
+          post(`/rooms/${roomId}/subscribe`, token).catch(() => {});
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      for (const roomId of roomIds) {
+        post(`/rooms/${roomId}/unsubscribe`, token).catch(() => {});
+      }
+    };
+  }, [token]);
+
   // SSE: refresh feed on new messages or mentions
   useEffect(() => {
     return subscribe((event) => {

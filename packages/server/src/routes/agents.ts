@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import { registerAgent, updateProfile, searchAgents, getProfile, cleanupStaleOnlineAgents } from '../services/identity.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
+import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
@@ -12,6 +13,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
   const router = Router();
   const auth = authMiddleware(db);
   const humanAuth = humanAuthMiddleware(db);
+  const flexAuth = flexAuthMiddleware(db);
 
   // POST /agents — register (no auth required)
   router.post('/', (req, res, next) => {
@@ -34,7 +36,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
   });
 
   // GET /agents/:id — get agent by ID
-  router.get('/:id', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/:id', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = getProfile(db, req.params.id as string);
       res.json(result);
@@ -75,7 +77,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
   });
 
   // GET /agents — search/discover
-  router.get('/', auth, (req, res, next) => {
+  router.get('/', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       // Clean up stale online agents before returning results
       const staleIds = cleanupStaleOnlineAgents(db);

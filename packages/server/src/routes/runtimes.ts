@@ -2,10 +2,12 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { registerRuntime, listRuntimes, heartbeat } from '../services/runtime.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 
 export function runtimesRouter(db: Database.Database): Router {
   const router = Router();
   const auth = authMiddleware(db);
+  const flexAuth = flexAuthMiddleware(db);
 
   // POST /runtimes — register a new runtime
   router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
@@ -18,7 +20,7 @@ export function runtimesRouter(db: Database.Database): Router {
   });
 
   // GET /runtimes — list all registered runtimes
-  router.get('/', auth, (_req: AuthenticatedRequest, res, next) => {
+  router.get('/', flexAuth, (_req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = listRuntimes(db);
       res.json({ runtimes: result });

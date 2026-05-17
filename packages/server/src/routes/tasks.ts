@@ -2,15 +2,17 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { createTask, getTask, listTasks, updateTask } from '../services/task.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
+import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
 import { notifyTaskAssignment } from '../services/callback.js';
 
 export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
   const auth = authMiddleware(db);
+  const flexAuth = flexAuthMiddleware(db);
 
   // POST /tasks — create task
-  router.post('/', auth, (req: AuthenticatedRequest, res, next) => {
+  router.post('/', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = createTask(db, req.agentId!, req.body);
 
@@ -33,7 +35,7 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // GET /tasks — list tasks (optionally filtered by room)
-  router.get('/', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const roomId = req.query.room_id as string | undefined;
       const result = listTasks(db, {
@@ -49,7 +51,7 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // GET /tasks/:id — get single task
-  router.get('/:id', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/:id', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = getTask(db, req.params.id as string);
       res.json(result);
@@ -59,7 +61,7 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // GET /tasks/:id/events — get task events (timeline)
-  router.get('/:id/events', auth, (req: AuthenticatedRequest, res, next) => {
+  router.get('/:id/events', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const taskId = req.params.id as string;
       // Verify task exists
@@ -94,7 +96,7 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
   });
 
   // PATCH /tasks/:id — update task status/assignment
-  router.patch('/:id', auth, (req: AuthenticatedRequest, res, next) => {
+  router.patch('/:id', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const taskId = req.params.id as string;
       const oldTask = getTask(db, taskId);
