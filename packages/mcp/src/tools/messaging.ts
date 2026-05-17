@@ -6,7 +6,11 @@ import { sendMessage, getMessages } from '@flock/server/services/messaging';
 import { emitNewMessage } from './subscribe.js';
 import { getAgentId } from '../db.js';
 
-export function registerMessagingTools(server: McpServer, db: Database.Database): void {
+export function registerMessagingTools(
+  server: McpServer,
+  db: Database.Database,
+  agentIdProvider: () => string | null = getAgentId,
+): void {
   // Tool 1: flock_post
   server.registerTool(
     'flock_post',
@@ -22,7 +26,7 @@ export function registerMessagingTools(server: McpServer, db: Database.Database)
     },
     async (args) => {
       try {
-        const agentId = getAgentId();
+        const agentId = agentIdProvider();
         if (!agentId) {
           return {
             content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],

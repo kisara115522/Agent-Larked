@@ -4,7 +4,11 @@ import { z } from 'zod';
 import { createRoom, joinRoom, listRooms } from '@flock/server/services/room';
 import { getAgentId } from '../db.js';
 
-export function registerRoomTools(server: McpServer, db: Database.Database): void {
+export function registerRoomTools(
+  server: McpServer,
+  db: Database.Database,
+  agentIdProvider: () => string | null = getAgentId,
+): void {
   // Tool 1: flock_room_create
   server.registerTool(
     'flock_room_create',
@@ -18,7 +22,7 @@ export function registerRoomTools(server: McpServer, db: Database.Database): voi
     },
     async (args) => {
       try {
-        const agentId = getAgentId();
+        const agentId = agentIdProvider();
         if (!agentId) {
           return {
             content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
@@ -45,7 +49,7 @@ export function registerRoomTools(server: McpServer, db: Database.Database): voi
     },
     async (args) => {
       try {
-        const agentId = getAgentId();
+        const agentId = agentIdProvider();
         if (!agentId) {
           return {
             content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],

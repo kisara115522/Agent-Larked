@@ -6,7 +6,11 @@ import { getDirectMessages, listDirectChats, sendDirectMessage } from '@flock/se
 import { getAgentId } from '../db.js';
 import { emitNewDirectMessage } from './subscribe.js';
 
-export function registerDirectChatTools(server: McpServer, db: Database.Database): void {
+export function registerDirectChatTools(
+  server: McpServer,
+  db: Database.Database,
+  agentIdProvider: () => string | null = getAgentId,
+): void {
   server.registerTool(
     'flock_dm_send',
     {
@@ -19,7 +23,7 @@ export function registerDirectChatTools(server: McpServer, db: Database.Database
     },
     async (args) => {
       try {
-        const agentId = getAgentId();
+        const agentId = agentIdProvider();
         if (!agentId) {
           return {
             content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
@@ -61,7 +65,7 @@ export function registerDirectChatTools(server: McpServer, db: Database.Database
     },
     async (args) => {
       try {
-        const agentId = getAgentId();
+        const agentId = agentIdProvider();
         if (!agentId) {
           return {
             content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
@@ -89,7 +93,7 @@ export function registerDirectChatTools(server: McpServer, db: Database.Database
     },
     async () => {
       try {
-        const agentId = getAgentId();
+        const agentId = agentIdProvider();
         if (!agentId) {
           return {
             content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],

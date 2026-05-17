@@ -4,7 +4,11 @@ import { z } from 'zod';
 import { addReaction, getThread } from '@flock/server/services/messaging';
 import { getAgentId } from '../db.js';
 
-export function registerReactionTools(server: McpServer, db: Database.Database): void {
+export function registerReactionTools(
+  server: McpServer,
+  db: Database.Database,
+  agentIdProvider: () => string | null = getAgentId,
+): void {
   // Tool 1: flock_react
   server.registerTool(
     'flock_react',
@@ -17,7 +21,7 @@ export function registerReactionTools(server: McpServer, db: Database.Database):
     },
     async (args) => {
       try {
-        const agentId = getAgentId();
+        const agentId = agentIdProvider();
         if (!agentId) {
           return {
             content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],

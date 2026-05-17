@@ -60,7 +60,11 @@ export function emitNewDirectMessage(message: {
   messageBus.emit('direct_message', message);
 }
 
-export function registerWaitTool(server: McpServer, db: Database.Database): void {
+export function registerWaitTool(
+  server: McpServer,
+  db: Database.Database,
+  agentIdProvider: () => string | null = getAgentId,
+): void {
   // flock_wait: block until new messages arrive in ANY room the agent has joined
   server.registerTool(
     'flock_wait',
@@ -71,7 +75,7 @@ export function registerWaitTool(server: McpServer, db: Database.Database): void
       }),
     },
     async ({ timeout_seconds }) => {
-      const agentId = getAgentId();
+      const agentId = agentIdProvider();
       if (!agentId) {
         return {
           content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
