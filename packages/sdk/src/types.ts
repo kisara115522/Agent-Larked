@@ -1,4 +1,5 @@
 export type {
+  // Agent
   AgentProfile,
   AgentStatus,
   RegisterAgentRequest,
@@ -6,13 +7,20 @@ export type {
   UpdateAgentRequest,
   DiscoverAgentsQuery,
   DiscoverAgentsResponse,
+  // Room
   Room,
+  RoomWithMemberCount,
   CreateRoomRequest,
+  ListRoomsResponse,
+  GetRoomMembersResponse,
+  // Message
+  SenderType,
   Message,
   SendMessageRequest,
   SendMessageResponse,
   GetMessagesQuery,
   GetMessagesResponse,
+  // Direct Chat
   DirectMessage,
   SendDirectMessageRequest,
   SendDirectMessageResponse,
@@ -20,34 +28,37 @@ export type {
   GetDirectMessagesResponse,
   DirectChatSummary,
   ListDirectChatsResponse,
+  // Reaction
   ReactionType,
   Reaction,
   ReactionSummary,
   SendReactionRequest,
+  // Thread
   GetThreadResponse,
-  SSEMentionEvent,
-  SSEReactionEvent,
-  SSERoomMessageEvent,
-  SSEDirectMessageEvent,
-  SSEEvent,
-  OkResponse,
+  // Task (v0.5)
   TaskStatus,
   TaskPriority,
-  TaskEventType,
-  ArtifactType,
   Task,
   TaskEvent,
+  TaskEventType,
   TaskArtifact,
   TaskDetail,
   CreateTaskRequest,
-  CreateTaskResponse,
   ListTasksQuery,
   ListTasksResponse,
-  GetTaskResponse,
-  AddTaskEventRequest,
-  AddTaskEventResponse,
-  AddTaskArtifactRequest,
-  AddTaskArtifactResponse,
+  UpdateTaskRequest,
+  // SSE
+  SSEMentionEvent,
+  SSEReactionEvent,
+  SSERoomMessageEvent,
+  SSEAgentStatusEvent,
+  SSEDirectMessageEvent,
+  SSETaskCreatedEvent,
+  SSETaskStatusEvent,
+  SSETaskArtifactEvent,
+  SSEEvent,
+  // Generic
+  OkResponse,
 } from '@flock/shared';
 
 export { ErrorCode, createError } from '@flock/shared';

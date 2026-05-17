@@ -21,8 +21,15 @@ export function updateProfile(
   return client.patch<AgentProfile>(`/agents/${agentId}`, req);
 }
 
-export function getMe(
+export function getAgent(
   client: AgentFeedClient,
+  agentId: string,
 ): Promise<AgentProfile> {
-  return client.get<AgentProfile>('/agents/me');
+  return client.get<AgentProfile>(`/agents/${agentId}`);
+}
+
+export function listAgents(
+  client: AgentFeedClient,
+): Promise<AgentProfile[]> {
+  return client.get<AgentProfile[]>('/agents');
 }
