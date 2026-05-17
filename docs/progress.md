@@ -59,14 +59,41 @@
   - claude003（GUI）：LoginPage 人类登录、AuthContext human 认证、tokenStorage 重命名、删除 AdminPage/RoomManagePage/TaskPanel、Sidebar human 显示、RoomPage 移除 TaskPanel
   - 7 个细粒度 commit（GUI 部分）
 - **v0.5 环 2 已完成** — 2026-05-17（3 agent 协作）
-  - claude001（Server）：agent_runtimes/agent_spawns 表 + spawn/stop/wake API（待确认完成时间）
+  - claude001（Server）：agent_runtimes/agent_spawns 表 + spawn/stop/wake API + runtime 管理（POST/GET /runtimes, heartbeat）+ @mention wake callback（HMAC-SHA256, 3 次重试指数退避）+ 人类消息路由（POST /rooms/:id/messages human auth）+ broadcast wake（commit a4c68c0）
   - claude002（SDK）：lifecycle.ts（spawn/stop/wake/status）、human.ts（register/login/me）、identity 适配
   - claude003（GUI）：AgentListPage 新建、AgentPage 重写（spawn/stop/wake）、StatusIndicator v0.5 四态、Sidebar Agents 链接、CommandPage auth 修复、FeedPage 文字更新
   - 7 个细粒度 commit（GUI 部分）
+- **v0.5 环 2 review 完成** — 2026-05-17（commit 87c7b1d）
+  - claude002 review claude001 的 Ring 2 (a4c68c0)：5 个问题，3 个立即修复（错误日志、trailing slash、idempotency key），2 个记 backlog（runtime 注册权限、broadcast wake 语义）
+  - claude001 review claude002 的 Ring 4 (fd6e7b9..3c586df)：4 个问题，1 个建议修（transport idle timeout），其他集成时处理
+- **v0.5 环 5 Server 已完成** — 2026-05-17（commit 0d5b08d）
+  - claude001（Server）：POST/GET /tasks, PATCH /tasks/:id — 任务 CRUD + 状态机验证（6 态转换）+ task_events 写入 + SSE 事件（task_created, task_status）
+  - 138 tests pass, 0 TS errors
+- **v0.5 环 6 Server 已完成** — 2026-05-17（commit 0d5b08d）
+  - claude001（Server）：GET /token-budgets（含默认值）、GET /token-usage、GET /configs、PATCH /configs（upsert）
+  - 138 tests pass, 0 TS errors
 - **v0.5 环 3 GUI 已完成** — 2026-05-17
   - claude003（GUI）：MessageCard sender_type 支持、FeedPage 重写（聚合 Room 消息）、MentionContext + Sidebar 未读徽章、@mention 消息高亮
   - 14 个细粒度 commit（GUI 总计）
-  - 等待 claude001 Server 环 1 剩余（task 表 + agent management 路由）完成后联调
+  - 等待 claude001 Server task API 路由完成后联调
+- **v0.5 环 5 GUI 已完成** — 2026-05-17
+  - claude003（GUI）：TaskBoardPage 看板布局（todo/in_progress/review/done）、任务卡片、优先级标签、状态推进按钮、房间过滤、创建任务弹窗、SSE 实时刷新
+  - 1 个 commit（TaskBoard + tasks API client）
+  - 等待 claude001 task API 路由（POST/GET /tasks, PATCH /tasks/:id）接上
+- **v0.5 环 6 GUI 已完成** — 2026-05-17
+  - claude003（GUI）：SettingsPage（token 使用表格、agent 预算、全局配置显示）、Stats 卡片、Sidebar Settings 链接
+  - 1 个 commit
+  - 等待 claude001 token-budget/config API 路由接上
+- **v0.5 环 4 MCP 已完成** — 2026-05-17（6 个 commit）
+  - claude002（MCP）：所有 MCP 工具文件重构为接受 `agentIdProvider` 参数（支持 stdio 和 HTTP 两种模式）、`createMcpServer()` 工厂函数、`createHttpMcpHandler()` Streamable HTTP transport handler、独立 MCP HTTP server 入口（端口 3001）
+  - 架构决策：MCP HTTP server 作为独立进程运行，避免与 server 包的循环依赖
+  - review 修复：transport idle timeout（30 分钟 TTL + 每 60 秒清理）
+  - 测试：factory 集成测试（验证所有工具组注册）
+- **v0.5 交叉 review 完成** — 2026-05-17
+  - claude002 review claude001 Ring 2 (a4c68c0)：5 个问题，3 个已修 (87c7b1d)，2 个记 backlog
+  - claude001 review claude002 Ring 4 (fd6e7b9..3c586df)：代码质量高，transport idle timeout 已修 (25bd32e)
+  - backlog 已同步更新
+- **当前状态：** Ring 1-6 代码层面全部完成，等待 Runtime daemon 实现 + 端到端联调
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
