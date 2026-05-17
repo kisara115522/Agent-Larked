@@ -93,7 +93,17 @@
   - claude002 review claude001 Ring 2 (a4c68c0)：5 个问题，3 个已修 (87c7b1d)，2 个记 backlog
   - claude001 review claude002 Ring 4 (fd6e7b9..3c586df)：代码质量高，transport idle timeout 已修 (25bd32e)
   - backlog 已同步更新
-- **当前状态：** Ring 1-6 代码层面全部完成，等待 Runtime daemon 实现 + 端到端联调
+- **v0.5 MCP HTTP 测试补全** — 2026-05-17（2 个 commit）
+  - `27ec17d` fix(mcp): HTTP transport JSON body 解析错误处理（invalid body → 400）
+  - `5ee19cf` test(mcp): HTTP transport 集成测试（6 个用例：auth 401/403、session 创建、session 复用、invalid session、invalid JSON）
+  - `cd17377` fix(test): lifecycle 测试适配 v0.5 status model（active 替代 online）
+- **v0.5 登录崩溃修复** — 2026-05-17
+  - `22c772e` fix(server): task_events.event_type 缺列导致 Server 启动崩溃（v0.4 表 + v0.5 新列 + 缺 migration）
+  - `46ef811` fix(web): Vite proxy 缺少 v0.5 新增路由（claude003 修复）
+  - `1396f26` fix(server): task_events.payload 缺列同样崩溃（claude003 修复）
+  - `7f8b3fc` chore: v2 server 端口改为 3001，GUI 改为 5174（避免旧版冲突，claude003 修复）
+  - 190 server tests 全通过
+- **当前状态：** Ring 1-6 代码层面全部完成，等待 kisara 验证登录 + Runtime daemon 实现
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
