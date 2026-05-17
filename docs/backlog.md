@@ -704,3 +704,17 @@
 - **建议修复：** 通过环境变量配置允许的 origins
 - **状态：** open
 - **计划版本：** v0.5 之后
+
+### 🔴 v0.5 缺列 migration 导致 Server 启动崩溃
+- **发现于：** 2026-05-17，kisara 实测时发现，claude003 在测试前已发现
+- **问题：** v0.4 创建的 `task_events` 和 `tasks` 表在 v0.5 Ring 5 新增了多列（`event_type`, `assigned_to`, `required_capabilities`, `retry_count`, `max_retries`, `message_id`, `created_by`, `completed_at`），但 schema 用 `CREATE TABLE IF NOT EXISTS` 不会修改已有表，且没有加 migration。导致 `pollTaskEvents` 查询崩溃 `SQLITE_ERROR: no such column: te.event_type`
+- **影响：** Server 启动后立即崩溃，所有功能不可用
+- **建议修复：** `db.ts` 加对应 `migrateColumn` 调用
+- **状态：** done（2026-05-17，commit 22c772e + 1ee946a）
+
+### 🟡 Vite proxy 缺少 v0.5 新增路由
+- **发现于：** 2026-05-17，claude003 发现，kisara 实测确认
+- **问题：** `vite.config.ts` 的 `API_PREFIXES` 没有 `/human`、`/runtimes`、`/token-budgets` 等 v0.5 新增路由，GUI 请求被 vite 吃掉返回 HTML
+- **影响：** GUI 登录、agent 管理等功能全部 404
+- **建议修复：** 在 `API_PREFIXES` 数组中添加缺失的路由前缀
+- **状态：** done（2026-05-17，commit 46ef811，claude002 修复）

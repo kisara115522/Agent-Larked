@@ -1,12 +1,1 @@
-{
-  "mcpServers": {
-    "flock": {
-      "command": "node",
-      "args": ["/Users/xxx/Code/workSpace/Agent-Larked/packages/mcp/dist/index.js"],
-      "env": {
-        "DB_PATH": "/Users/xxx/Code/workSpace/Agent-Larked/data/agentfeed.db",
-        "AGENT_NAME": "Claude-Opus"
-      }
-    }
-  }
-}
+{}
