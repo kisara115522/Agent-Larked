@@ -13,6 +13,7 @@ let adminToken: string;
 describe('Runtime Management', () => {
   let agentToken: string;
   let agentId: string;
+  let humanCookie: string;
 
   beforeAll(async () => {
     ({ app, db } = createApp());
@@ -21,6 +22,13 @@ describe('Runtime Management', () => {
     const reg = await request(app).post('/agents').send({ name: 'RuntimeBot' }).expect(201);
     agentToken = reg.body.token;
     agentId = reg.body.id;
+
+    // Register a human user for humanAuth routes
+    const humanRes = await request(app)
+      .post('/human/register')
+      .send({ username: 'test-admin', password: 'test-pass-123' })
+      .expect(201);
+    humanCookie = humanRes.headers['set-cookie'][0].split(';')[0];
   });
 
   it('registers a new runtime', async () => {
@@ -87,5 +95,73 @@ describe('Runtime Management', () => {
       .set('Authorization', `Bearer ${agentToken}`)
       .send({ host: 'localhost' }) // missing port and callback_url
       .expect(400);
+  });
+
+  it('spawns agent and creates spawn record', async () => {
+    const res = await request(app)
+      .post(`/agents/${agentId}/spawn`)
+      .set('Cookie', humanCookie)
+      .send({ prompt: 'Hello world' })
+      .expect(201);
+
+    expect(res.body.spawn_id).toBeDefined();
+    expect(res.body.status).toBe('active');
+
+    // Agent should now be active
+    const statusRes = await request(app)
+      .get(`/agents/${agentId}/status`)
+      .set('Cookie', humanCookie)
+      .expect(200);
+
+    expect(statusRes.body.status).toBe('active');
+  });
+
+  it('stops agent and marks spawn as stopped', async () => {
+    const res = await request(app)
+      .post(`/agents/${agentId}/stop`)
+      .set('Cookie', humanCookie)
+      .expect(200);
+
+    expect(res.body.ok).toBe(true);
+
+    // Agent should now be dormant
+    const statusRes = await request(app)
+      .get(`/agents/${agentId}/status`)
+      .set('Cookie', humanCookie)
+      .expect(200);
+
+    expect(statusRes.body.status).toBe('dormant');
+  });
+
+  it('wakes dormant agent', async () => {
+    const res = await request(app)
+      .post(`/agents/${agentId}/wake`)
+      .set('Cookie', humanCookie)
+      .send({ prompt: 'Wake up!' })
+      .expect(200);
+
+    expect(res.body.ok).toBe(true);
+
+    // Agent should be active again
+    const statusRes = await request(app)
+      .get(`/agents/${agentId}/status`)
+      .set('Cookie', humanCookie)
+      .expect(200);
+
+    expect(statusRes.body.status).toBe('active');
+  });
+
+  it('returns 404 for spawn on unknown agent', async () => {
+    await request(app)
+      .post('/agents/nonexistent/spawn')
+      .set('Cookie', humanCookie)
+      .expect(404);
+  });
+
+  it('returns 404 for wake on unknown agent', async () => {
+    await request(app)
+      .post('/agents/nonexistent/wake')
+      .set('Cookie', humanCookie)
+      .expect(404);
   });
 });
