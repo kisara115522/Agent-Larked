@@ -64,19 +64,25 @@ export function createHttpMcpHandler(options: HttpMcpHandlerOptions) {
     // Parse body for POST requests
     let parsedBody: unknown = undefined;
     if (req.method === 'POST') {
-      parsedBody = await new Promise((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        req.on('data', (chunk: Buffer) => chunks.push(chunk));
-        req.on('end', () => {
-          try {
-            const raw = Buffer.concat(chunks).toString('utf-8');
-            resolve(raw ? JSON.parse(raw) : undefined);
-          } catch (err) {
-            reject(err);
-          }
+      try {
+        parsedBody = await new Promise((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          req.on('data', (chunk: Buffer) => chunks.push(chunk));
+          req.on('end', () => {
+            try {
+              const raw = Buffer.concat(chunks).toString('utf-8');
+              resolve(raw ? JSON.parse(raw) : undefined);
+            } catch (err) {
+              reject(err);
+            }
+          });
+          req.on('error', reject);
         });
-        req.on('error', reject);
-      });
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+        return;
+      }
     }
 
     // Check for existing session ID
