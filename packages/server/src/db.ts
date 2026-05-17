@@ -307,6 +307,14 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'agent_runtimes', 'callback_secret', 'TEXT');
   // v0.5: task_events.event_type was added in Ring 5 but table existed from v0.4
   migrateColumn(db, 'task_events', 'event_type', "TEXT NOT NULL DEFAULT 'created'");
+  // v0.5: tasks table got new columns in Ring 5 that didn't exist in v0.4
+  migrateColumn(db, 'tasks', 'assigned_to', 'TEXT REFERENCES profiles(id) ON DELETE SET NULL');
+  migrateColumn(db, 'tasks', 'required_capabilities', "TEXT DEFAULT '[]'");
+  migrateColumn(db, 'tasks', 'retry_count', 'INTEGER DEFAULT 0');
+  migrateColumn(db, 'tasks', 'max_retries', 'INTEGER DEFAULT 3');
+  migrateColumn(db, 'tasks', 'message_id', 'TEXT REFERENCES messages(id) ON DELETE SET NULL');
+  migrateColumn(db, 'tasks', 'created_by', "TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT");
+  migrateColumn(db, 'tasks', 'completed_at', 'TEXT');
   migrateRoomsCreatedByAuditField(db);
   migrateMessagesFromAgentHistoryField(db);
 
