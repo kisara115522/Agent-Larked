@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { get } from '../api/client';
+import { get, post } from '../api/client';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
+import { WakeSingleModal } from '../components/modals/WakeSingleModal';
 
 interface Agent {
   id: string;
@@ -11,21 +12,50 @@ interface Agent {
   last_active_at: string | null;
 }
 
+interface Room {
+  id: string;
+  name: string;
+}
+
 export function WakePage() {
   const { token } = useAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState('');
+  const [wakeAgent, setWakeAgent] = useState<Agent | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await get<{ agents: Agent[] }>('/agents', token);
-      setAgents(res.agents);
+      const [agentsRes, roomsRes] = await Promise.all([
+        get<{ agents: Agent[] }>('/agents', token),
+        get<{ rooms: Room[] }>('/rooms', token).catch(() => ({ rooms: [] })),
+      ]);
+      setAgents(agentsRes.agents);
+      setRooms(roomsRes.rooms);
+      if (roomsRes.rooms.length > 0 && !selectedRoom) setSelectedRoom(roomsRes.rooms[0].id);
     } catch {}
-  }, [token]);
+  }, [token, selectedRoom]);
 
   useEffect(() => { load(); }, [load]);
 
   const dormantAgents = agents.filter(a => a.status === 'dormant' || a.status === 'error');
+
+  const handleBroadcastWake = async () => {
+    if (!token || !selectedRoom) return;
+    try {
+      await post(`/rooms/${selectedRoom}/broadcast-wake`, token, {});
+      load();
+    } catch {}
+  };
+
+  const handleQuickWake = async (agentId: string) => {
+    if (!token) return;
+    try {
+      await post(`/agents/${agentId}/wake`, token, {});
+      load();
+    } catch {}
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -48,13 +78,13 @@ export function WakePage() {
               <div className="flex-1">
                 <div className="text-sm font-semibold">{agent.display_name || agent.name}</div>
                 <div className="text-xs text-text-muted mt-0.5">
-                  {agent.status} · {agent.last_active_at ? `最后活跃 ${formatRelativeTime(agent.last_active_at)}` : '从未活跃'}
+                  {agent.status} · {agent.last_active_at ? `${formatRelativeTime(agent.last_active_at)}未活跃` : '从未活跃'} · 最后 Session: 无
                 </div>
               </div>
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white transition-colors">
-                唤醒
+              <button onClick={() => setWakeAgent(agent)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white transition-colors">
+                🔔 唤醒
               </button>
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
+              <button onClick={() => handleQuickWake(agent.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
                 启动到 Runtime
               </button>
             </div>
@@ -68,11 +98,12 @@ export function WakePage() {
             <div className="text-sm font-semibold">唤醒 Room 内所有 dormant agent</div>
             <div className="text-xs text-text-muted mt-0.5">向 Room 内所有处于 dormant 状态的 agent 发送唤醒 callback</div>
           </div>
-          <select className="px-3 py-2 bg-surface border border-border rounded-[14px] text-sm text-text w-[200px]">
-            <option>选择 Room...</option>
+          <select value={selectedRoom} onChange={e => setSelectedRoom(e.target.value)} className="px-3 py-2 bg-surface border border-border rounded-[14px] text-sm text-text w-[200px]">
+            {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            {rooms.length === 0 && <option>选择 Room...</option>}
           </select>
-          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white transition-colors">
-            全部唤醒
+          <button onClick={handleBroadcastWake} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white transition-colors">
+            🔔 全部唤醒
           </button>
         </div>
 
@@ -85,6 +116,19 @@ export function WakePage() {
           </div>
         </div>
       </div>
+
+      {/* Wake Single Modal */}
+      {wakeAgent && (
+        <WakeSingleModal
+          agentId={wakeAgent.id}
+          agentName={wakeAgent.name}
+          agentStatus={wakeAgent.status}
+          lastActive={wakeAgent.last_active_at ? formatRelativeTime(wakeAgent.last_active_at) : undefined}
+          rooms={rooms}
+          onClose={() => setWakeAgent(null)}
+          onWoken={load}
+        />
+      )}
     </div>
   );
 }
