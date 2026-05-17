@@ -138,7 +138,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
       const result = sendMessage(db, req.humanId!, {
         room_id: roomId,
         content: req.body.content,
-        idempotency_key: req.body.idempotency_key ?? `human-${req.humanId}-${Date.now()}`,
+        idempotency_key: req.body.idempotency_key ?? randomUUID(),
         mentions: req.body.mentions,
         reply_to: req.body.reply_to,
       }, 'human');

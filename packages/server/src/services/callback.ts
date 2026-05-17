@@ -31,7 +31,8 @@ async function sendCallbackWithRetry(
 ): Promise<boolean> {
   if (!runtime.callback_secret) return false;
 
-  const url = `${runtime.callback_url}/agents/${agentId}/callback`;
+  const baseUrl = runtime.callback_url.replace(/\/+$/, '');
+  const url = `${baseUrl}/agents/${agentId}/callback`;
   const body = JSON.stringify(event);
   const signature = `sha256=${signPayload(runtime.callback_secret, body)}`;
 
@@ -105,7 +106,9 @@ export function wakeMentionedAgents(
     };
 
     // Fire and forget — don't block the message response
-    sendCallbackWithRetry(runtime, agentId, event).catch(() => {});
+    sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
+      console.error(`[callback] Failed to wake agent ${agentId} via runtime ${runtime.id}:`, err);
+    });
   }
 }
 
@@ -148,6 +151,8 @@ export function wakeRoomAgents(
       excerpt,
     };
 
-    sendCallbackWithRetry(runtime, agent_id, event).catch(() => {});
+    sendCallbackWithRetry(runtime, agent_id, event).catch((err) => {
+      console.error(`[callback] Failed to wake agent ${agent_id} via runtime ${runtime_id}:`, err);
+    });
   }
 }
