@@ -110,8 +110,11 @@
   - 新组件：SpawnModal（agent/runtime/room选择+流程预览）、DMModal（私聊）、TaskDetailModal（状态/优先级/时间线）、WakeSingleModal（prompt+room选择）
   - RightPanel：3标签（活动/成员/任务），成员显示人类用户
   - 3列布局：220px Sidebar | 1fr Main | 360px RightPanel
-  - 27+ 个 GUI commit，build 72 modules, 336KB JS, 25KB CSS
-- **当前状态：** GUI v3 设计稿全部实现，Runtime daemon 仍待实现
+  - 消息样式匹配 v3 设计：fadeUp 动画、human 名字 accent 色、text-dim 时间戳、14px/1.65 行高
+  - 全中文 UI：所有 Loading/No messages/Send/Cancel/Create/Join/Close 等均已翻译
+  - CSS tokens：新增 fadeUp keyframe、text-dim (#5A5A66)、accent-hover (#2563EB)
+  - 30+ 个 GUI commit，build 72 modules, 336KB JS, 25KB CSS
+- **当前状态：** GUI v3 设计稿全部实现（含消息样式+全中文 UI），Runtime daemon 仍待实现
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
