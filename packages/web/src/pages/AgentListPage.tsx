@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
-import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
 
 interface Agent {

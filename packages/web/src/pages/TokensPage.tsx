@@ -62,8 +62,6 @@ export function TokensPage() {
   const totalCost = usage.reduce((sum, u) => sum + (u.cost_usd || 0), 0);
   const defaultDailyLimit = budgets[0]?.daily_limit || 100000;
 
-  const getAgentName = (id: string) => agents.find(a => a.id === id)?.display_name || agents.find(a => a.id === id)?.name || id;
-
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">

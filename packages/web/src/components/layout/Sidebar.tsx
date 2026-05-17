@@ -25,8 +25,8 @@ export function Sidebar() {
   const { token, human, logout } = useAuth();
   const { subscribe, connected } = useSSE();
   const { unreadByRoom } = useMentions();
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [, setRooms] = useState<Room[]>([]);
+  const [, setAgents] = useState<Agent[]>([]);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [showJoinRoom, setShowJoinRoom] = useState(false);
 
@@ -50,7 +50,6 @@ export function Sidebar() {
     });
   }, [subscribe]);
 
-  const activeCount = agents.filter(a => a.status === 'active').length;
   const totalUnread = Object.values(unreadByRoom).reduce((s, n) => s + n, 0);
 
   return (
