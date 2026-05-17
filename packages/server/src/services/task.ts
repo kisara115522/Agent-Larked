@@ -23,6 +23,7 @@ export interface CreateTaskRequest {
   priority?: number;
   parent_task_id?: string;
   message_id?: string;
+  orchestrator_id?: string;
 }
 
 export interface UpdateTaskRequest {
@@ -30,6 +31,7 @@ export interface UpdateTaskRequest {
   assigned_to?: string;
   priority?: number;
   description?: string;
+  orchestrator_id?: string;
 }
 
 export interface TaskInfo {
@@ -45,6 +47,7 @@ export interface TaskInfo {
   retry_count: number;
   max_retries: number;
   message_id: string | null;
+  orchestrator_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -72,8 +75,8 @@ export function createTask(
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO tasks (id, room_id, parent_task_id, title, description, status, assigned_to, required_capabilities, priority, message_id, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tasks (id, room_id, parent_task_id, title, description, status, assigned_to, required_capabilities, priority, message_id, orchestrator_id, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     req.room_id,
@@ -84,6 +87,7 @@ export function createTask(
     JSON.stringify(req.required_capabilities ?? []),
     req.priority ?? 0,
     req.message_id ?? null,
+    req.orchestrator_id ?? null,
     agentId,
     now,
     now,
@@ -108,13 +112,16 @@ export function getTask(db: Database.Database, taskId: string): TaskInfo {
 
 export function listTasks(
   db: Database.Database,
-  roomId: string,
-  query: { status?: string; limit?: number; cursor?: string } = {},
+  query: { room_id?: string; status?: string; limit?: number; cursor?: string } = {},
 ): { tasks: TaskInfo[]; has_more: boolean; next_cursor: string | null } {
   const limit = Math.min(query.limit ?? 50, 100);
-  const params: unknown[] = [roomId];
-  let where = 'WHERE room_id = ?';
+  const params: unknown[] = [];
+  let where = 'WHERE 1=1';
 
+  if (query.room_id) {
+    where += ' AND room_id = ?';
+    params.push(query.room_id);
+  }
   if (query.status) {
     where += ' AND status = ?';
     params.push(query.status);
@@ -182,6 +189,10 @@ export function updateTask(
     updates.push('description = ?');
     values.push(req.description);
   }
+  if (req.orchestrator_id !== undefined) {
+    updates.push('orchestrator_id = ?');
+    values.push(req.orchestrator_id);
+  }
 
   if (updates.length === 0) {
     return task;
@@ -218,6 +229,7 @@ function rowToTask(row: Record<string, unknown>): TaskInfo {
     retry_count: row.retry_count as number,
     max_retries: row.max_retries as number,
     message_id: row.message_id as string | null,
+    orchestrator_id: row.orchestrator_id as string | null,
     created_by: row.created_by as string,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,

@@ -316,6 +316,7 @@ export interface Task {
   retry_count: number;
   max_retries: number;
   message_id: string | null;
+  orchestrator_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -367,6 +368,7 @@ export interface CreateTaskRequest {
   assigned_to?: string;
   priority?: TaskPriority;
   required_capabilities?: string[];
+  orchestrator_id?: string;
 }
 
 export interface ListTasksQuery {
@@ -387,6 +389,7 @@ export interface UpdateTaskRequest {
   status?: TaskStatus;
   assigned_to?: string;
   priority?: TaskPriority;
+  orchestrator_id?: string;
 }
 
 // --- Token Budget ---

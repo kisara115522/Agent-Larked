@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   retry_count INTEGER DEFAULT 0,
   max_retries INTEGER DEFAULT 3,
   message_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  orchestrator_id TEXT REFERENCES profiles(id) ON DELETE SET NULL,
   created_by TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -316,6 +317,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'tasks', 'message_id', 'TEXT REFERENCES messages(id) ON DELETE SET NULL');
   migrateColumn(db, 'tasks', 'created_by', "TEXT NOT NULL DEFAULT '[deleted]' REFERENCES profiles(id) ON DELETE SET DEFAULT");
   migrateColumn(db, 'tasks', 'completed_at', 'TEXT');
+  migrateColumn(db, 'tasks', 'orchestrator_id', 'TEXT REFERENCES profiles(id) ON DELETE SET NULL');
   migrateRoomsCreatedByAuditField(db);
   migrateMessagesFromAgentHistoryField(db);
 

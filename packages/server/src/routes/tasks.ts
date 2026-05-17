@@ -26,15 +26,12 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
     }
   });
 
-  // GET /tasks — list tasks by room
+  // GET /tasks — list tasks (optionally filtered by room)
   router.get('/', auth, (req: AuthenticatedRequest, res, next) => {
     try {
-      const roomId = req.query.room_id as string;
-      if (!roomId) {
-        res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'room_id is required' } });
-        return;
-      }
-      const result = listTasks(db, roomId, {
+      const roomId = req.query.room_id as string | undefined;
+      const result = listTasks(db, {
+        room_id: roomId,
         status: req.query.status as string | undefined,
         limit: req.query.limit ? Number(req.query.limit) : undefined,
         cursor: req.query.cursor as string | undefined,
