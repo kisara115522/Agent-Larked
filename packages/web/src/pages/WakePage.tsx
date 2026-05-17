@@ -17,22 +17,36 @@ interface Room {
   name: string;
 }
 
+interface WakeEvent {
+  id: string;
+  agent_id: string;
+  agent_name?: string;
+  triggered_by: string;
+  room_id?: string;
+  room_name?: string;
+  status: string;
+  created_at: string;
+}
+
 export function WakePage() {
   const { token } = useAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [wakeHistory, setWakeHistory] = useState<WakeEvent[]>([]);
   const [selectedRoom, setSelectedRoom] = useState('');
   const [wakeAgent, setWakeAgent] = useState<Agent | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [agentsRes, roomsRes] = await Promise.all([
+      const [agentsRes, roomsRes, historyRes] = await Promise.all([
         get<{ agents: Agent[] }>('/agents', token),
         get<{ rooms: Room[] }>('/rooms', token).catch(() => ({ rooms: [] })),
+        get<{ events: WakeEvent[] }>('/activity/wake-history', token).catch(() => ({ events: [] })),
       ]);
       setAgents(agentsRes.agents);
       setRooms(roomsRes.rooms);
+      setWakeHistory(historyRes.events);
       if (roomsRes.rooms.length > 0 && !selectedRoom) setSelectedRoom(roomsRes.rooms[0].id);
     } catch {}
   }, [token, selectedRoom]);
@@ -109,12 +123,30 @@ export function WakePage() {
 
         {/* Wake History */}
         <h4 className="text-sm font-semibold mt-6 mb-3">唤醒历史</h4>
-        <div className="text-xs text-text-muted">
-          <div className="py-1.5 border-b border-border flex gap-3">
-            <span className="font-mono text-text-dim w-[60px]">--:--</span>
-            <span>暂无唤醒记录</span>
+        {wakeHistory.length === 0 ? (
+          <div className="text-xs text-text-muted">
+            <div className="py-1.5 border-b border-border flex gap-3">
+              <span className="font-mono text-text-dim w-[60px]">--:--</span>
+              <span>暂无唤醒记录</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-xs text-text-muted">
+            {wakeHistory.slice(0, 20).map(ev => (
+              <div key={ev.id} className="py-1.5 border-b border-border flex gap-3 items-center">
+                <span className="font-mono text-text-dim w-[60px] shrink-0">
+                  {new Date(ev.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span className="font-semibold">{ev.agent_name || ev.agent_id.slice(0, 8)}</span>
+                <span className="text-text-dim">被 {ev.triggered_by} 唤醒</span>
+                {ev.room_name && <span className="text-text-dim">→ {ev.room_name}</span>}
+                <span className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${ev.status === 'success' ? 'bg-[#064E3B] text-[#34D399]' : 'bg-error-muted text-error'}`}>
+                  {ev.status === 'success' ? '成功' : ev.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Wake Single Modal */}

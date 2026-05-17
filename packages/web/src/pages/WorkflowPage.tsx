@@ -67,19 +67,37 @@ export function WorkflowPage() {
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
   const [showSpawn, setShowSpawn] = useState(false);
 
+  const [todayTokens, setTodayTokens] = useState(0);
+
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [agentsRes, tasksRes, roomsRes, runtimesRes] = await Promise.all([
+      const [agentsRes, tasksRes, roomsRes, runtimesRes, activityRes, usageRes] = await Promise.all([
         get<{ agents: Agent[] }>('/agents', token),
         get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
         get<{ rooms: Room[] }>('/rooms', token).catch(() => ({ rooms: [] })),
         get<{ runtimes: Runtime[] }>('/runtimes', token).catch(() => ({ runtimes: [] })),
+        get<{ events: Array<{ id: string; agent_id: string; agent_name?: string; event_type: string; detail?: string; created_at: string }> }>('/activity', token).catch(() => ({ events: [] })),
+        get<{ usage: Array<{ agent_id: string; input_tokens: number; output_tokens: number }> }>('/token-usage', token).catch(() => ({ usage: [] })),
       ]);
       setAgents(agentsRes.agents);
       setTasks(tasksRes.tasks);
       setRooms(roomsRes.rooms);
       setRuntimes(runtimesRes.runtimes);
+      // Convert activity log to workflow events
+      const converted: WorkflowEvent[] = activityRes.events.slice(0, 30).map(ev => ({
+        id: ev.id,
+        type: ev.event_type === 'tool_call' ? 'tool' : ev.event_type === 'message' ? 'msg' : ev.event_type === 'think' ? 'think' : ev.event_type === 'error' ? 'error' : 'system',
+        agent: ev.agent_name || ev.agent_id,
+        agentDisplay: ev.agent_name || ev.agent_id.slice(0, 8),
+        action: ev.event_type,
+        detail: ev.detail || '',
+        time: new Date(ev.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      }));
+      if (converted.length > 0) setEvents(prev => [...converted, ...prev].slice(0, 50));
+      // Sum today's token usage
+      const totalTokens = usageRes.usage.reduce((sum, u) => sum + u.input_tokens + u.output_tokens, 0);
+      setTodayTokens(totalTokens);
     } catch {}
   }, [token]);
 
@@ -97,6 +115,18 @@ export function WorkflowPage() {
           agentDisplay: data.from_name || data.from_agent || 'unknown',
           action: '发送消息',
           detail: data.content?.slice(0, 120) || '',
+          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        }, ...prev].slice(0, 50));
+      }
+      if (event.event === 'workflow_event') {
+        const data = event.data as { agent_id: string; agent_name?: string; event_type: string; detail?: string };
+        setEvents(prev => [{
+          id: `${Date.now()}-${Math.random()}`,
+          type: (data.event_type === 'tool_call' ? 'tool' : data.event_type === 'message' ? 'msg' : data.event_type === 'think' ? 'think' : data.event_type === 'error' ? 'error' : 'system') as WorkflowEvent['type'],
+          agent: data.agent_name || data.agent_id,
+          agentDisplay: data.agent_name || data.agent_id.slice(0, 8),
+          action: data.event_type,
+          detail: data.detail || '',
           time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         }, ...prev].slice(0, 50));
       }
@@ -144,7 +174,7 @@ export function WorkflowPage() {
           <StatCard label="在线 Agent" value={String(activeCount)} sub={`共 ${totalAgents} 个 Profile`} color="text-[#34D399]" />
           <StatCard label="活跃 Runtime" value={activeRuntimes > 0 ? String(activeRuntimes) : '-'} sub={activeRuntimes > 0 ? `${activeRuntimes} 台机器` : '等待 Runtime daemon'} color="text-accent" />
           <StatCard label="进行中任务" value={String(inProgressTasks)} sub={`待办 ${todoTasks} / 审查 ${reviewTasks}`} color="text-[#FBBF24]" />
-          <StatCard label="今日 Token" value="-" sub="等待 API 接入" />
+          <StatCard label="今日 Token" value={todayTokens > 0 ? todayTokens.toLocaleString() : '-'} sub={todayTokens > 0 ? '输入 + 输出' : '暂无使用记录'} />
         </div>
 
         {/* Live Workflow Timeline */}
