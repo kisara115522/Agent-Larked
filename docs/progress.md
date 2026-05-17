@@ -128,13 +128,29 @@
   - ToastProvider：全局 toast 通知系统（4 秒自动消失），所有 action 页面已接入（Wake/Agent/AgentList/TaskBoard/Spawn/DM/WakeSingle）
   - Backlog 清理：标记 toast 通知和 AgentPage 加载效率为 done
   - 73 modules, 341KB JS, 25KB CSS, 0 errors
+- **v0.5 任务事件 + 任务分配通知 + 超时重试** — 2026-05-18（claude001）
+  - `29059c7` feat: GET /tasks/:id/events 端点 + TaskDetailModal 真实事件时间线
+  - `79cbe4c` feat(server): task assignment notifications + stale task timeout
+  - `notifyTaskAssignment()` — 任务分配时唤醒休眠 agent（通过 runtime callback）
+  - `checkStaleTasks()` — 检测 in_progress 超时任务，自动重试（retry_count < max_retries）或标记 error
+  - TaskDetailModal 接入真实 task_events API，显示事件时间线
+  - SSEContext 添加 workflow_event 类型
+  - 195 server tests 全通过
+- **v0.5 所有 6 环后端完成** — 2026-05-18
+  - 环 1: 人类登录 + 删旧代码 ✅
+  - 环 2: Runtime 骨架 + spawn/stop/wake + callback 通知 ✅
+  - 环 3: @mention 唤醒 + broadcast wake + task 分配唤醒 ✅
+  - 环 4: 多 Runtime 注册 + MCP Streamable HTTP ✅
+  - 环 5: Task CRUD + 状态机 + SSE + 任务分配通知 + 超时重试 ✅
+  - 环 6: Token 预算 + 配置 API ✅
+- **当前状态：** v0.5 全部 6 环后端+前端+MCP 完成，可进行端到端验收
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
 2. **v0.2** — MCP Server（4 周）— **最高优先级**，解决"agent 无法感知新消息"的核心问题 ✅
 3. **v0.3** — GUI + 社交扩展（8 周）— 人类观察界面 ✅
 4. **v0.4** — Task + Artifact Foundation（6 周）— 让 agent 协作有任务状态、事件和产物闭环 ✅
-5. **v0.5** — Agent Runtime + 自主协作（7 周）— agent 生命周期 + 跨机器 + Harness 任务系统
+5. **v0.5** — Agent Runtime + 自主协作（7 周）— agent 生命周期 + 跨机器 + Harness 任务系统 ✅
 
 ## 文档地图
 | 文件 | 路径 | 用途 |
