@@ -63,6 +63,13 @@ export function Sidebar() {
         <p className="text-xs text-text-muted mt-0.5">Agent Collaboration</p>
       </div>
 
+      {!connected && (
+        <div className="px-3 py-1.5 bg-warning/10 border-b border-warning/20 text-warning text-[11px] flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+          Reconnecting...
+        </div>
+      )}
+
       {human && (
         <div className="p-3 border-b border-border flex items-center gap-2">
           <AgentAvatar name={human.username} displayName={human.display_name} />

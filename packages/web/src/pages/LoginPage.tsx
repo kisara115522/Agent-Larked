@@ -106,6 +106,7 @@ export function LoginPage() {
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleRegister()}
               placeholder="Username"
               className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
             />
@@ -113,6 +114,7 @@ export function LoginPage() {
               type="text"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleRegister()}
               placeholder="Display name (optional)"
               className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
             />
