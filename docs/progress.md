@@ -103,7 +103,15 @@
   - `1396f26` fix(server): task_events.payload 缺列同样崩溃（claude003 修复）
   - `7f8b3fc` chore: v2 server 端口改为 3001，GUI 改为 5174（避免旧版冲突，claude003 修复）
   - 190 server tests 全通过
-- **当前状态：** Ring 1-6 代码层面全部完成，等待 kisara 验证登录 + Runtime daemon 实现
+- **v0.5 GUI v3 重设计完成** — 2026-05-18（claude003）
+  - 按照 finalized.html 设计稿重做所有页面
+  - 新页面：WorkflowPage、OrchestratorPage、RuntimesPage、WakePage、TokensPage
+  - 重写：AgentListPage（卡片布局+渐变头像+4列信息网格）、AgentPage（详情页：Runtime/Session/能力标签/当前任务/历史任务/最近活动/配置）、TaskBoardPage（6列看板）、SettingsPage（Skills+MCP+Token预算）、Sidebar（9项导航）
+  - 新组件：SpawnModal（agent/runtime/room选择+流程预览）、DMModal（私聊）、TaskDetailModal（状态/优先级/时间线）、WakeSingleModal（prompt+room选择）
+  - RightPanel：3标签（活动/成员/任务），成员显示人类用户
+  - 3列布局：220px Sidebar | 1fr Main | 360px RightPanel
+  - 27+ 个 GUI commit，build 72 modules, 336KB JS, 25KB CSS
+- **当前状态：** GUI v3 设计稿全部实现，Runtime daemon 仍待实现
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
