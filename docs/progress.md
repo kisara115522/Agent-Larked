@@ -137,6 +137,11 @@
   - TaskDetailModal 接入真实 task_events API，显示事件时间线
   - SSEContext 添加 workflow_event 类型
   - 195 server tests 全通过
+- **v0.5 测试补全 + 周期性任务超时检测** — 2026-05-18（claude001）
+  - `07c7ec4` test: add task events and stale detection tests（10 个测试）
+  - `e75316b` feat(server): periodic stale task detection（每 5 分钟检测）
+  - 修复 datetime 格式不匹配（SQLite `datetime('now')` vs JS `toISOString()`）
+  - 211 tests 全通过（200 server + 11 runtime）
 - **v0.5 所有 6 环后端完成** — 2026-05-18
   - 环 1: 人类登录 + 删旧代码 ✅
   - 环 2: Runtime 骨架 + spawn/stop/wake + callback 通知 ✅
