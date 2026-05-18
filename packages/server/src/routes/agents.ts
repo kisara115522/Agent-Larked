@@ -136,6 +136,14 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       const spawnId = crypto.randomUUID();
       const now = new Date().toISOString();
       const prompt = req.body.prompt ?? null;
+      const roomId = req.body.room_id ?? null;
+
+      // Resolve room name if room_id provided
+      let roomName: string | null = null;
+      if (roomId) {
+        const room = db.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string } | undefined;
+        roomName = room?.name ?? null;
+      }
 
       // Select an available runtime (auto-cleans stale runtimes first)
       const runtimeId = req.body.runtime_id ?? selectAvailableRuntime(db);
@@ -161,7 +169,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       const { token } = regenerateToken(db, agentId);
 
       // Notify runtime to actually spawn the agent process
-      notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token);
+      notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token, roomId ?? undefined, roomName ?? undefined);
 
       res.status(201).json({ spawn_id: spawnId, status: 'spawning', agent_token: token });
     } catch (err) {
@@ -217,6 +225,14 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
 
       const now = new Date().toISOString();
       const prompt = req.body.prompt ?? null;
+      const roomId = req.body.room_id ?? null;
+
+      // Resolve room name if room_id provided
+      let roomName: string | null = null;
+      if (roomId) {
+        const room = db.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string } | undefined;
+        roomName = room?.name ?? null;
+      }
 
       // Select an available runtime (auto-cleans stale runtimes first)
       const runtimeId = req.body.runtime_id ?? selectAvailableRuntime(db);
@@ -243,7 +259,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       const { token } = regenerateToken(db, agentId);
 
       // Notify runtime to wake the agent
-      notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token);
+      notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token, roomId ?? undefined, roomName ?? undefined);
 
       // Log wake event
       db.prepare(`

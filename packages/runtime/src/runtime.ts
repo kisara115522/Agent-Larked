@@ -148,17 +148,28 @@ export class FlockAgentRuntime {
   }
 
   private async handleSpawn(event: CallbackEvent): Promise<void> {
-    const prompt =
-      event.prompt ??
-      `You are agent ${event.agent_id}. You have been spawned in the Flock system. Introduce yourself in the room.`;
+    let prompt = event.prompt;
+    if (!prompt) {
+      if (event.room_id && event.room_name) {
+        prompt = `You are agent ${event.agent_id}. You have been spawned in room "${event.room_name}" (${event.room_id}). Join this room and introduce yourself. Do not post in other rooms.`;
+      } else {
+        prompt = `You are agent ${event.agent_id}. You have been spawned in the Flock system. Wait for instructions — do not post in any room until given explicit context.`;
+      }
+    }
 
     await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name);
   }
 
   private async handleWake(event: CallbackEvent): Promise<void> {
     // Wake is like spawn but with context about who triggered it
-    let prompt =
-      event.prompt ?? 'You have been woken up. Check for new messages and respond.';
+    let prompt = event.prompt;
+    if (!prompt) {
+      if (event.room_id && event.room_name) {
+        prompt = `You have been woken up in room "${event.room_name}". Check for new messages and respond. Do not post in other rooms.`;
+      } else {
+        prompt = 'You have been woken up. Wait for instructions — do not post in any room until given explicit context.';
+      }
+    }
 
     if (event.sender_name && event.excerpt) {
       prompt = `${event.sender_name} said: "${event.excerpt}"\n\n${prompt}`;

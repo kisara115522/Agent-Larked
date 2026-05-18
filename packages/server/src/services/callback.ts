@@ -200,6 +200,8 @@ export function notifyRuntimeSpawn(
   agentId: string,
   prompt?: string,
   token?: string,
+  roomId?: string,
+  roomName?: string,
 ): void {
   const runtime = db.prepare(
     'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
@@ -218,6 +220,8 @@ export function notifyRuntimeSpawn(
     agent_token: token ?? undefined,
     prompt: prompt ?? undefined,
     agent_name: agent?.name,
+    room_id: roomId,
+    room_name: roomName,
   };
 
   sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
