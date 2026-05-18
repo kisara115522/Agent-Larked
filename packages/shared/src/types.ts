@@ -222,6 +222,7 @@ export interface GetMessagesResponse {
 
 export interface DirectMessage {
   id: string;
+  chat_id: string;
   from: string;
   from_name: string;
   from_display_name: string;
@@ -242,6 +243,7 @@ export interface SendDirectMessageRequest {
 
 export interface SendDirectMessageResponse {
   id: string;
+  chat_id: string;
   sequence: number;
   created_at: string;
 }

@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
+import type { DirectMessage } from '@flock/shared';
 import { getMessages } from '@flock/server/services/messaging';
 import { getLatestDirectMessageOrder, getUnreadDirectMessagesSince } from '@flock/server/services/direct-chat';
 import { getAgentId } from '../db.js';
@@ -176,15 +177,7 @@ export function registerWaitTool(
           reply_to: string | null;
           created_at: string;
         }> = [];
-        const directCollected: Array<{
-          id: string;
-          chat_id: string;
-          from: string;
-          to: string;
-          content: string;
-          sequence: number;
-          created_at: string;
-        }> = [];
+        const directCollected: DirectMessage[] = [];
 
         const finish = (msgs: typeof collected, directMessages = directCollected) => {
           if (resolved) return;
@@ -217,7 +210,7 @@ export function registerWaitTool(
           }
         };
 
-        const onDirectMessage = (msg: { id: string; chat_id: string; from: string; to: string; content: string; sequence: number; created_at: string }) => {
+        const onDirectMessage = (msg: DirectMessage) => {
           if (msg.to !== agentId || msg.from === agentId) return;
           directCollected.push(msg);
           finish(collected, directCollected);
@@ -281,15 +274,7 @@ function waitForDirectMessagesOnly(
 
   return new Promise((resolve) => {
     let resolved = false;
-    const finish = (directMessages: Array<{
-      id: string;
-      chat_id: string;
-      from: string;
-      to: string;
-      content: string;
-      sequence: number;
-      created_at: string;
-    }>, timedOut = false) => {
+    const finish = (directMessages: DirectMessage[], timedOut = false) => {
       if (resolved) return;
       resolved = true;
       cleanup();
@@ -307,7 +292,7 @@ function waitForDirectMessagesOnly(
       });
     };
 
-    const onDirectMessage = (msg: { id: string; chat_id: string; from: string; to: string; content: string; sequence: number; created_at: string }) => {
+    const onDirectMessage = (msg: DirectMessage) => {
       if (msg.to !== agentId || msg.from === agentId) return;
       finish([msg]);
     };

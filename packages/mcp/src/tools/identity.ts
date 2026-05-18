@@ -1,8 +1,16 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
+import type { AgentStatus } from '@flock/shared';
 import { registerAgent, searchAgents, updateProfile } from '@flock/server/services/identity';
 import { getAgentId } from '../db.js';
+
+const MCP_STATUS_MAP: Record<string, AgentStatus> = {
+  online: 'active',
+  busy: 'recovering',
+  idle: 'dormant',
+  offline: 'error',
+};
 
 export function registerIdentityTools(
   server: McpServer,
@@ -84,7 +92,7 @@ export function registerIdentityTools(
           display_name: args.display_name,
           bio: args.bio,
           capabilities: args.capabilities,
-          status: args.status,
+          status: args.status ? MCP_STATUS_MAP[args.status] : undefined,
         });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
       } catch (err) {

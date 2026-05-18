@@ -143,6 +143,6 @@ describe('flock_update with display_name', () => {
     const text = (result.content as Array<{ type: string; text: string }>)[0].text;
     const parsed = JSON.parse(text);
     expect(parsed.display_name).toBe('The Display Bot');
-    expect(parsed.status).toBe('online');
+    expect(parsed.status).toBe('active');
   });
 });

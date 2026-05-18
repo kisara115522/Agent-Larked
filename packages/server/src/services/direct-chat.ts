@@ -96,7 +96,7 @@ export function sendDirectMessage(
 
     db.prepare('UPDATE direct_chats SET updated_at = ? WHERE id = ?').run(now, chat.id);
 
-    const response: SendDirectMessageResponse = { id, sequence, created_at: now };
+    const response: SendDirectMessageResponse = { id, chat_id: chat.id, sequence, created_at: now };
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     db.prepare(`
       INSERT INTO direct_idempotency_keys (agent_id, peer_id, key, request_hash, response, expires_at)
@@ -215,6 +215,7 @@ function rowToDirectMessage(db: Database.Database, row: Record<string, unknown>)
 
   return {
     id: row.id as string,
+    chat_id: row.chat_id as string,
     from,
     from_name: fromProfile?.name ?? '',
     from_display_name: fromProfile?.display_name ?? '',
