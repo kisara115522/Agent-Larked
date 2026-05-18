@@ -14,8 +14,8 @@ interface Message {
 
 interface DmApiMessage {
   id: string;
-  from_agent_id: string;
-  to_agent_id: string;
+  from: string;
+  to: string;
   content: string;
   created_at: string;
   sequence: number;
@@ -45,10 +45,10 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
       const humanId = human?.id;
       const loaded: Message[] = res.messages.map(m => ({
         id: m.id,
-        from: m.from_agent_id === humanId ? (human?.display_name || human?.username || 'kisara') : agentName,
+        from: m.from === humanId ? (human?.display_name || human?.username || 'Human') : agentName,
         text: m.content,
         time: new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-        isHuman: m.from_agent_id === humanId,
+        isHuman: m.from === humanId,
       }));
       setMessages(loaded);
     } catch {}
@@ -65,7 +65,7 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
     const now = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     setMessages(prev => [...prev, {
       id: `${Date.now()}`,
-      from: human?.display_name || human?.username || 'kisara',
+      from: human?.display_name || human?.username || 'Human',
       text,
       time: now,
       isHuman: true,
@@ -106,7 +106,7 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
           {messages.map(msg => (
             <div key={msg.id} className="flex gap-2.5">
               <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: `linear-gradient(135deg,${msg.isHuman ? '#3B82F6,#8B5CF6' : gradient})` }}>
-                {msg.isHuman ? 'K' : initials}
+                {msg.isHuman ? (human?.display_name?.[0] || human?.username?.[0] || 'H').toUpperCase() : initials}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2">

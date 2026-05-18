@@ -34,13 +34,13 @@ export function TokensPage() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [agentsRes, budgetsRes, usageRes] = await Promise.all([
+      const [agentsRes, budgetRes, usageRes] = await Promise.all([
         get<{ agents: Agent[] }>('/agents', token),
-        get<{ budgets: TokenBudget[] }>('/token-budgets', token).catch(() => ({ budgets: [] })),
+        get<TokenBudget>('/token-budgets', token).catch(() => null),
         get<{ usage: TokenUsage[] }>('/token-usage', token).catch(() => ({ usage: [] })),
       ]);
       setAgents(agentsRes.agents);
-      setBudgets(budgetsRes.budgets);
+      setBudgets(budgetRes ? [budgetRes] : []);
       setUsage(usageRes.usage);
     } catch {}
   }, [token]);

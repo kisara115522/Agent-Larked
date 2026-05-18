@@ -135,7 +135,7 @@ function MembersTab({ agents, human }: { agents: Agent[]; human: { display_name?
       {/* Human user first */}
       {human && (
         <div className="flex items-center gap-2 py-2 border-b border-border">
-          <AgentAvatar name="kisara" displayName={human.display_name || human.username} size="sm" />
+          <AgentAvatar name={human.username || 'human'} displayName={human.display_name || human.username} size="sm" />
           <span className="flex-1 text-[13px]">{human.display_name || human.username}</span>
           <span className="text-[11px] text-text-muted">管理员</span>
         </div>

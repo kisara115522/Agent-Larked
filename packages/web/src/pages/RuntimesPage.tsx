@@ -7,7 +7,7 @@ interface Runtime {
   host: string;
   port: number;
   callback_url: string;
-  capabilities: string;
+  capabilities: string[];
   max_agents: number;
   agent_count: number;
   status: string;
@@ -110,9 +110,7 @@ export function RuntimesPage() {
 
 function RuntimeCard({ runtime }: { runtime: Runtime }) {
   const isOnline = runtime.status === 'online';
-  const caps = (() => {
-    try { return JSON.parse(runtime.capabilities); } catch { return []; }
-  })();
+  const caps = Array.isArray(runtime.capabilities) ? runtime.capabilities : [];
 
   const heartbeat = runtime.last_heartbeat_at
     ? `${Math.round((Date.now() - new Date(runtime.last_heartbeat_at).getTime()) / 1000)} 秒前`

@@ -10,13 +10,18 @@ export function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const clear = () => { setError(''); setUsername(''); setPassword(''); setDisplayName(''); };
+  const clear = () => { setError(''); setUsername(''); setPassword(''); setDisplayName(''); setConfirmPassword(''); };
 
   const handleRegister = async () => {
     if (!username.trim() || !password.trim()) return;
+    if (password !== confirmPassword) {
+      setError('两次密码不一致');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -128,8 +133,9 @@ export function LoginPage() {
             />
             <input
               type="password"
-              value=""
-              onChange={() => {}}
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleRegister()}
               placeholder="确认密码"
               className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text placeholder:text-text-dim focus:border-accent text-left"
             />

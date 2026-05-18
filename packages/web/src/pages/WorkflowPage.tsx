@@ -116,13 +116,13 @@ export function WorkflowPage() {
         }, ...prev].slice(0, 50));
       }
       if (event.event === 'workflow_event') {
-        const data = event.data as { agent_id: string; agent_name?: string; event_type: string; detail?: string };
+        const data = event.data as { agent_id: string; agent_name?: string; activity_type: string; detail?: string };
         setEvents(prev => [{
           id: `${Date.now()}-${Math.random()}`,
-          type: (data.event_type === 'tool_call' ? 'tool' : data.event_type === 'message' ? 'msg' : data.event_type === 'think' ? 'think' : data.event_type === 'error' ? 'error' : 'system') as WorkflowEvent['type'],
+          type: (data.activity_type === 'tool_call' ? 'tool' : data.activity_type === 'message' ? 'msg' : data.activity_type === 'think' ? 'think' : data.activity_type === 'error' ? 'error' : 'system') as WorkflowEvent['type'],
           agent: data.agent_name || data.agent_id,
           agentDisplay: data.agent_name || data.agent_id.slice(0, 8),
-          action: data.event_type,
+          action: data.activity_type,
           detail: data.detail || '',
           time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         }, ...prev].slice(0, 50));
