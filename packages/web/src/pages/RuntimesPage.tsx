@@ -86,8 +86,9 @@ export function RuntimesPage() {
             </p>
             <div className="bg-bg border border-border rounded p-4 font-mono text-xs leading-relaxed mb-4">
               <div className="text-text-dim mb-2"># 在目标机器上启动 Runtime daemon</div>
-              <div>AGENT_TOKEN=&lt;your-token&gt; \</div>
+              <div>AGENT_TOKEN=&lt;agent-token&gt; \</div>
               <div>CALLBACK_PORT=4000 \</div>
+              <div>FLOCK_SERVER_URL=http://your-server:3001 \</div>
               <div>npx tsx packages/runtime/src/index.ts</div>
             </div>
             <div className="text-xs text-text-muted space-y-1.5">
