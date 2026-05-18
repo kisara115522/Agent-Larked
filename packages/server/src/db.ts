@@ -290,6 +290,7 @@ CREATE TABLE IF NOT EXISTS wake_events (
   agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   triggered_by TEXT NOT NULL,  -- agent_id or 'system'
   trigger_type TEXT NOT NULL,  -- 'mention' | 'manual' | 'broadcast' | 'spawn'
+  status TEXT NOT NULL DEFAULT 'queued',  -- 'queued' | 'sent' | 'skipped' | 'failed'
   room_id TEXT REFERENCES rooms(id) ON DELETE SET NULL,
   prompt TEXT,
   created_at TEXT NOT NULL
@@ -455,6 +456,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateMessagesFromAgentHistoryField(db);
   migrateAgentSpawnsRuntimeNullable(db);
   migrateRemoveHumanFkConstraints(db);
+  migrateColumn(db, 'wake_events', 'status', "TEXT NOT NULL DEFAULT 'queued'");
 
   // v0.3.5 stores admin privileges on agent profiles, so remove the legacy separate human admin model.
   db.exec(`

@@ -30,13 +30,14 @@ function logWakeEvent(
   agentId: string,
   triggeredBy: string,
   triggerType: string,
+  status: string = 'sent',
   roomId?: string,
   prompt?: string,
 ): void {
   db.prepare(`
-    INSERT INTO wake_events (id, agent_id, triggered_by, trigger_type, room_id, prompt, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(randomUUID(), agentId, triggeredBy, triggerType, roomId ?? null, prompt ?? null, new Date().toISOString());
+    INSERT INTO wake_events (id, agent_id, triggered_by, trigger_type, status, room_id, prompt, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(randomUUID(), agentId, triggeredBy, triggerType, status, roomId ?? null, prompt ?? null, new Date().toISOString());
 }
 
 /** Compute HMAC-SHA256 signature for a callback payload */
@@ -134,7 +135,7 @@ export function wakeMentionedAgents(
     });
 
     // Log wake event
-    logWakeEvent(db, agentId, senderName, 'mention', roomId);
+    logWakeEvent(db, agentId, senderName, 'mention', 'sent', roomId);
   }
 }
 
@@ -185,7 +186,7 @@ export function wakeRoomAgents(
     });
 
     // Log wake event
-    logWakeEvent(db, agent_id, senderName, 'broadcast', roomId);
+    logWakeEvent(db, agent_id, senderName, 'broadcast', 'sent', roomId);
   }
 }
 
@@ -262,7 +263,7 @@ export function notifyTaskAssignment(
     console.error(`[callback] Failed to notify agent ${agentId} about task assignment:`, err);
   });
 
-  logWakeEvent(db, agentId, 'system', 'task_assignment', roomId, taskTitle);
+  logWakeEvent(db, agentId, 'system', 'task_assignment', 'sent', roomId, taskTitle);
 }
 
 /**

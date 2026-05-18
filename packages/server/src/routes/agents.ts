@@ -247,8 +247,8 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
 
       // Log wake event
       db.prepare(`
-        INSERT INTO wake_events (id, agent_id, triggered_by, trigger_type, prompt, created_at)
-        VALUES (?, ?, ?, 'manual', ?, ?)
+        INSERT INTO wake_events (id, agent_id, triggered_by, trigger_type, status, prompt, created_at)
+        VALUES (?, ?, ?, 'manual', 'sent', ?, ?)
       `).run(crypto.randomUUID(), agentId, req.humanId!, prompt, now);
 
       res.json({ ok: true, status: 'spawning' });

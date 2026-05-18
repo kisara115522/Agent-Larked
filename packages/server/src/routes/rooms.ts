@@ -166,6 +166,48 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     }
   });
 
+  // POST /rooms/:id/broadcast-wake — wake all dormant agents in a room (human auth)
+  router.post('/:id/broadcast-wake', humanAuth, (req: HumanAuthenticatedRequest, res, next) => {
+    try {
+      const roomId = req.params.id as string;
+      requireRoomAccess(db, roomId, req.humanId!);
+
+      const human = db.prepare('SELECT display_name FROM humans WHERE id = ?').get(req.humanId!) as { display_name: string } | undefined;
+      const senderName = human?.display_name ?? 'Human';
+
+      // Find dormant agents that would be woken
+      const dormantAgents = db.prepare(`
+        SELECT rm.agent_id,
+               (SELECT sp.runtime_id FROM agent_spawns sp WHERE sp.agent_id = rm.agent_id ORDER BY sp.spawned_at DESC LIMIT 1) AS runtime_id
+        FROM room_members rm
+        JOIN profiles p ON p.id = rm.agent_id
+        WHERE rm.room_id = ? AND p.status = 'dormant' AND rm.agent_id != ?
+      `).all(roomId, req.humanId!) as { agent_id: string; runtime_id: string | null }[];
+
+      const results: Array<{ agent_id: string; status: string; reason?: string }> = [];
+
+      for (const { agent_id, runtime_id } of dormantAgents) {
+        if (!runtime_id) {
+          results.push({ agent_id, status: 'skipped', reason: 'no runtime history' });
+          continue;
+        }
+        const runtime = db.prepare('SELECT status FROM agent_runtimes WHERE id = ?').get(runtime_id) as { status: string } | undefined;
+        if (!runtime || runtime.status !== 'online') {
+          results.push({ agent_id, status: 'skipped', reason: 'runtime offline' });
+          continue;
+        }
+        results.push({ agent_id, status: 'queued' });
+      }
+
+      // Fire the actual wake
+      wakeRoomAgents(db, roomId, req.humanId!, senderName, `Broadcast wake from ${senderName}`);
+
+      res.json({ ok: true, agents: results });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // POST /rooms/:id/subscribe (accepts both agent and human tokens)
   router.post('/:id/subscribe', flexAuth, (req: FlexAuthenticatedRequest, res) => {
     eventBus.subscribe(req.agentId!, req.params.id as string);
