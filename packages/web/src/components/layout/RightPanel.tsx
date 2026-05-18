@@ -102,7 +102,7 @@ function ActivityTab({ agents, rooms, connected }: { agents: Agent[]; rooms: Roo
             <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
           </div>
           <div className="text-[11px] text-text-dim py-1 font-mono">
-            {agent.status === 'active' ? '运行中' : agent.status === 'recovering' ? '恢复中...' : agent.status === 'dormant' ? '休眠中' : agent.status}
+            {agent.status === 'active' ? '运行中' : agent.status === 'recovering' ? '恢复中...' : agent.status === 'dormant' ? '休眠中' : agent.status === 'spawning' ? '启动中...' : agent.status}
             {agent.bio && <div className="text-text-muted mt-0.5">{agent.bio}</div>}
           </div>
         </div>

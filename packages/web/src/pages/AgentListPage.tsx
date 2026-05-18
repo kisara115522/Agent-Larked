@@ -41,6 +41,7 @@ const STATUS_BADGE: Record<string, string> = {
   dormant: 'bg-surface-elevated text-text-muted border border-border',
   recovering: 'bg-[#78350F] text-[#FBBF24]',
   error: 'bg-error-muted text-error',
+  spawning: 'bg-accent-muted text-accent',
 };
 
 export function AgentListPage() {

@@ -132,6 +132,7 @@ export function AgentPage() {
   const statusBadgeClass = agent.status === 'active' ? 'bg-[#064E3B] text-[#34D399]'
     : agent.status === 'recovering' ? 'bg-[#78350F] text-[#FBBF24]'
     : agent.status === 'error' ? 'bg-error-muted text-error'
+    : agent.status === 'spawning' ? 'bg-accent-muted text-accent'
     : 'bg-surface-elevated text-text-muted border border-border';
 
   return (
@@ -144,7 +145,7 @@ export function AgentPage() {
         <h3 className="text-base font-semibold">{agent.display_name || agent.name}</h3>
         <div className="ml-auto flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusBadgeClass}`}>
-            <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
+            <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error' | 'spawning'} />
             {agent.status}
           </span>
           {agent.status === 'active' && (

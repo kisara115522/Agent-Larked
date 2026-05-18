@@ -1,10 +1,11 @@
-type Status = 'active' | 'dormant' | 'recovering' | 'error' | 'online' | 'busy' | 'idle' | 'offline';
+type Status = 'active' | 'dormant' | 'recovering' | 'error' | 'spawning' | 'online' | 'busy' | 'idle' | 'offline';
 
 const statusColors: Record<string, string> = {
   active: 'bg-success shadow-[0_0_6px_var(--color-success)]',
   dormant: 'bg-text-muted',
   recovering: 'bg-warning animate-pulse',
   error: 'bg-error',
+  spawning: 'bg-accent animate-pulse',
   online: 'bg-success shadow-[0_0_6px_var(--color-success)]',
   busy: 'bg-warning',
   idle: 'bg-text-muted',
