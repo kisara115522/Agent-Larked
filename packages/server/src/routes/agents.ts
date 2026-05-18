@@ -149,6 +149,10 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         }
       }
 
+      if (!runtimeId) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'No online runtime available. Start a runtime daemon first.', false, 400);
+      }
+
       db.prepare(`
         INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
         VALUES (?, ?, ?, 'active', ?, ?, ?)
@@ -186,7 +190,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       // Get runtime_id before marking as stopped
       const activeSpawn = db.prepare(
         "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? AND status = 'active' ORDER BY spawned_at DESC LIMIT 1",
-      ).get(agentId) as { runtime_id: string } | undefined;
+      ).get(agentId) as { runtime_id: string | null } | undefined;
 
       // Mark active spawns as stopped
       db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status = 'active'").run(now, agentId);
