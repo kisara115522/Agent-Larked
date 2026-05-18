@@ -811,3 +811,11 @@
 - **建议修复：** 将当前设计系统文档同步到 v2 root，或在 docs 中明确 v2 的设计规范位置。GUI 验收前避免无依据的大范围视觉重构。
 - **状态：** done（已从 v1 复制 DESIGN.md 到 v2 root）
 - **计划版本：** v0.5
+
+### 🟡 spawn room_id 未实现
+- **发现于：** 2026-05-18，codex 验收发现
+- **问题：** SpawnModal 发送 `room_id` 到 `POST /agents/:id/spawn`，但 server 完全忽略该字段。GUI 已移除 Room 选择控件。
+- **影响：** 无法在 spawn 时指定目标 Room，agent 启动后不知道要加入/查看哪个 Room
+- **建议修复：** server spawn 端点支持 room_id，callback payload 带 room_id/room_name，初始 prompt 让 agent join/read/post 到该 room
+- **状态：** open
+- **计划版本：** v0.5
