@@ -5,7 +5,6 @@ import type { RuntimeConfig } from '../config.js';
 
 const baseConfig: RuntimeConfig = {
   flockServerUrl: 'http://localhost:3001',
-  agentToken: 'test-token',
   callbackHost: 'localhost',
   callbackPort: 4000,
   callbackSecret: 'test-secret-123',

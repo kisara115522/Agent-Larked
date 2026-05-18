@@ -7,7 +7,7 @@ describe('AgentRunner', () => {
 
   beforeEach(() => {
     reporter = vi.fn().mockResolvedValue(undefined);
-    runner = new AgentRunner(reporter);
+    runner = new AgentRunner(reporter, 'http://localhost:3001');
   });
 
   it('should track agent status', () => {

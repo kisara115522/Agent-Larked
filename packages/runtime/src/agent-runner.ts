@@ -3,12 +3,14 @@ import { randomUUID } from 'node:crypto';
 
 export interface AgentInstance {
   agentId: string;
+  agentName: string;
   sessionId: string;
   status: 'spawning' | 'active' | 'dormant' | 'error';
   process: ChildProcess | null;
   startedAt: Date;
   lastActiveAt: Date;
   prompt: string;
+  agentToken?: string;
 }
 
 export type ActivityReporter = (
@@ -21,9 +23,25 @@ export type ActivityReporter = (
 export class AgentRunner {
   private agents: Map<string, AgentInstance> = new Map();
   private reportActivity: ActivityReporter;
+  private flockServerUrl: string;
 
-  constructor(reportActivity: ActivityReporter) {
+  constructor(reportActivity: ActivityReporter, flockServerUrl: string) {
     this.reportActivity = reportActivity;
+    this.flockServerUrl = flockServerUrl;
+  }
+
+  /** Fetch agent name from Flock server by agent ID */
+  private async fetchAgentName(agentId: string): Promise<string> {
+    try {
+      const res = await fetch(`${this.flockServerUrl}/agents/${agentId}`);
+      if (res.ok) {
+        const profile = (await res.json()) as { name: string };
+        return profile.name;
+      }
+    } catch (err) {
+      console.error(`[runner] Failed to fetch agent name for ${agentId}:`, err);
+    }
+    return `agent-${agentId.slice(0, 8)}`;
   }
 
   getAgent(agentId: string): AgentInstance | undefined {
@@ -39,21 +57,27 @@ export class AgentRunner {
     return agent !== undefined && agent.status === 'active';
   }
 
-  async spawn(agentId: string, prompt: string): Promise<string> {
+  async spawn(agentId: string, prompt: string, agentToken?: string): Promise<string> {
     if (this.isRunning(agentId)) {
       console.log(`[runner] Agent ${agentId} already running, skipping spawn`);
       return this.agents.get(agentId)!.sessionId;
     }
 
+    // Fetch agent name so MCP server uses the correct per-agent identity
+    const agentName = await this.fetchAgentName(agentId);
+    console.log(`[runner] Agent ${agentId} resolved to name: ${agentName}`);
+
     const sessionId = randomUUID();
     const instance: AgentInstance = {
       agentId,
+      agentName,
       sessionId,
       status: 'spawning',
       process: null,
       startedAt: new Date(),
       lastActiveAt: new Date(),
       prompt,
+      agentToken,
     };
     this.agents.set(agentId, instance);
 
@@ -111,7 +135,11 @@ export class AgentRunner {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
-          // Ensure the agent can access Flock MCP if configured
+          // AGENT_NAME tells the MCP server to use ~/.flock/agents/{name}/identity.json
+          // instead of the global ~/.flock/identity.json
+          AGENT_NAME: instance.agentName,
+          // AGENT_TOKEN lets the MCP server authenticate as the correct agent
+          ...(instance.agentToken ? { AGENT_TOKEN: instance.agentToken } : {}),
         },
       });
 

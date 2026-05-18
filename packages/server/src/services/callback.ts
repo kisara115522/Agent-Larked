@@ -11,6 +11,7 @@ export interface CallbackEvent {
 }
 
 export interface RuntimeCallbackEvent {
+  agent_token?: string;
   type: 'spawn' | 'stop' | 'wake';
   prompt?: string;
   room_id?: string;
@@ -196,6 +197,7 @@ export function notifyRuntimeSpawn(
   runtimeId: string,
   agentId: string,
   prompt?: string,
+  token?: string,
 ): void {
   const runtime = db.prepare(
     'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
@@ -208,6 +210,7 @@ export function notifyRuntimeSpawn(
 
   const event: RuntimeCallbackEvent = {
     type: 'spawn',
+    agent_token: token ?? undefined,
     prompt: prompt ?? undefined,
   };
 

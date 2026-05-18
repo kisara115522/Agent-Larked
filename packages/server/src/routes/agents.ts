@@ -344,8 +344,8 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
     }
   });
 
-  // POST /agents/:id/activity — log agent activity (for Runtime daemon to report)
-  router.post('/:id/activity', auth, (req: AuthenticatedRequest, res, next) => {
+  // POST /agents/:id/activity — log agent activity (for Runtime daemon to report, no auth required)
+  router.post('/:id/activity', (req, res, next) => {
     try {
       const agentId = req.params.id as string;
       const { activity_type, detail, metadata } = req.body;

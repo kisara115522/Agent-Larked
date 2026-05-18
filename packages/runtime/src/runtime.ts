@@ -12,7 +12,7 @@ export class FlockAgentRuntime {
 
   constructor(config: RuntimeConfig) {
     this.config = config;
-    this.runner = new AgentRunner(this.reportActivity.bind(this));
+    this.runner = new AgentRunner(this.reportActivity.bind(this), config.flockServerUrl);
   }
 
   async start(): Promise<void> {
@@ -152,7 +152,7 @@ export class FlockAgentRuntime {
       event.prompt ??
       `You are agent ${event.agent_id}. You have been spawned in the Flock system. Introduce yourself in the room.`;
 
-    await this.runner.spawn(event.agent_id, prompt);
+    await this.runner.spawn(event.agent_id, prompt, event.agent_token);
   }
 
   private async handleWake(event: CallbackEvent): Promise<void> {
@@ -164,7 +164,7 @@ export class FlockAgentRuntime {
       prompt = `${event.sender_name} said: "${event.excerpt}"\n\n${prompt}`;
     }
 
-    await this.runner.spawn(event.agent_id, prompt);
+    await this.runner.spawn(event.agent_id, prompt, event.agent_token);
   }
 
   private async handleStop(event: CallbackEvent): Promise<void> {
@@ -184,7 +184,6 @@ export class FlockAgentRuntime {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.config.agentToken}`,
           },
           body: JSON.stringify({
             activity_type: activityType,
