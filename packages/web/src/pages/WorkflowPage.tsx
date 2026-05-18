@@ -20,13 +20,6 @@ interface Task {
   priority: number;
 }
 
-interface Room {
-  id: string;
-  name: string;
-  visibility: string;
-  member_count: number;
-}
-
 interface Runtime {
   id: string;
   host: string;
@@ -59,7 +52,6 @@ export function WorkflowPage() {
   const { subscribe } = useSSE();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [runtimes, setRuntimes] = useState<Runtime[]>([]);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
   const [showSpawn, setShowSpawn] = useState(false);
@@ -69,17 +61,15 @@ export function WorkflowPage() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [agentsRes, tasksRes, roomsRes, runtimesRes, activityRes, usageRes] = await Promise.all([
+      const [agentsRes, tasksRes, runtimesRes, activityRes, usageRes] = await Promise.all([
         get<{ agents: Agent[] }>('/agents', token),
         get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
-        get<{ rooms: Room[] }>('/rooms', token).catch(() => ({ rooms: [] })),
         get<{ runtimes: Runtime[] }>('/runtimes', token).catch(() => ({ runtimes: [] })),
         get<{ logs: Array<{ id: string; agent_id: string; agent_name?: string; activity_type: string; detail?: string; created_at: string }> }>('/activity', token).catch(() => ({ logs: [] })),
         get<{ usage: Array<{ agent_id: string; input_tokens: number; output_tokens: number }> }>('/token-usage', token).catch(() => ({ usage: [] })),
       ]);
       setAgents(agentsRes.agents);
       setTasks(tasksRes.tasks);
-      setRooms(roomsRes.rooms);
       setRuntimes(runtimesRes.runtimes);
       // Convert activity log to workflow events
       const converted: WorkflowEvent[] = activityRes.logs.slice(0, 30).map(ev => ({
@@ -148,7 +138,8 @@ export function WorkflowPage() {
   const todoTasks = tasks.filter(t => t.status === 'todo').length;
   const reviewTasks = tasks.filter(t => t.status === 'review').length;
   const totalAgents = agents.length;
-  const activeRuntimes = runtimes.filter(r => r.agent_count > 0).length;
+  const onlineRuntimes = runtimes.length;
+  const totalAgentSlots = runtimes.reduce((sum, r) => sum + r.agent_count, 0);
 
   return (
     <div className="flex flex-col h-full">
@@ -169,7 +160,7 @@ export function WorkflowPage() {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 p-5">
           <StatCard label="在线 Agent" value={String(activeCount)} sub={`共 ${totalAgents} 个 Profile`} color="text-[#34D399]" />
-          <StatCard label="活跃 Runtime" value={activeRuntimes > 0 ? String(activeRuntimes) : '-'} sub={activeRuntimes > 0 ? `${activeRuntimes} 台机器` : '等待 Runtime daemon'} color="text-accent" />
+          <StatCard label="Runtime" value={onlineRuntimes > 0 ? String(onlineRuntimes) : '-'} sub={onlineRuntimes > 0 ? `${totalAgentSlots} 个 agent 槽位` : '等待 Runtime daemon'} color="text-accent" />
           <StatCard label="进行中任务" value={String(inProgressTasks)} sub={`待办 ${todoTasks} / 审查 ${reviewTasks}`} color="text-[#FBBF24]" />
           <StatCard label="今日 Token" value={todayTokens > 0 ? todayTokens.toLocaleString() : '-'} sub={todayTokens > 0 ? '输入 + 输出' : '暂无使用记录'} />
         </div>
@@ -196,7 +187,6 @@ export function WorkflowPage() {
         <SpawnModal
           agents={agents}
           runtimes={runtimes}
-          rooms={rooms}
           onClose={() => setShowSpawn(false)}
           onSpawned={load}
         />

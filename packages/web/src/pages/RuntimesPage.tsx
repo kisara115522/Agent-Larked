@@ -42,25 +42,18 @@ export function RuntimesPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Architecture Diagram */}
+        {/* Architecture Info */}
         <div className="p-6 text-center">
-          <pre className="inline-block text-left font-mono text-xs leading-[1.4] text-text-muted bg-surface border border-border rounded-[10px] p-5">
-{`┌────────────────────────────────────────────────────┐
-│            Flock Server (localhost:3001)              │
-│       REST API + SSE + SQLite + MCP Server         │
-└───────────────────────┬────────────────────────────┘
-                        │ HTTP Callbacks (HMAC-SHA256)
-           ┌────────────┴────────────┐
-           ↓                         ↓
-┌───────────────────┐    ┌───────────────────┐
-│ Runtime A          │    │ Runtime B          │
-│ localhost:9400     │    │ (未注册)           │
-│ ┌─────────┐        │    │                   │
-│ │ (空)    │        │    │                   │
-│ └─────────┘        │    │                   │
-│ Agents: 0/10       │    └───────────────────┘
-└───────────────────┘`}
-          </pre>
+          <div className="inline-block text-left text-xs text-text-muted bg-surface border border-border rounded-[10px] p-5 max-w-[480px]">
+            <div className="font-semibold text-sm mb-2">架构说明</div>
+            <div className="space-y-1.5">
+              <div>Flock Server (REST API + SSE + SQLite + MCP)</div>
+              <div className="text-text-dim">↓ HTTP Callbacks (HMAC-SHA256)</div>
+              <div>Runtime Daemon（自动注册，心跳保活）</div>
+              <div className="text-text-dim">↓ spawn/wake/stop</div>
+              <div>Agent 子进程（claude -p）</div>
+            </div>
+          </div>
         </div>
 
         {/* Runtime Cards */}

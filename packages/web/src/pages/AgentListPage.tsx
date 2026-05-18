@@ -173,7 +173,6 @@ export function AgentListPage() {
         <SpawnModal
           agents={agents}
           runtimes={runtimes}
-          rooms={rooms}
           onClose={() => setSpawnAgent(null)}
           onSpawned={loadAgents}
         />

@@ -23,9 +23,10 @@ interface WakeEvent {
   agent_id: string;
   agent_name?: string;
   triggered_by: string;
+  triggered_by_name?: string;
+  trigger_type: string;
   room_id?: string;
-  room_name?: string;
-  status: string;
+  prompt?: string;
   created_at: string;
 }
 
@@ -50,8 +51,10 @@ export function WakePage() {
       setRooms(roomsRes.rooms);
       setWakeHistory(historyRes.events);
       if (roomsRes.rooms.length > 0 && !selectedRoom) setSelectedRoom(roomsRes.rooms[0].id);
-    } catch {}
-  }, [token, selectedRoom]);
+    } catch (e) {
+      toast(`加载失败: ${e instanceof Error ? e.message : '未知错误'}`);
+    }
+  }, [token, selectedRoom, toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -146,10 +149,9 @@ export function WakePage() {
                   {new Date(ev.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                 </span>
                 <span className="font-semibold">{ev.agent_name || ev.agent_id.slice(0, 8)}</span>
-                <span className="text-text-dim">被 {ev.triggered_by} 唤醒</span>
-                {ev.room_name && <span className="text-text-dim">→ {ev.room_name}</span>}
-                <span className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${ev.status === 'success' ? 'bg-[#064E3B] text-[#34D399]' : 'bg-error-muted text-error'}`}>
-                  {ev.status === 'success' ? '成功' : ev.status}
+                <span className="text-text-dim">被 {ev.triggered_by_name || ev.triggered_by.slice(0, 8)} 唤醒</span>
+                <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface-elevated text-text-muted border border-border">
+                  {ev.trigger_type === 'manual' ? '手动' : ev.trigger_type === 'mention' ? '@mention' : ev.trigger_type === 'broadcast' ? '广播' : ev.trigger_type === 'spawn' ? '启动' : ev.trigger_type}
                 </span>
               </div>
             ))}

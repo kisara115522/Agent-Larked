@@ -18,15 +18,9 @@ interface Runtime {
   max_agents: number;
 }
 
-interface Room {
-  id: string;
-  name: string;
-}
-
-export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
+export function SpawnModal({ agents, runtimes, onClose, onSpawned }: {
   agents: Agent[];
   runtimes: Runtime[];
-  rooms: Room[];
   onClose: () => void;
   onSpawned: () => void;
 }) {
@@ -34,7 +28,6 @@ export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
   const [selectedAgent, setSelectedAgent] = useState(agents[0]?.id || '');
   const [selectedRuntime, setSelectedRuntime] = useState('auto');
   const [prompt, setPrompt] = useState('');
-  const [selectedRoom, setSelectedRoom] = useState(rooms[0]?.id || '');
   const [spawning, setSpawning] = useState(false);
   const { toast } = useToast();
 
@@ -45,7 +38,6 @@ export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
       await post(`/agents/${selectedAgent}/spawn`, token, {
         runtime_id: selectedRuntime === 'auto' ? undefined : selectedRuntime,
         prompt: prompt.trim() || undefined,
-        room_id: selectedRoom || undefined,
       });
       toast('Agent 启动成功', 'success');
       onSpawned();
@@ -92,14 +84,6 @@ export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-xs text-text-muted mb-1">目标 Room</label>
-          <select value={selectedRoom} onChange={e => setSelectedRoom(e.target.value)} className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text focus:border-accent">
-            {rooms.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-        </div>
 
         {/* Spawn flow preview */}
         <div className="bg-bg border border-border rounded-[10px] p-4 mb-5">
@@ -113,7 +97,7 @@ export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
             <span className="text-text-dim">→</span>
             <span>POST callback</span>
             <span className="text-text-dim">→</span>
-            <span>Agent SDK query()</span>
+            <span>claude -p</span>
             <span className="text-text-dim">→</span>
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent" />
             <span>active</span>
