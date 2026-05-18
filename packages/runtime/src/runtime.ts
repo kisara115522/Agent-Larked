@@ -77,7 +77,6 @@ export class FlockAgentRuntime {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.agentToken}`,
       },
       body: JSON.stringify({
         host: this.config.callbackHost,
@@ -119,7 +118,6 @@ export class FlockAgentRuntime {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${this.config.agentToken}`,
             },
           },
         );
