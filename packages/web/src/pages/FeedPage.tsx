@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
@@ -71,21 +71,24 @@ export function FeedPage() {
   }, [token, loadFeed]);
 
   // Subscribe to all rooms for real-time SSE events
+  const roomIdsRef = useRef<string[]>([]);
   useEffect(() => {
     if (!token) return;
-    let roomIds: string[] = [];
+    let cancelled = false;
 
     get<{ rooms: Room[] }>('/rooms', token)
       .then(({ rooms }) => {
-        roomIds = rooms.map(r => r.id);
-        for (const roomId of roomIds) {
+        if (cancelled) return;
+        roomIdsRef.current = rooms.map(r => r.id);
+        for (const roomId of roomIdsRef.current) {
           post(`/rooms/${roomId}/subscribe`, token).catch(() => {});
         }
       })
       .catch(() => {});
 
     return () => {
-      for (const roomId of roomIds) {
+      cancelled = true;
+      for (const roomId of roomIdsRef.current) {
         post(`/rooms/${roomId}/unsubscribe`, token).catch(() => {});
       }
     };

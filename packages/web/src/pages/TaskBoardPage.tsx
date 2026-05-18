@@ -70,11 +70,11 @@ export function TaskBoardPage() {
       setTasks(tasksRes.tasks);
       setAgents(agentsRes.agents);
       setRooms(roomsRes.rooms);
-      if (roomsRes.rooms.length > 0 && !newRoom) setNewRoom(roomsRes.rooms[0].id);
+      setNewRoom(prev => prev || (roomsRes.rooms[0]?.id ?? ''));
     } catch {} finally {
       setLoading(false);
     }
-  }, [token, newRoom]);
+  }, [token]);
 
   useEffect(() => { load(); }, [load]);
 
