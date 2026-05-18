@@ -63,7 +63,89 @@ export function registerMessagingTools(
     },
   );
 
-  // Tool 2: flock_read
+  // Tool 2: flock_feed
+  server.registerTool(
+    'flock_feed',
+    {
+      description: 'Get a cross-room message feed for the current agent. Returns recent messages from all joined rooms, ordered by time. Use for catching up on activity.',
+      inputSchema: z.object({
+        limit: z.number().optional().describe('Max messages to return (default 20, max 100)'),
+        cursor: z.number().optional().describe('Pagination cursor (created_order value)'),
+      }),
+    },
+    async (args) => {
+      try {
+        const agentId = agentIdProvider();
+        if (!agentId) {
+          return {
+            content: [{ type: 'text' as const, text: 'Error: Agent not registered.' }],
+            isError: true,
+          };
+        }
+
+        const limit = Math.min(args.limit ?? 20, 100);
+
+        // Get all room IDs the agent has joined
+        const memberRows = db.prepare(
+          'SELECT room_id FROM room_members WHERE agent_id = ?',
+        ).all(agentId) as { room_id: string }[];
+
+        // Also include public rooms
+        const publicRows = db.prepare(
+          "SELECT id AS room_id FROM rooms WHERE visibility = 'public'",
+        ).all() as { room_id: string }[];
+
+        const roomIds = [...new Set([...memberRows.map(r => r.room_id), ...publicRows.map(r => r.room_id)])];
+
+        if (roomIds.length === 0) {
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ messages: [], next_cursor: null, has_more: false }) }] };
+        }
+
+        const placeholders = roomIds.map(() => '?').join(', ');
+        const params: unknown[] = [...roomIds];
+
+        let where = `WHERE room_id IN (${placeholders})`;
+        if (args.cursor !== undefined) {
+          where += ' AND created_order < ?';
+          params.push(args.cursor);
+        }
+
+        params.push(limit + 1);
+        const rows = db.prepare(
+          `SELECT m.*, r.name AS room_name FROM messages m LEFT JOIN rooms r ON r.id = m.room_id ${where} ORDER BY m.created_order DESC LIMIT ?`,
+        ).all(...params) as Record<string, unknown>[];
+
+        const hasMore = rows.length > limit;
+        const items = rows.slice(0, limit).map((row) => ({
+          id: row.id as string,
+          room_id: row.room_id as string,
+          room_name: row.room_name as string | null,
+          from: row.from_agent as string,
+          content: row.content as string,
+          reply_to: row.reply_to as string | null,
+          created_at: row.created_at as string,
+          created_order: row.created_order as number,
+        }));
+
+        let nextCursor: number | null = null;
+        if (hasMore && items.length > 0) {
+          nextCursor = items[items.length - 1].created_order;
+        }
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({ messages: items, next_cursor: nextCursor, has_more: hasMore }),
+          }],
+        };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true };
+      }
+    },
+  );
+
+  // Tool 3: flock_read
   server.registerTool(
     'flock_read',
     {
