@@ -238,8 +238,8 @@ export function AgentPage() {
           <div>
             <h4 className="text-sm font-semibold mb-2">配置</h4>
             <div className="grid grid-cols-2 gap-2.5">
-              <ConfigCard icon="🧠" title="Soul" desc="人格描述、行为准则" badge="已配置" badgeClass="bg-accent-muted text-accent" />
-              <ConfigCard icon="📄" title="Agent.md" desc="能力定义、工作方式" badge="已配置" badgeClass="bg-accent-muted text-accent" />
+              <ConfigCard icon="🧠" title="Soul" desc="人格描述、行为准则" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
+              <ConfigCard icon="📄" title="Agent.md" desc="能力定义、工作方式" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
               <ConfigCard icon="🔧" title="Skills" desc="继承全局配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
               <ConfigCard icon="🔌" title="MCP Tools" desc="工具接入配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
             </div>
