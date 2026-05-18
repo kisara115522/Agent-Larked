@@ -5,6 +5,7 @@ import type { RuntimeConfig } from './config.js';
 export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
   agent_id: string;
+  agent_token?: string;
   prompt?: string;
   room_id?: string;
   room_name?: string;
@@ -44,6 +45,7 @@ export function createCallbackServer(
     const event: CallbackEvent = {
       type: req.body.type,
       agent_id: agentId,
+      agent_token: req.body.agent_token,
       prompt: req.body.prompt,
       room_id: req.body.room_id,
       room_name: req.body.room_name,

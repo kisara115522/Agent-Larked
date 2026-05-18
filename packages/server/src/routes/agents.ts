@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { registerAgent, updateProfile, searchAgents, getProfile, cleanupStaleOnlineAgents } from '../services/identity.js';
+import { registerAgent, updateProfile, searchAgents, getProfile, cleanupStaleOnlineAgents, regenerateToken } from '../services/identity.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
 import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
@@ -166,12 +166,15 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
       }
 
+      // Generate a new token for this spawn session
+      const { token } = regenerateToken(db, agentId);
+
       // Notify runtime to actually spawn the agent process
       if (runtimeId) {
-        notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined);
+        notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token);
       }
 
-      res.status(201).json({ spawn_id: spawnId, status: 'active' });
+      res.status(201).json({ spawn_id: spawnId, status: 'active', agent_token: token });
     } catch (err) {
       next(err);
     }
@@ -255,9 +258,12 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
       }
 
+      // Generate a new token for this wake session
+      const { token } = regenerateToken(db, agentId);
+
       // Notify runtime to wake the agent
       if (runtimeId) {
-        notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined);
+        notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token);
       }
 
       // Log wake event
