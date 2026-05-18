@@ -46,15 +46,12 @@ interface WorkflowEvent {
   tokenUsage?: string;
 }
 
-const AGENT_COLORS: Record<string, string> = {
-  claude001: '#10B981',
-  claude002: '#F59E0B',
-  claude003: '#8B5CF6',
-  kisara: '#3B82F6',
-};
+const PALETTE = ['#10B981', '#F59E0B', '#8B5CF6', '#3B82F6', '#EF4444', '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#A855F7'];
 
 function getAgentColor(name: string): string {
-  return AGENT_COLORS[name] || '#6B7280';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
 export function WorkflowPage() {
@@ -77,7 +74,7 @@ export function WorkflowPage() {
         get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
         get<{ rooms: Room[] }>('/rooms', token).catch(() => ({ rooms: [] })),
         get<{ runtimes: Runtime[] }>('/runtimes', token).catch(() => ({ runtimes: [] })),
-        get<{ events: Array<{ id: string; agent_id: string; agent_name?: string; event_type: string; detail?: string; created_at: string }> }>('/activity', token).catch(() => ({ events: [] })),
+        get<{ logs: Array<{ id: string; agent_id: string; agent_name?: string; activity_type: string; detail?: string; created_at: string }> }>('/activity', token).catch(() => ({ logs: [] })),
         get<{ usage: Array<{ agent_id: string; input_tokens: number; output_tokens: number }> }>('/token-usage', token).catch(() => ({ usage: [] })),
       ]);
       setAgents(agentsRes.agents);
@@ -85,12 +82,12 @@ export function WorkflowPage() {
       setRooms(roomsRes.rooms);
       setRuntimes(runtimesRes.runtimes);
       // Convert activity log to workflow events
-      const converted: WorkflowEvent[] = activityRes.events.slice(0, 30).map(ev => ({
+      const converted: WorkflowEvent[] = activityRes.logs.slice(0, 30).map(ev => ({
         id: ev.id,
-        type: ev.event_type === 'tool_call' ? 'tool' : ev.event_type === 'message' ? 'msg' : ev.event_type === 'think' ? 'think' : ev.event_type === 'error' ? 'error' : 'system',
+        type: ev.activity_type === 'tool_call' ? 'tool' : ev.activity_type === 'message' ? 'msg' : ev.activity_type === 'think' ? 'think' : ev.activity_type === 'error' ? 'error' : 'system',
         agent: ev.agent_name || ev.agent_id,
         agentDisplay: ev.agent_name || ev.agent_id.slice(0, 8),
-        action: ev.event_type,
+        action: ev.activity_type,
         detail: ev.detail || '',
         time: new Date(ev.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       }));

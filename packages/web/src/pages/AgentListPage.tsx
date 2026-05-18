@@ -8,6 +8,7 @@ import { StatusIndicator } from '../components/agent/StatusIndicator';
 import { SpawnModal } from '../components/modals/SpawnModal';
 import { DMModal } from '../components/modals/DMModal';
 import { WakeSingleModal } from '../components/modals/WakeSingleModal';
+import { getAgentGradient, getAgentInitials } from '../utils/agent-style';
 
 interface Agent {
   id: string;
@@ -41,24 +42,6 @@ const STATUS_BADGE: Record<string, string> = {
   recovering: 'bg-[#78350F] text-[#FBBF24]',
   error: 'bg-error-muted text-error',
 };
-
-const AGENT_GRADIENTS: Record<string, string> = {
-  claude001: '#10B981,#059669',
-  claude002: '#F59E0B,#D97706',
-  claude003: '#8B5CF6,#7C3AED',
-  kisara: '#3B82F6,#8B5CF6',
-};
-
-function getGradient(name: string): string {
-  return AGENT_GRADIENTS[name] || '#6B7280,#4B5563';
-}
-
-function getInitials(name: string): string {
-  if (name === 'kisara') return 'K';
-  const match = name.match(/claude(\d+)/);
-  if (match) return `C${match[1]}`;
-  return name.slice(0, 2).toUpperCase();
-}
 
 export function AgentListPage() {
   const { token } = useAuth();
@@ -231,8 +214,8 @@ function AgentCard({ agent, onStop, onNavigate, onDM, onWakeModal, onSpawnModal 
   onSpawnModal: () => void;
 }) {
   const isDormant = agent.status === 'dormant';
-  const gradient = getGradient(agent.name);
-  const initials = getInitials(agent.name);
+  const gradient = getAgentGradient(agent.name);
+  const initials = getAgentInitials(agent.name);
 
   return (
     <div

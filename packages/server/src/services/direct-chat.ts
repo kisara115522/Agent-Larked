@@ -25,10 +25,11 @@ function ensurePeer(db: Database.Database, agentId: string, peerId: string): voi
   if (agentId === peerId) {
     throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Cannot direct message yourself', false, 400);
   }
-  const peer = db.prepare('SELECT id FROM profiles WHERE id = ?').get(peerId) as { id: string } | undefined;
-  if (!peer) {
-    throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
-  }
+  const agentPeer = db.prepare('SELECT id FROM profiles WHERE id = ?').get(peerId) as { id: string } | undefined;
+  if (agentPeer) return;
+  const humanPeer = db.prepare('SELECT id FROM humans WHERE id = ?').get(peerId) as { id: string } | undefined;
+  if (humanPeer) return;
+  throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
 }
 
 function canonicalPair(a: string, b: string): { low: string; high: string } {

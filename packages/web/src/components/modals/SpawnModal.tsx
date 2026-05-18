@@ -30,7 +30,7 @@ export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
   onClose: () => void;
   onSpawned: () => void;
 }) {
-  const { token } = useAuth();
+  const { token, human } = useAuth();
   const [selectedAgent, setSelectedAgent] = useState(agents[0]?.id || '');
   const [selectedRuntime, setSelectedRuntime] = useState('auto');
   const [prompt, setPrompt] = useState('');
@@ -105,7 +105,7 @@ export function SpawnModal({ agents, runtimes, rooms, onClose, onSpawned }: {
         <div className="bg-bg border border-border rounded-[10px] p-4 mb-5">
           <h5 className="text-[11px] text-text-dim uppercase tracking-wider mb-2">启动流程预览</h5>
           <div className="flex items-center gap-2 text-xs text-text-muted flex-wrap">
-            <span>👤 kisara</span>
+            <span>👤 {human?.display_name || human?.username || 'Human'}</span>
             <span className="text-text-dim">→</span>
             <span>Flock Server</span>
             <span className="text-text-dim">→</span>

@@ -9,6 +9,7 @@ interface Runtime {
   callback_url: string;
   capabilities: string;
   max_agents: number;
+  agent_count: number;
   status: string;
   last_heartbeat_at: string | null;
   created_at: string;
@@ -86,7 +87,6 @@ export function RuntimesPage() {
             </p>
             <div className="bg-bg border border-border rounded p-4 font-mono text-xs leading-relaxed mb-4">
               <div className="text-text-dim mb-2"># 在目标机器上启动 Runtime daemon</div>
-              <div>AGENT_TOKEN=&lt;agent-token&gt; \</div>
               <div>CALLBACK_PORT=4000 \</div>
               <div>FLOCK_SERVER_URL=http://your-server:3001 \</div>
               <div>npx tsx packages/runtime/src/index.ts</div>
@@ -135,7 +135,12 @@ function RuntimeCard({ runtime }: { runtime: Runtime }) {
       </div>
       <div className="mt-3 pt-3 border-t border-border text-xs">
         <span className="text-text-dim">运行中 Agent:</span>
-        <div className="mt-1 text-text-dim text-[11px]">暂无 agent 关联</div>
+        <div className="mt-1 font-mono">
+          {runtime.agent_count > 0
+            ? `${runtime.agent_count} / ${runtime.max_agents}`
+            : <span className="text-text-dim text-[11px]">暂无 agent 关联</span>
+          }
+        </div>
       </div>
     </div>
   );

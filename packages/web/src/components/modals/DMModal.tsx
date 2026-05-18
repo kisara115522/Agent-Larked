@@ -1,25 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { post } from '../../api/client';
+import { get, post } from '../../api/client';
 import { useToast } from '../ui/Toast';
-
-const AGENT_GRADIENTS: Record<string, string> = {
-  claude001: '#10B981,#059669',
-  claude002: '#F59E0B,#D97706',
-  claude003: '#8B5CF6,#7C3AED',
-  kisara: '#3B82F6,#8B5CF6',
-};
-
-function getGradient(name: string): string {
-  return AGENT_GRADIENTS[name] || '#6B7280,#4B5563';
-}
-
-function getInitials(name: string): string {
-  if (name === 'kisara') return 'K';
-  const match = name.match(/claude(\d+)/);
-  if (match) return `C${match[1]}`;
-  return name.slice(0, 2).toUpperCase();
-}
+import { getAgentGradient, getAgentInitials } from '../../utils/agent-style';
 
 interface Message {
   id: string;
@@ -27,6 +10,15 @@ interface Message {
   text: string;
   time: string;
   isHuman: boolean;
+}
+
+interface DmApiMessage {
+  id: string;
+  from_agent_id: string;
+  to_agent_id: string;
+  content: string;
+  created_at: string;
+  sequence: number;
 }
 
 export function DMModal({ agentId, agentName, agentBio, onClose }: {
@@ -46,6 +38,24 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const loadHistory = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await get<{ messages: DmApiMessage[] }>(`/direct-chats/${agentId}/messages`, token).catch(() => ({ messages: [] }));
+      const humanId = human?.id;
+      const loaded: Message[] = res.messages.map(m => ({
+        id: m.id,
+        from: m.from_agent_id === humanId ? (human?.display_name || human?.username || 'kisara') : agentName,
+        text: m.content,
+        time: new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+        isHuman: m.from_agent_id === humanId,
+      }));
+      setMessages(loaded);
+    } catch {}
+  }, [token, agentId, agentName, human]);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
   const handleSend = async () => {
     if (!token || !input.trim() || sending) return;
     const text = input.trim();
@@ -62,7 +72,7 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
     }]);
 
     try {
-      await post(`/agents/${agentId}/dm`, token, { content: text });
+      await post(`/direct-chats/${agentId}/messages`, token, { content: text });
     } catch (e) {
       toast(`发送失败: ${e instanceof Error ? e.message : '未知错误'}`);
     } finally {
@@ -70,8 +80,8 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
     }
   };
 
-  const gradient = getGradient(agentName);
-  const initials = getInitials(agentName);
+  const gradient = getAgentGradient(agentName);
+  const initials = getAgentInitials(agentName);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>

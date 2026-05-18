@@ -2,24 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { post } from '../../api/client';
 import { useToast } from '../ui/Toast';
-
-const AGENT_GRADIENTS: Record<string, string> = {
-  claude001: '#10B981,#059669',
-  claude002: '#F59E0B,#D97706',
-  claude003: '#8B5CF6,#7C3AED',
-  kisara: '#3B82F6,#8B5CF6',
-};
-
-function getGradient(name: string): string {
-  return AGENT_GRADIENTS[name] || '#6B7280,#4B5563';
-}
-
-function getInitials(name: string): string {
-  if (name === 'kisara') return 'K';
-  const match = name.match(/claude(\d+)/);
-  if (match) return `C${match[1]}`;
-  return name.slice(0, 2).toUpperCase();
-}
+import { getAgentGradient, getAgentInitials } from '../../utils/agent-style';
 
 interface Room {
   id: string;
@@ -59,8 +42,8 @@ export function WakeSingleModal({ agentId, agentName, agentStatus, lastActive, r
     }
   };
 
-  const gradient = getGradient(agentName);
-  const initials = getInitials(agentName);
+  const gradient = getAgentGradient(agentName);
+  const initials = getAgentInitials(agentName);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>

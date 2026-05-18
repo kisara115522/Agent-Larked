@@ -18,6 +18,7 @@ export interface RuntimeInfo {
   callback_url: string;
   capabilities: string[];
   max_agents: number;
+  agent_count: number;
   status: string;
   last_heartbeat_at: string | null;
   created_at: string;
@@ -61,6 +62,7 @@ export function registerRuntime(
     callback_url: req.callback_url,
     capabilities: req.capabilities ?? [],
     max_agents: req.max_agents ?? 10,
+    agent_count: 0,
     status: 'online',
     last_heartbeat_at: now,
     created_at: now,
@@ -69,9 +71,12 @@ export function registerRuntime(
 }
 
 export function listRuntimes(db: Database.Database): RuntimeInfo[] {
-  const rows = db.prepare(
-    'SELECT id, host, port, callback_url, capabilities, max_agents, status, last_heartbeat_at, created_at FROM agent_runtimes ORDER BY created_at DESC',
-  ).all() as Record<string, unknown>[];
+  const rows = db.prepare(`
+    SELECT r.id, r.host, r.port, r.callback_url, r.capabilities, r.max_agents, r.status, r.last_heartbeat_at, r.created_at,
+           COALESCE((SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status = 'active'), 0) AS agent_count
+    FROM agent_runtimes r
+    ORDER BY r.created_at DESC
+  `).all() as Record<string, unknown>[];
 
   return rows.map((row) => ({
     id: row.id as string,
@@ -80,6 +85,7 @@ export function listRuntimes(db: Database.Database): RuntimeInfo[] {
     callback_url: row.callback_url as string,
     capabilities: JSON.parse((row.capabilities as string) ?? '[]'),
     max_agents: row.max_agents as number,
+    agent_count: row.agent_count as number,
     status: row.status as string,
     last_heartbeat_at: row.last_heartbeat_at as string | null,
     created_at: row.created_at as string,

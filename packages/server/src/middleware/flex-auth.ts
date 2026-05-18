@@ -5,12 +5,18 @@ import { ErrorCode, createError } from '@flock/shared';
 
 export interface FlexAuthenticatedRequest extends Request {
   agentId?: string;
+  humanId?: string;
+}
+
+interface ResolvedToken {
+  id: string;
+  type: 'agent' | 'human';
 }
 
 /**
  * Flex auth middleware: tries agent token (Bearer → profiles.token_hash) first,
  * then falls back to human session token (Bearer → human_sessions).
- * Sets req.agentId to the profile ID in either case.
+ * Sets req.agentId for agents, req.humanId for humans.
  */
 export function flexAuthMiddleware(db: Database.Database) {
   const agentStmt = db.prepare('SELECT id FROM profiles WHERE token_hash = ?');
@@ -23,12 +29,11 @@ export function flexAuthMiddleware(db: Database.Database) {
   return (req: FlexAuthenticatedRequest, res: Response, next: NextFunction): void => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      // Also check query param (for SSE)
       const queryToken = req.query.token as string | undefined;
       if (queryToken) {
         const result = resolveToken(queryToken, agentStmt, humanStmt);
         if (result) {
-          req.agentId = result;
+          applyResult(req, result);
           next();
           return;
         }
@@ -45,24 +50,34 @@ export function flexAuthMiddleware(db: Database.Database) {
       return;
     }
 
-    req.agentId = result;
+    applyResult(req, result);
     next();
   };
+}
+
+function applyResult(req: FlexAuthenticatedRequest, result: ResolvedToken): void {
+  if (result.type === 'agent') {
+    req.agentId = result.id;
+  } else {
+    req.humanId = result.id;
+    // For backward compat, also set agentId so existing code that only checks agentId still works
+    req.agentId = result.id;
+  }
 }
 
 function resolveToken(
   token: string,
   agentStmt: import('better-sqlite3').Statement,
   humanStmt: import('better-sqlite3').Statement,
-): string | null {
+): ResolvedToken | null {
   // Try agent token first
   const hash = createHash('sha256').update(token).digest('hex');
   const agentRow = agentStmt.get(hash) as { id: string } | undefined;
-  if (agentRow) return agentRow.id;
+  if (agentRow) return { id: agentRow.id, type: 'agent' };
 
   // Fall back to human session token
   const humanRow = humanStmt.get(token) as { id: string } | undefined;
-  if (humanRow) return humanRow.id;
+  if (humanRow) return { id: humanRow.id, type: 'human' };
 
   return null;
 }

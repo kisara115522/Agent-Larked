@@ -54,16 +54,16 @@ export function AgentPage() {
       const [agentData, tasksRes, activityRes] = await Promise.all([
         get<Agent>(`/agents/${id}`, token),
         get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
-        get<{ events: Array<{ id: string; event_type: string; detail?: string; created_at: string }> }>(`/agents/${id}/activity`, token).catch(() => ({ events: [] })),
+        get<{ logs: Array<{ id: string; activity_type: string; detail?: string; created_at: string }> }>(`/agents/${id}/activity`, token).catch(() => ({ logs: [] })),
       ]);
       setAgent(agentData);
       setTasks(tasksRes.tasks.filter(t => t.assigned_to === id));
       // Convert activity logs to workflow events
-      const converted: WorkflowEvent[] = activityRes.events.slice(0, 20).map(ev => ({
+      const converted: WorkflowEvent[] = activityRes.logs.slice(0, 20).map(ev => ({
         id: ev.id,
-        type: ev.event_type === 'tool_call' ? 'tool' : ev.event_type === 'message' ? 'msg' : ev.event_type === 'think' ? 'think' : ev.event_type === 'error' ? 'error' : 'system',
+        type: ev.activity_type === 'tool_call' ? 'tool' : ev.activity_type === 'message' ? 'msg' : ev.activity_type === 'think' ? 'think' : ev.activity_type === 'error' ? 'error' : 'system',
         agent: agentData.display_name || agentData.name,
-        action: ev.event_type,
+        action: ev.activity_type,
         detail: ev.detail || '',
         time: new Date(ev.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
       }));
