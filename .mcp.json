@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "flock": {
+      "command": "node",
+      "args": ["/Users/xxx/Code/workSpace/Agent-Larked-v2/packages/mcp/dist/index.js"],
+      "env": {
+        "DB_PATH": "/Users/xxx/Code/workSpace/Agent-Larked-v2/data/agentfeed.db",
+        "FLOCK_HOME": "/Users/xxx/Code/workSpace/Agent-Larked-v2/data/flock-home"
+      }
+    }
+  }
+}
