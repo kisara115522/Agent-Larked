@@ -18,6 +18,7 @@ export function registerAgentLifecycleTools(
       agent_id: z.string().describe('ID of the agent to spawn'),
       prompt: z.string().optional().describe('Initial prompt/instructions for the agent'),
       runtime_id: z.string().optional().describe('Specific Runtime ID to use (auto-selects if omitted)'),
+      room_id: z.string().optional().describe('Target room ID for the agent to join on spawn'),
     },
     async (args) => {
       try {
@@ -53,8 +54,15 @@ export function registerAgentLifecycleTools(
 
         db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, args.agent_id);
 
+        // Look up room name if room_id provided
+        let roomName: string | undefined;
+        if (args.room_id) {
+          const room = db.prepare('SELECT name FROM rooms WHERE id = ?').get(args.room_id) as { name: string } | undefined;
+          roomName = room?.name;
+        }
+
         const { token } = regenerateToken(db, args.agent_id);
-        notifyRuntimeSpawn(db, runtimeId, args.agent_id, args.prompt ?? undefined, token);
+        notifyRuntimeSpawn(db, runtimeId, args.agent_id, args.prompt ?? undefined, token, args.room_id, roomName);
 
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ spawn_id: spawnId, agent_id: args.agent_id, runtime_id: runtimeId, status: 'spawning', agent_token: token }) }],
