@@ -27,6 +27,7 @@ interface WakeEvent {
   trigger_type: string;
   room_id?: string;
   prompt?: string;
+  status: string;
   created_at: string;
 }
 
@@ -150,8 +151,11 @@ export function WakePage() {
                 </span>
                 <span className="font-semibold">{ev.agent_name || ev.agent_id.slice(0, 8)}</span>
                 <span className="text-text-dim">被 {ev.triggered_by_name || ev.triggered_by.slice(0, 8)} 唤醒</span>
-                <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface-elevated text-text-muted border border-border">
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface-elevated text-text-muted border border-border">
                   {ev.trigger_type === 'manual' ? '手动' : ev.trigger_type === 'mention' ? '@mention' : ev.trigger_type === 'broadcast' ? '广播' : ev.trigger_type === 'spawn' ? '启动' : ev.trigger_type}
+                </span>
+                <span className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${ev.status === 'queued' || ev.status === 'sent' ? 'bg-[#064E3B] text-[#34D399]' : ev.status === 'skipped' ? 'bg-[#78350F] text-[#FBBF24]' : ev.status === 'failed' ? 'bg-error-muted text-error' : 'bg-surface-elevated text-text-muted border border-border'}`}>
+                  {ev.status === 'queued' ? '已排队' : ev.status === 'sent' ? '已发送' : ev.status === 'skipped' ? '跳过' : ev.status === 'failed' ? '失败' : ev.status}
                 </span>
               </div>
             ))}
