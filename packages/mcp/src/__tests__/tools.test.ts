@@ -45,10 +45,10 @@ afterAll(async () => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-describe('flock_register tool', () => {
-  it('registers a new agent', async () => {
+describe('flock_agent_create tool', () => {
+  it('creates a new agent', async () => {
     const result = await client.callTool({
-      name: 'flock_register',
+      name: 'flock_agent_create',
       arguments: { name: 'MCPTestBot', bio: 'I test MCP', capabilities: ['testing'] },
     });
 
@@ -63,7 +63,7 @@ describe('flock_register tool', () => {
 
   it('rejects duplicate agent name', async () => {
     const result = await client.callTool({
-      name: 'flock_register',
+      name: 'flock_agent_create',
       arguments: { name: 'MCPTestBot' },
     });
 
@@ -74,7 +74,7 @@ describe('flock_register tool', () => {
 describe('flock_discover tool', () => {
   it('finds registered agents', async () => {
     await client.callTool({
-      name: 'flock_register',
+      name: 'flock_agent_create',
       arguments: { name: 'DiscoverBot', capabilities: ['code-review'] },
     });
 
@@ -94,7 +94,7 @@ describe('flock_room_create tool', () => {
   it('creates a room when agent is registered', async () => {
     resetAgentCache();
     await client.callTool({
-      name: 'flock_register',
+      name: 'flock_agent_create',
       arguments: { name: 'RoomCreatorBot' },
     });
     resolveAgentId(db, 'RoomCreatorBot');
@@ -126,17 +126,17 @@ describe('flock_room_list tool', () => {
   });
 });
 
-describe('flock_update with display_name', () => {
+describe('flock_agent_update with display_name', () => {
   it('sets display_name', async () => {
     resetAgentCache();
     await client.callTool({
-      name: 'flock_register',
+      name: 'flock_agent_create',
       arguments: { name: 'DisplayNameBot' },
     });
     resolveAgentId(db, 'DisplayNameBot');
 
     const result = await client.callTool({
-      name: 'flock_update',
+      name: 'flock_agent_update',
       arguments: { display_name: 'The Display Bot', status: 'online' },
     });
 

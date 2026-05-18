@@ -7,6 +7,8 @@ import { registerDirectChatTools } from './tools/direct-chat.js';
 import { registerMentionTools } from './tools/mentions.js';
 import { registerWaitTool } from './tools/subscribe.js';
 import { registerReactionTools } from './tools/reactions.js';
+import { registerAgentLifecycleTools } from './tools/agent-lifecycle.js';
+import { registerTaskTools } from './tools/task.js';
 import { installUnreadMentionInjection, startMentionListener } from './mentions.js';
 import { getAgentId } from './db.js';
 
@@ -50,6 +52,8 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   registerMentionTools(server, db, agentIdProvider);
   registerWaitTool(server, db, agentIdProvider);
   registerReactionTools(server, db, agentIdProvider);
+  registerAgentLifecycleTools(server, db, agentIdProvider);
+  registerTaskTools(server, db, agentIdProvider);
 
   // Start background mention listener (for long-running processes)
   if (enableMentionListener) {
