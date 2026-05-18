@@ -313,6 +313,112 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON agent_activity_logs(crea
 
 `;
 
+/**
+ * Remove FK constraints that reference profiles(id) on tables that humans also use.
+ * rooms.created_by, room_members.agent_id, direct_chats.agent_low/high_id,
+ * direct_messages.from_agent/to_agent — all need to accept human IDs too.
+ */
+function migrateRemoveHumanFkConstraints(db: Database.Database): void {
+  // Check if rooms.created_by still has a FK to profiles
+  const roomFks = db.prepare('PRAGMA foreign_key_list(rooms)').all() as Array<{ from: string; table: string }>;
+  const createdByFk = roomFks.find((fk) => fk.from === 'created_by' && fk.table === 'profiles');
+  if (!createdByFk) return; // Already migrated
+
+  const foreignKeysEnabled = Number(db.pragma('foreign_keys', { simple: true })) === 1;
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      // 1. rooms — remove FK on created_by
+      db.exec('DROP TABLE IF EXISTS _rooms_new;');
+      db.exec(`
+        CREATE TABLE _rooms_new (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT DEFAULT '',
+          visibility TEXT DEFAULT 'public',
+          created_by TEXT,
+          created_at TEXT NOT NULL
+        );
+      `);
+      db.exec(`
+        INSERT INTO _rooms_new (id, name, description, visibility, created_by, created_at)
+        SELECT id, name, description, COALESCE(visibility, 'public'), created_by, created_at FROM rooms;
+      `);
+      db.exec('DROP TABLE rooms;');
+      db.exec('ALTER TABLE _rooms_new RENAME TO rooms;');
+
+      // 2. room_members — remove FK on agent_id
+      db.exec('DROP TABLE IF EXISTS _room_members_new;');
+      db.exec(`
+        CREATE TABLE _room_members_new (
+          room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+          agent_id TEXT NOT NULL,
+          joined_at TEXT NOT NULL,
+          PRIMARY KEY (room_id, agent_id)
+        );
+      `);
+      db.exec(`
+        INSERT INTO _room_members_new (room_id, agent_id, joined_at)
+        SELECT room_id, agent_id, joined_at FROM room_members;
+      `);
+      db.exec('DROP TABLE room_members;');
+      db.exec('ALTER TABLE _room_members_new RENAME TO room_members;');
+
+      // 3. direct_chats — remove FK on agent_low_id, agent_high_id
+      db.exec('DROP TABLE IF EXISTS _direct_chats_new;');
+      db.exec(`
+        CREATE TABLE _direct_chats_new (
+          id TEXT PRIMARY KEY,
+          agent_low_id TEXT NOT NULL,
+          agent_high_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(agent_low_id, agent_high_id),
+          CHECK(agent_low_id < agent_high_id)
+        );
+      `);
+      db.exec(`
+        INSERT INTO _direct_chats_new (id, agent_low_id, agent_high_id, created_at, updated_at)
+        SELECT id, agent_low_id, agent_high_id, created_at, updated_at FROM direct_chats;
+      `);
+      db.exec('DROP TABLE direct_chats;');
+      db.exec('ALTER TABLE _direct_chats_new RENAME TO direct_chats;');
+
+      // 4. direct_messages — remove FK on from_agent, to_agent
+      db.exec('DROP TABLE IF EXISTS _direct_messages_new;');
+      db.exec(`
+        CREATE TABLE _direct_messages_new (
+          id TEXT PRIMARY KEY,
+          chat_id TEXT NOT NULL REFERENCES direct_chats(id) ON DELETE CASCADE,
+          from_agent TEXT NOT NULL,
+          to_agent TEXT NOT NULL,
+          content TEXT NOT NULL,
+          sequence INTEGER NOT NULL,
+          read_at TEXT DEFAULT NULL,
+          created_at TEXT NOT NULL,
+          created_order INTEGER NOT NULL,
+          UNIQUE(chat_id, sequence)
+        );
+      `);
+      db.exec(`
+        INSERT INTO _direct_messages_new (id, chat_id, from_agent, to_agent, content, sequence, read_at, created_at, created_order)
+        SELECT id, chat_id, from_agent, to_agent, content, sequence, read_at, created_at, created_order FROM direct_messages;
+      `);
+      db.exec('DROP TABLE direct_messages;');
+      db.exec('ALTER TABLE _direct_messages_new RENAME TO direct_messages;');
+    })();
+
+    // Recreate indexes
+    db.exec('CREATE INDEX IF NOT EXISTS idx_direct_messages_chat_seq ON direct_messages(chat_id, sequence);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_direct_messages_to_agent ON direct_messages(to_agent, created_order);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_direct_messages_from_agent ON direct_messages(from_agent, created_order);');
+  } finally {
+    if (foreignKeysEnabled) {
+      db.pragma('foreign_keys = ON');
+    }
+  }
+}
+
 export function createDatabase(path: string = ':memory:'): Database.Database {
   if (path !== ':memory:') {
     mkdirSync(dirname(path), { recursive: true });
@@ -576,112 +682,6 @@ function migrateAgentSpawnsRuntimeNullable(db: Database.Database): void {
 
   db.exec('CREATE INDEX IF NOT EXISTS idx_agent_spawns_agent ON agent_spawns(agent_id);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_agent_spawns_status ON agent_spawns(status);');
-}
-
-/**
- * Remove FK constraints that reference profiles(id) on tables that humans also use.
- * rooms.created_by, room_members.agent_id, direct_chats.agent_low/high_id,
- * direct_messages.from_agent/to_agent — all need to accept human IDs too.
- */
-function migrateRemoveHumanFkConstraints(db: Database.Database): void {
-  // Check if rooms.created_by still has a FK to profiles
-  const roomFks = db.prepare('PRAGMA foreign_key_list(rooms)').all() as Array<{ from: string; table: string }>;
-  const createdByFk = roomFks.find((fk) => fk.from === 'created_by' && fk.table === 'profiles');
-  if (!createdByFk) return; // Already migrated
-
-  const foreignKeysEnabled = Number(db.pragma('foreign_keys', { simple: true })) === 1;
-  db.pragma('foreign_keys = OFF');
-  try {
-    db.transaction(() => {
-      // 1. rooms — remove FK on created_by
-      db.exec('DROP TABLE IF EXISTS _rooms_new;');
-      db.exec(`
-        CREATE TABLE _rooms_new (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL UNIQUE,
-          description TEXT DEFAULT '',
-          visibility TEXT DEFAULT 'public',
-          created_by TEXT,
-          created_at TEXT NOT NULL
-        );
-      `);
-      db.exec(`
-        INSERT INTO _rooms_new (id, name, description, visibility, created_by, created_at)
-        SELECT id, name, description, COALESCE(visibility, 'public'), created_by, created_at FROM rooms;
-      `);
-      db.exec('DROP TABLE rooms;');
-      db.exec('ALTER TABLE _rooms_new RENAME TO rooms;');
-
-      // 2. room_members — remove FK on agent_id
-      db.exec('DROP TABLE IF EXISTS _room_members_new;');
-      db.exec(`
-        CREATE TABLE _room_members_new (
-          room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-          agent_id TEXT NOT NULL,
-          joined_at TEXT NOT NULL,
-          PRIMARY KEY (room_id, agent_id)
-        );
-      `);
-      db.exec(`
-        INSERT INTO _room_members_new (room_id, agent_id, joined_at)
-        SELECT room_id, agent_id, joined_at FROM room_members;
-      `);
-      db.exec('DROP TABLE room_members;');
-      db.exec('ALTER TABLE _room_members_new RENAME TO room_members;');
-
-      // 3. direct_chats — remove FK on agent_low_id, agent_high_id
-      db.exec('DROP TABLE IF EXISTS _direct_chats_new;');
-      db.exec(`
-        CREATE TABLE _direct_chats_new (
-          id TEXT PRIMARY KEY,
-          agent_low_id TEXT NOT NULL,
-          agent_high_id TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          UNIQUE(agent_low_id, agent_high_id),
-          CHECK(agent_low_id < agent_high_id)
-        );
-      `);
-      db.exec(`
-        INSERT INTO _direct_chats_new (id, agent_low_id, agent_high_id, created_at, updated_at)
-        SELECT id, agent_low_id, agent_high_id, created_at, updated_at FROM direct_chats;
-      `);
-      db.exec('DROP TABLE direct_chats;');
-      db.exec('ALTER TABLE _direct_chats_new RENAME TO direct_chats;');
-
-      // 4. direct_messages — remove FK on from_agent, to_agent
-      db.exec('DROP TABLE IF EXISTS _direct_messages_new;');
-      db.exec(`
-        CREATE TABLE _direct_messages_new (
-          id TEXT PRIMARY KEY,
-          chat_id TEXT NOT NULL REFERENCES direct_chats(id) ON DELETE CASCADE,
-          from_agent TEXT NOT NULL,
-          to_agent TEXT NOT NULL,
-          content TEXT NOT NULL,
-          sequence INTEGER NOT NULL,
-          read_at TEXT DEFAULT NULL,
-          created_at TEXT NOT NULL,
-          created_order INTEGER NOT NULL,
-          UNIQUE(chat_id, sequence)
-        );
-      `);
-      db.exec(`
-        INSERT INTO _direct_messages_new (id, chat_id, from_agent, to_agent, content, sequence, read_at, created_at, created_order)
-        SELECT id, chat_id, from_agent, to_agent, content, sequence, read_at, created_at, created_order FROM direct_messages;
-      `);
-      db.exec('DROP TABLE direct_messages;');
-      db.exec('ALTER TABLE _direct_messages_new RENAME TO direct_messages;');
-    })();
-
-    // Recreate indexes
-    db.exec('CREATE INDEX IF NOT EXISTS idx_direct_messages_chat_seq ON direct_messages(chat_id, sequence);');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_direct_messages_to_agent ON direct_messages(to_agent, created_order);');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_direct_messages_from_agent ON direct_messages(from_agent, created_order);');
-  } finally {
-    if (foreignKeysEnabled) {
-      db.pragma('foreign_keys = ON');
-    }
-  }
 }
 
 function ensureReservedProfiles(db: Database.Database, now: string): void {
