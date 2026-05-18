@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { notifyRuntimeSpawn, notifyRuntimeStop } from '@flock/server/services/callback';
+import { regenerateToken } from '@flock/server/services/identity';
 import { getAgentId } from '../db.js';
 
 export function registerAgentLifecycleTools(
@@ -33,7 +34,7 @@ export function registerAgentLifecycleTools(
           const runtime = db.prepare(`
             SELECT r.id FROM agent_runtimes r
             WHERE r.status = 'online'
-            AND (SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status = 'active') < r.max_agents
+            AND (SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status IN ('active', 'spawning')) < r.max_agents
             ORDER BY r.last_heartbeat_at DESC
             LIMIT 1
           `).get() as { id: string } | undefined;
@@ -47,15 +48,16 @@ export function registerAgentLifecycleTools(
         const spawnId = randomUUID();
         db.prepare(`
           INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
-          VALUES (?, ?, ?, 'active', ?, ?, ?)
+          VALUES (?, ?, ?, 'spawning', ?, ?, ?)
         `).run(spawnId, args.agent_id, runtimeId, now, now, args.prompt ?? null);
 
-        db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, args.agent_id);
+        db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, args.agent_id);
 
-        notifyRuntimeSpawn(db, runtimeId, args.agent_id, args.prompt ?? undefined);
+        const { token } = regenerateToken(db, args.agent_id);
+        notifyRuntimeSpawn(db, runtimeId, args.agent_id, args.prompt ?? undefined, token);
 
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ spawn_id: spawnId, agent_id: args.agent_id, runtime_id: runtimeId, status: 'active' }) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({ spawn_id: spawnId, agent_id: args.agent_id, runtime_id: runtimeId, status: 'spawning', agent_token: token }) }],
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -80,10 +82,10 @@ export function registerAgentLifecycleTools(
         const now = new Date().toISOString();
 
         const activeSpawn = db.prepare(
-          "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? AND status = 'active' ORDER BY spawned_at DESC LIMIT 1",
+          "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? AND status IN ('active', 'spawning') ORDER BY spawned_at DESC LIMIT 1",
         ).get(args.agent_id) as { runtime_id: string | null } | undefined;
 
-        db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status = 'active'").run(now, args.agent_id);
+        db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status IN ('active', 'spawning')").run(now, args.agent_id);
 
         if (activeSpawn?.runtime_id) {
           notifyRuntimeStop(db, activeSpawn.runtime_id, args.agent_id);
@@ -113,7 +115,7 @@ export function registerAgentLifecycleTools(
         }
 
         const spawn = db.prepare(
-          "SELECT runtime_id, session_id FROM agent_spawns WHERE agent_id = ? AND status = 'active' ORDER BY spawned_at DESC LIMIT 1",
+          "SELECT runtime_id, session_id FROM agent_spawns WHERE agent_id = ? AND status IN ('active', 'spawning') ORDER BY spawned_at DESC LIMIT 1",
         ).get(args.agent_id) as { runtime_id: string | null; session_id: string | null } | undefined;
 
         return {
