@@ -33,6 +33,7 @@ describe('AgentRunner', () => {
       'status_change',
       'Agent spawning',
       expect.objectContaining({ session_id: expect.any(String) }),
+      undefined,
     );
   });
 

@@ -105,15 +105,15 @@ describe('Runtime Management', () => {
       .expect(201);
 
     expect(res.body.spawn_id).toBeDefined();
-    expect(res.body.status).toBe('active');
+    expect(res.body.status).toBe('spawning');
 
-    // Agent should now be active
+    // Agent should now be spawning
     const statusRes = await request(app)
       .get(`/agents/${agentId}/status`)
       .set('Cookie', humanCookie)
       .expect(200);
 
-    expect(statusRes.body.status).toBe('active');
+    expect(statusRes.body.status).toBe('spawning');
   });
 
   it('stops agent and marks spawn as stopped', async () => {
@@ -142,13 +142,13 @@ describe('Runtime Management', () => {
 
     expect(res.body.ok).toBe(true);
 
-    // Agent should be active again
+    // Agent should be spawning again
     const statusRes = await request(app)
       .get(`/agents/${agentId}/status`)
       .set('Cookie', humanCookie)
       .expect(200);
 
-    expect(statusRes.body.status).toBe('active');
+    expect(statusRes.body.status).toBe('spawning');
   });
 
   it('returns 404 for spawn on unknown agent', async () => {

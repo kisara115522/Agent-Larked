@@ -18,6 +18,7 @@ export type ActivityReporter = (
   activityType: string,
   detail: string,
   metadata?: Record<string, unknown>,
+  agentToken?: string,
 ) => Promise<void>;
 
 export class AgentRunner {
@@ -57,14 +58,16 @@ export class AgentRunner {
     return agent !== undefined && agent.status === 'active';
   }
 
-  async spawn(agentId: string, prompt: string, agentToken?: string): Promise<string> {
+  async spawn(agentId: string, prompt: string, agentToken?: string, agentName?: string): Promise<string> {
     if (this.isRunning(agentId)) {
       console.log(`[runner] Agent ${agentId} already running, skipping spawn`);
       return this.agents.get(agentId)!.sessionId;
     }
 
-    // Fetch agent name so MCP server uses the correct per-agent identity
-    const agentName = await this.fetchAgentName(agentId);
+    // Use agent name from callback, or fall back to fetch
+    if (!agentName) {
+      agentName = await this.fetchAgentName(agentId);
+    }
     console.log(`[runner] Agent ${agentId} resolved to name: ${agentName}`);
 
     const sessionId = randomUUID();
@@ -85,7 +88,7 @@ export class AgentRunner {
 
     await this.reportActivity(agentId, 'status_change', 'Agent spawning', {
       session_id: sessionId,
-    });
+    }, agentToken);
 
     this.runAgent(instance);
 
@@ -116,7 +119,7 @@ export class AgentRunner {
 
     await this.reportActivity(agentId, 'status_change', 'Agent stopped', {
       session_id: instance.sessionId,
-    });
+    }, instance.agentToken);
 
     return true;
   }
@@ -150,7 +153,7 @@ export class AgentRunner {
       await this.reportActivity(instance.agentId, 'status_change', 'Agent active', {
         session_id: instance.sessionId,
         pid: child.pid,
-      });
+      }, instance.agentToken);
 
       let stdout = '';
       let stderr = '';
@@ -174,14 +177,14 @@ export class AgentRunner {
             session_id: instance.sessionId,
             exit_code: code,
             output_length: stdout.length,
-          });
+          }, instance.agentToken);
         } else {
           instance.status = 'error';
           await this.reportActivity(instance.agentId, 'error', `Agent exited with code ${code}`, {
             session_id: instance.sessionId,
             exit_code: code,
             stderr: stderr.slice(0, 1000),
-          });
+          }, instance.agentToken);
         }
 
         this.agents.delete(instance.agentId);
@@ -192,7 +195,7 @@ export class AgentRunner {
         instance.status = 'error';
         await this.reportActivity(instance.agentId, 'error', `Process error: ${err.message}`, {
           session_id: instance.sessionId,
-        });
+        }, instance.agentToken);
         this.agents.delete(instance.agentId);
       });
     } catch (err) {
@@ -200,7 +203,7 @@ export class AgentRunner {
       instance.status = 'error';
       await this.reportActivity(instance.agentId, 'error', `Spawn failed: ${err}`, {
         session_id: instance.sessionId,
-      });
+      }, instance.agentToken);
       this.agents.delete(instance.agentId);
     }
   }

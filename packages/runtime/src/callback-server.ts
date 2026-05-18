@@ -6,9 +6,12 @@ export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
   agent_id: string;
   agent_token?: string;
+  agent_name?: string;
   prompt?: string;
+  trigger_type?: string;
   room_id?: string;
   room_name?: string;
+  message_id?: string;
   sender_name?: string;
   excerpt?: string;
 }
@@ -46,9 +49,12 @@ export function createCallbackServer(
       type: req.body.type,
       agent_id: agentId,
       agent_token: req.body.agent_token,
+      agent_name: req.body.agent_name,
       prompt: req.body.prompt,
+      trigger_type: req.body.trigger_type,
       room_id: req.body.room_id,
       room_name: req.body.room_name,
+      message_id: req.body.message_id,
       sender_name: req.body.sender_name,
       excerpt: req.body.excerpt,
     };

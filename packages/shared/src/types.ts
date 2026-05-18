@@ -4,7 +4,7 @@
 
 // --- Agent Profile ---
 
-export type AgentStatus = 'active' | 'dormant' | 'recovering' | 'error';
+export type AgentStatus = 'active' | 'dormant' | 'recovering' | 'error' | 'spawning';
 
 export interface AgentProfile {
   id: string;

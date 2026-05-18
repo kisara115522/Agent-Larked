@@ -103,3 +103,51 @@ export function heartbeat(db: Database.Database, runtimeId: string): { status: s
 
   return { status: 'online', last_heartbeat_at: now };
 }
+
+/** Heartbeat TTL: runtimes that haven't sent a heartbeat within this period are considered stale. */
+const STALE_RUNTIME_TTL_MS = 60_000; // 2x default heartbeat interval (30s)
+
+/**
+ * Mark runtimes as offline if they haven't sent a heartbeat within the TTL.
+ * Returns IDs of runtimes that were marked stale.
+ */
+export function cleanupStaleRuntimes(db: Database.Database): string[] {
+  const cutoff = new Date(Date.now() - STALE_RUNTIME_TTL_MS).toISOString();
+  const stale = db.prepare(
+    "SELECT id FROM agent_runtimes WHERE status = 'online' AND last_heartbeat_at < ?",
+  ).all(cutoff) as { id: string }[];
+
+  if (stale.length === 0) return [];
+
+  const ids = stale.map((r) => r.id);
+  const placeholders = ids.map(() => '?').join(',');
+  db.prepare(`UPDATE agent_runtimes SET status = 'offline' WHERE id IN (${placeholders})`).run(...ids);
+
+  // Also mark active spawns on these runtimes as error
+  for (const id of ids) {
+    db.prepare(
+      "UPDATE agent_spawns SET status = 'error' WHERE runtime_id = ? AND status = 'active'",
+    ).run(id);
+  }
+
+  return ids;
+}
+
+/**
+ * Find an available online runtime for spawning.
+ * Automatically cleans up stale runtimes first.
+ * Returns the runtime ID or null if none available.
+ */
+export function selectAvailableRuntime(db: Database.Database): string | null {
+  cleanupStaleRuntimes(db);
+
+  const runtime = db.prepare(`
+    SELECT r.id FROM agent_runtimes r
+    WHERE r.status = 'online'
+    AND (SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status IN ('active', 'spawning')) < r.max_agents
+    ORDER BY r.last_heartbeat_at DESC
+    LIMIT 1
+  `).get() as { id: string } | undefined;
+
+  return runtime?.id ?? null;
+}

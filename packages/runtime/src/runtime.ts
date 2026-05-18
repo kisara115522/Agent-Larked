@@ -152,7 +152,7 @@ export class FlockAgentRuntime {
       event.prompt ??
       `You are agent ${event.agent_id}. You have been spawned in the Flock system. Introduce yourself in the room.`;
 
-    await this.runner.spawn(event.agent_id, prompt, event.agent_token);
+    await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name);
   }
 
   private async handleWake(event: CallbackEvent): Promise<void> {
@@ -164,7 +164,7 @@ export class FlockAgentRuntime {
       prompt = `${event.sender_name} said: "${event.excerpt}"\n\n${prompt}`;
     }
 
-    await this.runner.spawn(event.agent_id, prompt, event.agent_token);
+    await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name);
   }
 
   private async handleStop(event: CallbackEvent): Promise<void> {
@@ -176,15 +176,21 @@ export class FlockAgentRuntime {
     activityType: string,
     detail: string,
     metadata: Record<string, unknown> = {},
+    agentToken?: string,
   ): Promise<void> {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (agentToken) {
+        headers['Authorization'] = `Bearer ${agentToken}`;
+      }
+
       const res = await fetch(
         `${this.config.flockServerUrl}/agents/${agentId}/activity`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             activity_type: activityType,
             detail,

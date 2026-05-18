@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { registerAgent, updateProfile, searchAgents, getProfile, cleanupStaleOnlineAgents, regenerateToken } from '../services/identity.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
@@ -8,6 +9,7 @@ import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { notifyRuntimeSpawn, notifyRuntimeStop } from '../services/callback.js';
+import { selectAvailableRuntime } from '../services/runtime.js';
 import { sendDirectMessage } from '../services/direct-chat.js';
 
 export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
@@ -133,48 +135,35 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       // Create spawn record
       const spawnId = crypto.randomUUID();
       const now = new Date().toISOString();
-      let runtimeId = req.body.runtime_id ?? null;
       const prompt = req.body.prompt ?? null;
 
-      // Auto-select an online runtime if none specified
-      if (!runtimeId) {
-        const runtime = db.prepare(`
-          SELECT r.id FROM agent_runtimes r
-          WHERE r.status = 'online'
-          AND (SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status = 'active') < r.max_agents
-          ORDER BY r.last_heartbeat_at DESC
-          LIMIT 1
-        `).get() as { id: string } | undefined;
-        if (runtime) {
-          runtimeId = runtime.id;
-        }
-      }
+      // Select an available runtime (auto-cleans stale runtimes first)
+      const runtimeId = req.body.runtime_id ?? selectAvailableRuntime(db);
 
       if (!runtimeId) {
         throw new ServerError(ErrorCode.VALIDATION_ERROR, 'No online runtime available. Start a runtime daemon first.', false, 400);
       }
 
+      // Use 'spawning' status — runtime will update to 'active' once process starts
       db.prepare(`
         INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
-        VALUES (?, ?, ?, 'active', ?, ?, ?)
+        VALUES (?, ?, ?, 'spawning', ?, ?, ?)
       `).run(spawnId, agentId, runtimeId, now, now, prompt);
 
-      // Update agent status
-      db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
+      // Don't mark profile as active yet — wait for runtime confirmation
+      db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
 
       if (eventBus) {
-        eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
+        eventBus.emitAgentStatus({ agent_id: agentId, status: 'spawning' });
       }
 
       // Generate a new token for this spawn session
       const { token } = regenerateToken(db, agentId);
 
       // Notify runtime to actually spawn the agent process
-      if (runtimeId) {
-        notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token);
-      }
+      notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token);
 
-      res.status(201).json({ spawn_id: spawnId, status: 'active', agent_token: token });
+      res.status(201).json({ spawn_id: spawnId, status: 'spawning', agent_token: token });
     } catch (err) {
       next(err);
     }
@@ -228,43 +217,33 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
 
       const now = new Date().toISOString();
       const prompt = req.body.prompt ?? null;
-      let runtimeId = req.body.runtime_id ?? null;
 
-      // Auto-select an online runtime if none specified
+      // Select an available runtime (auto-cleans stale runtimes first)
+      const runtimeId = req.body.runtime_id ?? selectAvailableRuntime(db);
+
       if (!runtimeId) {
-        const runtime = db.prepare(`
-          SELECT r.id FROM agent_runtimes r
-          WHERE r.status = 'online'
-          AND (SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status = 'active') < r.max_agents
-          ORDER BY r.last_heartbeat_at DESC
-          LIMIT 1
-        `).get() as { id: string } | undefined;
-        if (runtime) {
-          runtimeId = runtime.id;
-        }
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'No online runtime available. Start a runtime daemon first.', false, 400);
       }
 
       // Create new spawn record for the wake
       const spawnId = crypto.randomUUID();
       db.prepare(`
         INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
-        VALUES (?, ?, ?, 'active', ?, ?, ?)
+        VALUES (?, ?, ?, 'spawning', ?, ?, ?)
       `).run(spawnId, agentId, runtimeId, now, now, prompt);
 
-      // Update agent status
-      db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
+      // Don't mark profile as active yet — wait for runtime confirmation
+      db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
 
       if (eventBus) {
-        eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
+        eventBus.emitAgentStatus({ agent_id: agentId, status: 'spawning' });
       }
 
       // Generate a new token for this wake session
       const { token } = regenerateToken(db, agentId);
 
       // Notify runtime to wake the agent
-      if (runtimeId) {
-        notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token);
-      }
+      notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token);
 
       // Log wake event
       db.prepare(`
@@ -272,7 +251,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         VALUES (?, ?, ?, 'manual', ?, ?)
       `).run(crypto.randomUUID(), agentId, req.humanId!, prompt, now);
 
-      res.json({ ok: true });
+      res.json({ ok: true, status: 'spawning' });
     } catch (err) {
       next(err);
     }
@@ -350,10 +329,25 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
     }
   });
 
-  // POST /agents/:id/activity — log agent activity (for Runtime daemon to report, no auth required)
+  // POST /agents/:id/activity — log agent activity (requires agent token auth)
   router.post('/:id/activity', (req, res, next) => {
     try {
       const agentId = req.params.id as string;
+
+      // Verify agent token
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Bearer token required' } });
+        return;
+      }
+      const token = authHeader.slice(7);
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const profile = db.prepare('SELECT id FROM profiles WHERE id = ? AND token_hash = ?').get(agentId, tokenHash) as { id: string } | undefined;
+      if (!profile) {
+        res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } });
+        return;
+      }
+
       const { activity_type, detail, metadata } = req.body;
       if (!activity_type) {
         res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'activity_type is required' } });
@@ -365,6 +359,24 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         INSERT INTO agent_activity_logs (id, agent_id, activity_type, detail, metadata, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(id, agentId, activity_type, detail ?? '', JSON.stringify(metadata ?? {}), now);
+
+      // Handle status changes from runtime — update spawn and profile status
+      if (activity_type === 'status_change' && metadata) {
+        const meta = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+        if (detail === 'Agent completed' || detail === 'Agent stopped') {
+          db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status IN ('active', 'spawning')").run(now, agentId);
+          db.prepare("UPDATE profiles SET status = 'dormant', updated_at = ? WHERE id = ?").run(now, agentId);
+          if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'dormant' });
+        } else if (detail === 'Agent active') {
+          db.prepare("UPDATE agent_spawns SET status = 'active', last_active_at = ? WHERE agent_id = ? AND status = 'spawning'").run(now, agentId);
+          db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
+          if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
+        }
+      } else if (activity_type === 'error') {
+        db.prepare("UPDATE agent_spawns SET status = 'error', last_active_at = ? WHERE agent_id = ? AND status IN ('active', 'spawning')").run(now, agentId);
+        db.prepare("UPDATE profiles SET status = 'error', updated_at = ? WHERE id = ?").run(now, agentId);
+        if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'error' });
+      }
 
       if (eventBus) {
         eventBus.emitWorkflowEvent({ agent_id: agentId, activity_type, detail: detail ?? '', metadata: metadata ?? {}, created_at: now });
