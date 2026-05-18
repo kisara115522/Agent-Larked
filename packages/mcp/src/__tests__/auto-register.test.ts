@@ -121,16 +121,16 @@ describe('identity file persistence', () => {
     expect(second.name).toBe(first.name);
   });
 
-  it('identity file takes priority over name lookup', () => {
+  it('explicit name lookup takes priority over identity file', () => {
     // Register agent A — writes identity file
     const agentA = resolveAgentId(db, 'PriorityA');
     // Reset cache, try to resolve with different name
     resetAgentCache();
     delete process.env.AGENT_ID;
-    // Should return A from identity file, ignoring the new name
+    // Should return PriorityB by name lookup, NOT agent A from identity file
     const agentB = resolveAgentId(db, 'PriorityB');
-    expect(agentB.id).toBe(agentA.id);
-    expect(agentB.name).toBe(agentA.name);
+    expect(agentB.name).toBe('PriorityB');
+    expect(agentB.id).not.toBe(agentA.id);
   });
 
   it('re-registers when identity file points to deleted agent', () => {

@@ -35,6 +35,12 @@ messageBus.setMaxListeners(100);
 const roomSequences = new Map<string, number>();
 const directMessageOrders = new Map<string, number>();
 
+/** Reset global sequence baselines. For testing only. */
+export function resetSequenceBaselines(): void {
+  roomSequences.clear();
+  directMessageOrders.clear();
+}
+
 /** Called by flock_post after sending a message to notify waiters */
 export function emitNewMessage(roomId: string, message: {
   id: string;

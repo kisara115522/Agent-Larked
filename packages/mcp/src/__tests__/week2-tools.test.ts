@@ -7,7 +7,7 @@ import { registerIdentityTools } from '../tools/identity.js';
 import { registerRoomTools } from '../tools/room.js';
 import { registerMessagingTools } from '../tools/messaging.js';
 import { registerReactionTools } from '../tools/reactions.js';
-import { registerWaitTool, emitNewMessage } from '../tools/subscribe.js';
+import { registerWaitTool, emitNewMessage, resetSequenceBaselines } from '../tools/subscribe.js';
 import { resetAgentCache, resolveAgentId } from '../db.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -43,6 +43,7 @@ beforeAll(async () => {
 
   // Register an agent and create a room for tests
   resetAgentCache();
+  resetSequenceBaselines();
   const regResult = await client.callTool({
     name: 'flock_agent_create',
     arguments: { name: 'Week2Bot', capabilities: ['testing'] },
@@ -196,21 +197,50 @@ describe('flock_thread tool', () => {
 
 describe('flock_wait', () => {
   it('returns existing new messages immediately (DB check)', async () => {
-    // Send a message first (creates new sequence above baseline)
-    await client.callTool({
+    // Reset sequence baselines so the test starts clean
+    resetSequenceBaselines();
+
+    // Register a second agent and have it post a message
+    const waitBotResult = await client.callTool({
       name: 'flock_agent_create',
       arguments: { name: 'WaitBot' },
     });
+    const waitBotId = JSON.parse((waitBotResult.content as Array<{ type: string; text: string }>)[0].text).id;
+
+    // Switch to WaitBot
     resetAgentCache();
-    resolveAgentId(db, 'WaitBot');
+    const resolved = resolveAgentId(db, 'WaitBot');
+    expect(resolved.id).toBe(waitBotId);
+
+    // WaitBot joins room
     await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
-    await client.callTool({ name: 'flock_post', arguments: { room_id: roomId, content: 'Pre-existing message for wait' } });
 
-    // Switch back to original agent
+    // Verify WaitBot is in room_members
+    const members = db.prepare('SELECT agent_id FROM room_members WHERE room_id = ?').all(roomId) as { agent_id: string }[];
+    expect(members.some(m => m.agent_id === waitBotId)).toBe(true);
+
+    // WaitBot posts a message
+    const postResult = await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'Pre-existing message for wait' },
+    });
+    const postParsed = JSON.parse((postResult.content as Array<{ type: string; text: string }>)[0].text);
+    expect(postParsed.sequence).toBeGreaterThan(0);
+
+    // Verify message exists in DB
+    const msgs = db.prepare('SELECT from_agent, content FROM messages WHERE room_id = ?').all(roomId) as { from_agent: string; content: string }[];
+    expect(msgs.some(m => m.from_agent === waitBotId && m.content === 'Pre-existing message for wait')).toBe(true);
+
+    // Switch back to Week2Bot
     resetAgentCache();
-    resolveAgentId(db, 'Week2Bot');
+    const week2Resolved = resolveAgentId(db, 'Week2Bot');
+    expect(week2Resolved.id).toBe(agentId);
 
-    // flock_wait should find it via DB check (no blocking needed)
+    // Verify Week2Bot is in room_members
+    const week2Members = db.prepare('SELECT agent_id FROM room_members WHERE room_id = ? AND agent_id = ?').all(roomId, agentId) as { agent_id: string }[];
+    expect(week2Members.length).toBe(1);
+
+    // flock_wait should find WaitBot's message via DB check (no blocking needed)
     const waitResult = await client.callTool({
       name: 'flock_wait',
       arguments: { timeout_seconds: 3 },
@@ -219,6 +249,7 @@ describe('flock_wait', () => {
     const text = (waitResult.content as Array<{ type: string; text: string }>)[0].text;
     const parsed = JSON.parse(text);
     expect(parsed.messages.length).toBeGreaterThanOrEqual(1);
+    expect(parsed.messages.some((m: { content: string }) => m.content === 'Pre-existing message for wait')).toBe(true);
   });
 
   it('blocks and returns when new message arrives via event', async () => {

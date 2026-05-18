@@ -89,6 +89,26 @@ export function resolveAgentId(database: Database.Database, name?: string): { id
     return { id: cachedAgentId, name: cachedAgentName };
   }
 
+  // When a name is explicitly provided, look up by name directly (skip identity file).
+  // The identity file stores the "current process" identity, not arbitrary named agents.
+  if (name) {
+    const existingByName = database.prepare('SELECT id FROM profiles WHERE name = ?').get(name) as { id: string } | undefined;
+    if (existingByName) {
+      cachedAgentId = existingByName.id;
+      cachedAgentName = name;
+      process.env.AGENT_ID = existingByName.id;
+      saveIdentityFile({ id: existingByName.id, name, token: '' });
+      return { id: existingByName.id, name };
+    }
+    // Not found by name — auto-register
+    const result = registerAgent(database, { name });
+    cachedAgentId = result.id;
+    cachedAgentName = name;
+    process.env.AGENT_ID = result.id;
+    saveIdentityFile({ id: result.id, name, token: result.token });
+    return { id: result.id, name };
+  }
+
   // 1. Check AGENT_TOKEN env var (set by Runtime when spawning a new session)
   //    This takes priority over the identity file to prevent identity confusion
   //    when multiple agents share the same ~/.flock/ directory.
@@ -122,7 +142,7 @@ export function resolveAgentId(database: Database.Database, name?: string): { id
   }
 
   // 3. Lookup by name in DB
-  const agentName = name || process.env.AGENT_NAME || generateAgentName();
+  const agentName = process.env.AGENT_NAME || generateAgentName();
   const existingByName = database.prepare('SELECT id FROM profiles WHERE name = ?').get(agentName) as { id: string } | undefined;
   if (existingByName) {
     cachedAgentId = existingByName.id;
