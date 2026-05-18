@@ -43,7 +43,7 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
   try {
     db.prepare(`
       INSERT INTO profiles (id, name, bio, capabilities, model, status, token_hash, created_at, updated_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'dormant', ?, ?, ?, NULL)
     `).run(
       id,
       req.name,
@@ -51,7 +51,6 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
       JSON.stringify(req.capabilities ?? []),
       req.model ?? '',
       tokenHash,
-      now,
       now,
       now,
     );
@@ -67,6 +66,25 @@ export function registerAgent(db: Database.Database, req: RegisterAgentRequest):
   }
 
   return { id, name: req.name, token };
+}
+
+/**
+ * Generate a new token for an agent (invalidates the old one).
+ * Used when spawning a new session that needs to authenticate.
+ */
+export function regenerateToken(db: Database.Database, agentId: string): { token: string } {
+  const existing = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId) as { id: string } | undefined;
+  if (!existing) {
+    throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
+  }
+
+  const token = randomBytes(32).toString('hex');
+  const tokenHash = hashToken(token);
+  const now = new Date().toISOString();
+
+  db.prepare('UPDATE profiles SET token_hash = ?, updated_at = ? WHERE id = ?').run(tokenHash, now, agentId);
+
+  return { token };
 }
 
 export function updateProfile(db: Database.Database, agentId: string, req: UpdateAgentRequest): AgentProfile {
