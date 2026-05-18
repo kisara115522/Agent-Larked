@@ -44,7 +44,7 @@ beforeAll(async () => {
   // Register an agent and create a room for tests
   resetAgentCache();
   const regResult = await client.callTool({
-    name: 'flock_register',
+    name: 'flock_agent_create',
     arguments: { name: 'Week2Bot', capabilities: ['testing'] },
   });
   const regText = (regResult.content as Array<{ type: string; text: string }>)[0].text;
@@ -88,7 +88,7 @@ describe('flock_post tool', () => {
   it('sends a message with mentions', async () => {
     // Register another agent to mention
     const regResult = await client.callTool({
-      name: 'flock_register',
+      name: 'flock_agent_create',
       arguments: { name: 'MentionBot' },
     });
     const mentionedId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id;
@@ -198,7 +198,7 @@ describe('flock_wait', () => {
   it('returns existing new messages immediately (DB check)', async () => {
     // Send a message first (creates new sequence above baseline)
     await client.callTool({
-      name: 'flock_register',
+      name: 'flock_agent_create',
       arguments: { name: 'WaitBot' },
     });
     resetAgentCache();

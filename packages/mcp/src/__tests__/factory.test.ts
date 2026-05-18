@@ -63,8 +63,8 @@ describe('createMcpServer factory', () => {
     const toolNames = tools.tools.map((t) => t.name);
 
     // Should have tools from all registered groups
-    expect(toolNames).toContain('flock_register');
-    expect(toolNames).toContain('flock_update');
+    expect(toolNames).toContain('flock_agent_create');
+    expect(toolNames).toContain('flock_agent_update');
     expect(toolNames).toContain('flock_room_create');
     expect(toolNames).toContain('flock_room_list');
     expect(toolNames).toContain('flock_post');
