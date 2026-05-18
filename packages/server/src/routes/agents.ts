@@ -8,6 +8,7 @@ import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { notifyRuntimeSpawn, notifyRuntimeStop } from '../services/callback.js';
+import { sendDirectMessage } from '../services/direct-chat.js';
 
 export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
   const router = Router();
@@ -364,6 +365,32 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       }
 
       res.status(201).json({ id, agent_id: agentId, activity_type, detail, metadata, created_at: now });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /agents/:id/dm — send a direct message to an agent
+  router.post('/:id/dm', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
+    try {
+      const result = sendDirectMessage(db, req.agentId!, req.params.id as string, {
+        content: req.body.content,
+        idempotency_key: req.body.idempotency_key ?? crypto.randomUUID(),
+      });
+      if (eventBus) {
+        eventBus.emitDirectMessage(
+          {
+            message_id: result.id,
+            from: req.agentId!,
+            to: req.params.id as string,
+            content: req.body.content,
+            sequence: result.sequence,
+          },
+          req.params.id as string,
+          req.agentId!,
+        );
+      }
+      res.status(201).json(result);
     } catch (err) {
       next(err);
     }
