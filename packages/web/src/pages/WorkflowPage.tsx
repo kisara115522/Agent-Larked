@@ -52,6 +52,7 @@ export function WorkflowPage() {
   const { subscribe } = useSSE();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [rooms, setRooms] = useState<Array<{ id: string; name: string }>>([]);
   const [runtimes, setRuntimes] = useState<Runtime[]>([]);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
   const [showSpawn, setShowSpawn] = useState(false);
@@ -61,15 +62,17 @@ export function WorkflowPage() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [agentsRes, tasksRes, runtimesRes, activityRes, usageRes] = await Promise.all([
+      const [agentsRes, tasksRes, roomsRes, runtimesRes, activityRes, usageRes] = await Promise.all([
         get<{ agents: Agent[] }>('/agents', token),
         get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
+        get<{ rooms: Array<{ id: string; name: string }> }>('/rooms', token).catch(() => ({ rooms: [] })),
         get<{ runtimes: Runtime[] }>('/runtimes', token).catch(() => ({ runtimes: [] })),
         get<{ logs: Array<{ id: string; agent_id: string; agent_name?: string; activity_type: string; detail?: string; created_at: string }> }>('/activity', token).catch(() => ({ logs: [] })),
         get<{ usage: Array<{ agent_id: string; input_tokens: number; output_tokens: number }> }>('/token-usage', token).catch(() => ({ usage: [] })),
       ]);
       setAgents(agentsRes.agents);
       setTasks(tasksRes.tasks);
+      setRooms(roomsRes.rooms);
       setRuntimes(runtimesRes.runtimes);
       // Convert activity log to workflow events
       const converted: WorkflowEvent[] = activityRes.logs.slice(0, 30).map(ev => ({
@@ -187,6 +190,7 @@ export function WorkflowPage() {
         <SpawnModal
           agents={agents}
           runtimes={runtimes}
+          rooms={rooms}
           onClose={() => setShowSpawn(false)}
           onSpawned={load}
         />

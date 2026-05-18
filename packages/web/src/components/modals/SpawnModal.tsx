@@ -18,15 +18,18 @@ interface Runtime {
   max_agents: number;
 }
 
-export function SpawnModal({ agents, runtimes, onClose, onSpawned }: {
+export function SpawnModal({ agents, runtimes, rooms, defaultRoomId, onClose, onSpawned }: {
   agents: Agent[];
   runtimes: Runtime[];
+  rooms?: Array<{ id: string; name: string }>;
+  defaultRoomId?: string;
   onClose: () => void;
   onSpawned: () => void;
 }) {
   const { token, human } = useAuth();
   const [selectedAgent, setSelectedAgent] = useState(agents[0]?.id || '');
   const [selectedRuntime, setSelectedRuntime] = useState('auto');
+  const [selectedRoom, setSelectedRoom] = useState(defaultRoomId || '');
   const [prompt, setPrompt] = useState('');
   const [spawning, setSpawning] = useState(false);
   const { toast } = useToast();
@@ -38,6 +41,7 @@ export function SpawnModal({ agents, runtimes, onClose, onSpawned }: {
       await post(`/agents/${selectedAgent}/spawn`, token, {
         runtime_id: selectedRuntime === 'auto' ? undefined : selectedRuntime,
         prompt: prompt.trim() || undefined,
+        room_id: selectedRoom || undefined,
       });
       toast('Agent 启动成功', 'success');
       onSpawned();
@@ -72,6 +76,21 @@ export function SpawnModal({ agents, runtimes, onClose, onSpawned }: {
             ))}
           </select>
         </div>
+
+        {rooms && rooms.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-xs text-text-muted mb-1">目标 Room（可选）</label>
+            <select value={selectedRoom} onChange={e => setSelectedRoom(e.target.value)} className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text focus:border-accent">
+              <option value="">无房间上下文</option>
+              {rooms.map(r => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+            <div className="text-[11px] text-text-dim mt-1">
+              {selectedRoom ? 'Agent 将被引导加入此 Room' : 'Agent 启动后不会自动加入任何 Room'}
+            </div>
+          </div>
+        )}
 
         <div className="mb-4">
           <label className="block text-xs text-text-muted mb-1">初始 Prompt</label>
