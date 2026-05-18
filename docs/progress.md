@@ -168,6 +168,50 @@
   - SDK + CLI + Server + Web 全部编译通过，0 TS 错误
   - 200 server tests 全通过
 
+## 2026-05-18 codex 验收记录
+
+> 当前 v0.5 不能按“全部完成”交付，需先关闭以下阻断项。问题已同步到 `docs/backlog.md` 并在 `flock讨论` 分配给对应 agent。
+
+### 初始基线
+- v2 旧进程已停止，v1 保持运行：v1 server `:3000`、web `:5173` 未关闭；v2 server/web 重新用于验收运行在 `:3001` / `:5174`。
+- 在 cc001/cc003 后续修复开始前，`npm run typecheck -w @flock/server`、`npm run typecheck -w @flock/web`、`npm run typecheck -w @flock/mcp` 均通过。
+- 在 cc001/cc003 后续修复开始前，`npm run build --workspaces --if-present` 通过。
+- `npm test -w @flock/server`：210 tests passed。
+- `npm test -w @flock/agent-runtime`：22 tests passed。
+- `npm test -w @flock/sdk`：34 tests passed。
+- `npm test -w @flock/mcp` 初次失败后，cc002 修复并由 codex 复跑确认：10 files / 55 tests passed（commit `40cbbce`）。
+
+### 当前回归
+- cc001/cc003 开始修复后，`npm run typecheck` 当前失败：server 将 `spawning` 写入不支持该值的 `AgentStatus`；web `SpawnModal` 留下未使用 `selectedRoom/setSelectedRoom`。已回报到 `flock讨论`，需先恢复编译绿色。
+
+### 阻断项
+- Runtime stale online：`/runtimes` 显示 `localhost:4000` online，但本机无 `:4000` 监听；此时 spawn 仍返回 201 并把 agent 标记 active。
+- @mention/broadcast wake callback 类型不匹配：server 发送 `mention` / `room_activity`，Runtime 只处理 `spawn` / `wake` / `stop`。
+- Dormant wake 状态模型矛盾：唤醒查询要求 active spawn，但 stop 会把 spawn 置 stopped，真正 dormant agent 可能无法被唤醒。
+- Runtime runner 未兑现 proposal 的 Agent SDK `query()` / resume / tool boundary 注入；当前是 CLI child process。
+- Runtime identity/status 回写不可靠：profile lookup 无 token、进程退出只写 activity、不回写 profile/spawn，activity 端点无鉴权。
+- GUI WakePage 调用不存在的 `/rooms/:id/broadcast-wake`；wake history 渲染后端不存在的 `status` 字段。
+- SpawnModal 的目标 Room 被 server 忽略，流程预览写 Agent SDK query() 与当前实现不一致。
+- Runtime/Workflow 页面存在硬编码假端口、静默吞 API 错误、runtime 指标语义不准。
+- root `npm run typecheck` 原因已从 root tsconfig 问题变为 workspace 真实红灯；根命令应保留并暴露这些失败。✅ cc002 已修
+- README/API/Schema/MCP 文档仍混有旧系统、旧端口、已删除工具和未实现端点。✅ cc002 已修
+
+### 分工
+- cc001：Server + Runtime 阻断项（stale runtime、spawn/wake 假成功、callback contract、dormant wake 模型、runner/session/status/auth）。
+- cc003：GUI 阻断项（WakePage、SpawnModal、Runtime/Workflow 页面、DESIGN.md 缺失确认）。
+- cc002：MCP + docs/build 对齐（root typecheck、README/API/Schema/MCP 文档、dead exports、MCP spawn token contract）。
+
+### cc002 batch 4 完成 — 2026-05-18
+
+- **Task A**: root `typecheck` 改为 `npm run typecheck --workspaces --if-present`（commit `6dfa859`）
+- **Task C**: `flock_agent_spawn` 补 token 传递 + 'spawning' 状态 + stop/status 兼容（commit `0296d2f`）
+- **Task B**: 文档全面对齐 v0.5:
+  - MCP README: 25 工具完整列表（4 类：Identity/Lifecycle、Rooms/Messaging、Direct Chat、Notifications、Tasks）
+  - root README: 移除 follows/broadcasts、更新 MCP 工具名、加 runtime 包、更新路由组、human 登录流程
+  - api.md: `/admin/runtimes` → `/runtimes`、修正认证方式、`/projects/:room_id/status` 标记为 MCP-only
+  - schema.md: rooms/direct_chats/direct_messages/direct_idempotency_keys 移除 FK 约束
+  - server package.json: 移除 dead exports（broadcast/follow）
+
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
 2. **v0.2** — MCP Server（4 周）— **最高优先级**，解决"agent 无法感知新消息"的核心问题 ✅

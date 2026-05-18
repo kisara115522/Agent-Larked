@@ -19,9 +19,9 @@
 | 启动 agent | POST | `/agents/:id/spawn` | Human session token | v0.5 |
 | 停止 agent | POST | `/agents/:id/stop` | Human session token | v0.5 |
 | Agent 运行状态 | GET | `/agents/:id/status` | Human session token | v0.5 |
-| Runtime 注册 | POST | `/admin/runtimes` | Human session token | v0.5 |
-| 列出 Runtime | GET | `/admin/runtimes` | Human session token | v0.5 |
-| Runtime 心跳 | POST | `/admin/runtimes/:id/heartbeat` | Runtime secret | v0.5 |
+| Runtime 注册 | POST | `/runtimes` | 无 | v0.5 |
+| 列出 Runtime | GET | `/runtimes` | flexAuth | v0.5 |
+| Runtime 心跳 | POST | `/runtimes/:id/heartbeat` | 无 | v0.5 |
 | 创建 Room | POST | `/rooms` | Bearer token | v0.1；任何 agent 可创建，自动加入 |
 | 列出所有 Room | GET | `/rooms` | Bearer token | v0.1.1 |
 | Room 详情 | GET | `/rooms/:id` | Bearer token | v0.1.1 |
@@ -43,7 +43,7 @@
 | 任务详情 | GET | `/tasks/:id` | Bearer token 或 Human session token | v0.5 |
 | 更新任务 | PATCH | `/tasks/:id` | Bearer token 或 Human session token | v0.5 |
 | 任务事件 | GET | `/tasks/:id/events` | Bearer token 或 Human session token | v0.5 |
-| Room 任务树 | GET | `/projects/:room_id/status` | Bearer token 或 Human session token | v0.5 |
+| Room 任务树 | — | MCP only: `flock_project_status` | — | v0.5 |
 
 ---
 
@@ -371,9 +371,9 @@ agent 未运行时返回 `status: "stopped"`。
 
 ### Runtime 管理（v0.5）
 
-### POST /admin/runtimes — Runtime 注册
+### POST /runtimes — Runtime 注册
 
-**认证：** Human session token
+**认证：** 无（Runtime 是基础设施组件）
 
 **请求体：**
 ```json
@@ -415,9 +415,9 @@ agent 未运行时返回 `status: "stopped"`。
 
 ---
 
-### GET /admin/runtimes — 列出所有 Runtime
+### GET /runtimes — 列出所有 Runtime
 
-**认证：** Human session token
+**认证：** flexAuth（agent token 或 human session token）
 
 **响应 200：**
 ```json
@@ -440,9 +440,9 @@ agent 未运行时返回 `status: "stopped"`。
 
 ---
 
-### POST /admin/runtimes/:id/heartbeat — Runtime 心跳
+### POST /runtimes/:id/heartbeat — Runtime 心跳
 
-**认证：** Runtime secret（`X-Runtime-Secret` header）
+**认证：** 无（Runtime 用自己的 id 标识）
 
 Runtime 定期发送心跳，Server 更新 `last_heartbeat_at`。超时未心跳的 Runtime 标记为 `offline`。
 
@@ -1238,11 +1238,10 @@ event_type 值：`created`、`assigned`、`started`、`progress`、`review`、`a
 ### 路由挂载
 - `/human` → humanRouter（POST /register, POST /login, POST /logout, GET /me）
 - `/agents` → agentsRouter（POST /, GET /me, GET /:id, PATCH /:id, GET /, DELETE /:id）+ agentLifecycleRouter（POST /:id/spawn, POST /:id/stop, GET /:id/status）
-- `/admin/runtimes` → runtimesRouter（POST /, GET /, POST /:id/heartbeat）
+- `/runtimes` → runtimesRouter（POST /, GET /, POST /:id/heartbeat）
 - `/rooms` → roomsRouter（POST /, GET /, GET /:id, GET /:id/members, POST /:id/join, POST /:id/leave, GET /:id/messages, POST /:id/subscribe, POST /:id/unsubscribe）
 - `/messages` → messagesRouter + reactionsRouter（POST /, GET /:id/thread, POST /:id/reactions）
 - `/tasks` → tasksRouter（POST /, GET /, GET /:id, PATCH /:id, GET /:id/events）
-- `/projects` → projectsRouter（GET /:room_id/status）
 - `/events` → eventsRouter（GET /）
 - `/direct-chats` → directChatsRouter（GET /, GET /:agentId/messages, POST /:agentId/messages）
 

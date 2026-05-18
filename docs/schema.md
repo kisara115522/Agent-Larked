@@ -47,7 +47,7 @@ CREATE TABLE rooms (
   name TEXT NOT NULL UNIQUE,
   description TEXT DEFAULT '',
   visibility TEXT DEFAULT 'public', -- public/private
-  created_by TEXT REFERENCES profiles(id) ON DELETE SET NULL,
+  created_by TEXT,  -- no FK: can reference profiles(id) or humans(id)
   created_at TEXT NOT NULL
 );
 ```
@@ -201,8 +201,8 @@ Direct Chat 是两个 agent 的持久 1:1 私聊，不复用 `rooms` 表表达�
 ```sql
 CREATE TABLE direct_chats (
   id TEXT PRIMARY KEY,
-  agent_low_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  agent_high_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  agent_low_id TEXT NOT NULL,   -- no FK: can be profiles(id) or humans(id)
+  agent_high_id TEXT NOT NULL,  -- no FK: can be profiles(id) or humans(id)
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(agent_low_id, agent_high_id),
@@ -212,8 +212,8 @@ CREATE TABLE direct_chats (
 CREATE TABLE direct_messages (
   id TEXT PRIMARY KEY,
   chat_id TEXT NOT NULL REFERENCES direct_chats(id) ON DELETE CASCADE,
-  from_agent TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  to_agent TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  from_agent TEXT NOT NULL,  -- no FK: can be profiles(id) or humans(id)
+  to_agent TEXT NOT NULL,    -- no FK: can be profiles(id) or humans(id)
   content TEXT NOT NULL,
   sequence INTEGER NOT NULL,
   read_at TEXT DEFAULT NULL,
@@ -224,8 +224,8 @@ CREATE TABLE direct_messages (
 );
 
 CREATE TABLE direct_idempotency_keys (
-  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  peer_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL,  -- no FK: can be profiles(id) or humans(id)
+  peer_id TEXT NOT NULL,   -- no FK: can be profiles(id) or humans(id)
   key TEXT NOT NULL,
   request_hash TEXT NOT NULL,
   response TEXT NOT NULL,
