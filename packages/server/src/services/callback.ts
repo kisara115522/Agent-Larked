@@ -5,6 +5,8 @@ export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
   agent_token?: string;
   agent_name?: string;
+  agent_model?: string;
+  agent_provider?: unknown;
   prompt?: string;
   trigger_type?: string;
   room_id?: string;
@@ -22,6 +24,11 @@ interface RuntimeRow {
   callback_url: string;
   callback_secret: string | null;
   status: string;
+}
+
+interface AgentRuntimeConfig {
+  model?: string;
+  provider?: unknown;
 }
 
 /** Log a wake event to the wake_events table */
@@ -212,14 +219,17 @@ export function notifyRuntimeSpawn(
     return;
   }
 
-  // Fetch agent name so runtime doesn't need a separate API call
-  const agent = db.prepare('SELECT name FROM profiles WHERE id = ?').get(agentId) as { name: string } | undefined;
+  // Fetch agent name/config so runtime doesn't need separate API calls.
+  const agent = db.prepare('SELECT name, model FROM profiles WHERE id = ?').get(agentId) as { name: string; model: string | null } | undefined;
+  const config = getAgentRuntimeConfig(db, agentId);
 
   const event: RuntimeCallbackEvent = {
     type: 'spawn',
     agent_token: token ?? undefined,
     prompt: prompt ?? undefined,
     agent_name: agent?.name,
+    agent_model: config.model ?? agent?.model ?? undefined,
+    agent_provider: config.provider,
     room_id: roomId,
     room_name: roomName,
   };
@@ -227,6 +237,34 @@ export function notifyRuntimeSpawn(
   sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
     console.error(`[callback] Failed to notify runtime ${runtimeId} to spawn agent ${agentId}:`, err);
   });
+}
+
+function getAgentRuntimeConfig(db: Database.Database, agentId: string): AgentRuntimeConfig {
+  const rows = db.prepare(`
+    SELECT config_type, config_value
+    FROM agent_configs
+    WHERE agent_id = ? AND config_type IN ('model', 'provider')
+  `).all(agentId) as Array<{ config_type: string; config_value: string }>;
+
+  const config: AgentRuntimeConfig = {};
+  for (const row of rows) {
+    const value = parseConfigValue(row.config_value);
+    if (row.config_type === 'model' && typeof value === 'string' && value.trim()) {
+      config.model = value.trim();
+    }
+    if (row.config_type === 'provider' && value !== null && value !== undefined && value !== '') {
+      config.provider = value;
+    }
+  }
+  return config;
+}
+
+function parseConfigValue(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
 }
 
 /**

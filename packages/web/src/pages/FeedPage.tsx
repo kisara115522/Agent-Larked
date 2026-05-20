@@ -12,6 +12,8 @@ interface Room {
   id: string;
   name: string;
   member_count: number;
+  visibility?: string;
+  created_at?: string;
 }
 
 interface FeedItem extends Message {
@@ -24,6 +26,7 @@ export function FeedPage() {
   const { totalUnread } = useMentions();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<FeedItem[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
 
@@ -32,6 +35,7 @@ export function FeedPage() {
     try {
       // 1. Get all rooms
       const { rooms } = await get<{ rooms: Room[] }>('/rooms', token);
+      setRooms(rooms);
       if (rooms.length === 0) {
         setMessages([]);
         return;
@@ -60,7 +64,8 @@ export function FeedPage() {
       allMessages.sort((a, b) => b.created_at.localeCompare(a.created_at));
       setMessages(allMessages.slice(0, 50));
     } catch {
-      // ignore
+      setMessages([]);
+      setRooms([]);
     } finally {
       setLoading(false);
     }
@@ -150,18 +155,45 @@ export function FeedPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-12 pb-8">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-[400px] text-center">
-            <div className="relative w-20 h-20 mb-6">
-              <div className="absolute inset-0 rounded-full border border-border" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-dim">
-                  <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
-                </svg>
-              </div>
+          rooms.length > 0 ? (
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
+              {rooms.map((room, index) => (
+                <button
+                  key={room.id}
+                  onClick={() => navigate(`/rooms/${room.id}`)}
+                  className="text-left bg-surface border border-border rounded-[8px] p-4 hover:border-accent/50 hover:bg-surface-elevated/40 transition-colors"
+                  style={{ animation: `fadeUp .25s ease-out ${index * 35}ms both` }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-[8px] bg-accent-muted text-accent flex items-center justify-center shrink-0">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                        <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] font-semibold truncate">{room.name}</div>
+                      <div className="text-[11px] text-text-dim mt-1">
+                        {room.member_count} 成员 · 暂无消息
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
-            <p className="text-[14px] text-text-muted font-medium">暂无消息</p>
-            <p className="text-[12px] text-text-dim mt-2">加入一个 Room 查看消息</p>
-          </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-[400px] text-center">
+              <div className="relative w-20 h-20 mb-6">
+                <div className="absolute inset-0 rounded-full border border-border" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-dim">
+                    <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
+                  </svg>
+                </div>
+              </div>
+              <p className="text-[14px] text-text-muted font-medium">暂无 Room</p>
+              <p className="text-[12px] text-text-dim mt-2">新建一个 Room 开始协作</p>
+            </div>
+          )
         ) : (
           <div className="space-y-1">
             {messages.map(msg => (

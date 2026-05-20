@@ -11,6 +11,17 @@ export interface AgentInstance {
   lastActiveAt: Date;
   prompt: string;
   agentToken?: string;
+  options?: AgentSpawnOptions;
+}
+
+export interface AgentProviderOptions {
+  name?: string;
+  env?: Record<string, string>;
+}
+
+export interface AgentSpawnOptions {
+  model?: string;
+  provider?: string | AgentProviderOptions;
 }
 
 export type ActivityReporter = (
@@ -58,7 +69,13 @@ export class AgentRunner {
     return agent !== undefined && agent.status === 'active';
   }
 
-  async spawn(agentId: string, prompt: string, agentToken?: string, agentName?: string): Promise<string> {
+  async spawn(
+    agentId: string,
+    prompt: string,
+    agentToken?: string,
+    agentName?: string,
+    options?: AgentSpawnOptions,
+  ): Promise<string> {
     if (this.isRunning(agentId)) {
       console.log(`[runner] Agent ${agentId} already running, skipping spawn`);
       return this.agents.get(agentId)!.sessionId;
@@ -81,6 +98,7 @@ export class AgentRunner {
       lastActiveAt: new Date(),
       prompt,
       agentToken,
+      options,
     };
     this.agents.set(agentId, instance);
 
@@ -127,20 +145,29 @@ export class AgentRunner {
   private async runAgent(instance: AgentInstance): Promise<void> {
     try {
       // Build the command to run Claude Code
-      const args = [
+      const args: string[] = [
         '-p', instance.prompt,
         '--output-format', 'text',
       ];
+      const provider = normalizeProvider(instance.options?.provider);
+
+      if (instance.options?.model) {
+        args.push('--model', instance.options.model);
+      }
+      if (provider?.env && Object.keys(provider.env).length > 0) {
+        args.push('--settings', JSON.stringify({ env: provider.env }));
+      }
 
       console.log(`[runner] Starting: claude ${args.slice(0, 2).join(' ')}...`);
 
       const child = spawn('claude', args, {
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
           // AGENT_NAME tells the MCP server to use ~/.flock/agents/{name}/identity.json
           // instead of the global ~/.flock/identity.json
           AGENT_NAME: instance.agentName,
+          AGENT_PROVIDER: provider?.name ?? 'default',
           // AGENT_TOKEN lets the MCP server authenticate as the correct agent
           ...(instance.agentToken ? { AGENT_TOKEN: instance.agentToken } : {}),
         },
@@ -180,10 +207,14 @@ export class AgentRunner {
           }, instance.agentToken);
         } else {
           instance.status = 'error';
-          await this.reportActivity(instance.agentId, 'error', `Agent exited with code ${code}`, {
+          const stdoutTail = tail(stdout);
+          const stderrTail = tail(stderr);
+          const summary = summarizeFailure(stdoutTail, stderrTail);
+          await this.reportActivity(instance.agentId, 'error', `Agent exited with code ${code}${summary ? `: ${summary}` : ''}`, {
             session_id: instance.sessionId,
             exit_code: code,
-            stderr: stderr.slice(0, 1000),
+            stdout: stdoutTail,
+            stderr: stderrTail,
           }, instance.agentToken);
         }
 
@@ -213,4 +244,37 @@ export class AgentRunner {
     const stops = Array.from(this.agents.keys()).map((id) => this.stop(id));
     await Promise.all(stops);
   }
+}
+
+function normalizeProvider(provider: AgentSpawnOptions['provider']): AgentProviderOptions | undefined {
+  if (!provider) return undefined;
+  if (typeof provider === 'string') {
+    return { name: provider };
+  }
+  return {
+    name: provider.name ?? 'custom',
+    env: sanitizeEnv(provider.env),
+  };
+}
+
+function sanitizeEnv(env: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!env) return undefined;
+  const cleanEntries = Object.entries(env).filter(([key, value]) => {
+    return /^[A-Z_][A-Z0-9_]*$/.test(key) && typeof value === 'string';
+  });
+  return cleanEntries.length > 0 ? Object.fromEntries(cleanEntries) : undefined;
+}
+
+function tail(value: string, max = 4000): string {
+  return value.length > max ? value.slice(value.length - max) : value;
+}
+
+function summarizeFailure(stdout: string, stderr: string): string {
+  const combined = `${stdout}\n${stderr}`;
+  const lines = combined
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const priority = lines.find((line) => /API Error|Failed to authenticate|Error:/i.test(line));
+  return (priority ?? lines[0] ?? '').slice(0, 300);
 }

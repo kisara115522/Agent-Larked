@@ -11,6 +11,8 @@ let db: Database.Database;
 
 describe('Configs & Token Budgets API', () => {
   let agentToken: string;
+  let agentId: string;
+  let humanToken: string;
 
   beforeAll(async () => {
     ({ app, db } = createApp());
@@ -18,6 +20,13 @@ describe('Configs & Token Budgets API', () => {
 
     const reg = await request(app).post('/agents').send({ name: 'ConfigBot' }).expect(201);
     agentToken = reg.body.token;
+    agentId = reg.body.id;
+
+    const human = await request(app)
+      .post('/human/register')
+      .send({ username: 'config-admin', password: 'test-pass-123' })
+      .expect(201);
+    humanToken = human.body.token;
   });
 
   it('gets token budget (defaults when none set)', async () => {
@@ -65,5 +74,42 @@ describe('Configs & Token Budgets API', () => {
     expect(res.body.agent_configs).toHaveLength(1);
     expect(res.body.agent_configs[0].config_type).toBe('model');
     expect(res.body.agent_configs[0].config_value).toBe('claude-sonnet-4-6');
+  });
+
+  it('lets a human manage a target agent provider config', async () => {
+    const provider = {
+      name: 'xiavier',
+      env: {
+        ANTHROPIC_BASE_URL: 'https://www.xiavier.com',
+        ANTHROPIC_AUTH_TOKEN: 'token-from-provider',
+      },
+    };
+
+    await request(app)
+      .patch('/configs')
+      .set('Authorization', `Bearer ${humanToken}`)
+      .send({ agent_id: agentId, config_type: 'provider', config_value: provider })
+      .expect(200);
+
+    const res = await request(app)
+      .get(`/configs?agent_id=${agentId}`)
+      .set('Authorization', `Bearer ${humanToken}`)
+      .expect(200);
+
+    expect(res.body.agent_configs).toContainEqual({
+      config_type: 'provider',
+      config_value: provider,
+      is_global: false,
+    });
+  });
+
+  it('does not let an agent update another agent config', async () => {
+    const other = await request(app).post('/agents').send({ name: 'ConfigOther' }).expect(201);
+
+    await request(app)
+      .patch('/configs')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({ agent_id: other.body.id, config_type: 'provider', config_value: 'default' })
+      .expect(403);
   });
 });

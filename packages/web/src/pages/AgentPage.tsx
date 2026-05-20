@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
-import { get, post } from '../api/client';
+import { get, patch, post } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
 
@@ -38,6 +38,12 @@ interface WorkflowEvent {
   time: string;
 }
 
+interface AgentConfig {
+  config_type: string;
+  config_value: unknown;
+  is_global: boolean;
+}
+
 export function AgentPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
@@ -46,18 +52,39 @@ export function AgentPage() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
+  const [configs, setConfigs] = useState<AgentConfig[]>([]);
+  const [modelValue, setModelValue] = useState('');
+  const [providerValue, setProviderValue] = useState('');
+  const [providerEnvValue, setProviderEnvValue] = useState('');
+  const [savingConfig, setSavingConfig] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadAgent = useCallback(async () => {
     if (!token || !id) return;
     try {
-      const [agentData, tasksRes, activityRes] = await Promise.all([
+      const [agentData, tasksRes, activityRes, configRes] = await Promise.all([
         get<Agent>(`/agents/${id}`, token),
         get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
         get<{ logs: Array<{ id: string; activity_type: string; detail?: string; created_at: string }> }>(`/agents/${id}/activity`, token).catch(() => ({ logs: [] })),
+        get<{ agent_configs: AgentConfig[] }>(`/configs?agent_id=${id}`, token).catch(() => ({ agent_configs: [] })),
       ]);
       setAgent(agentData);
       setTasks(tasksRes.tasks.filter(t => t.assigned_to === id));
+      setConfigs(configRes.agent_configs);
+      const modelConfig = configRes.agent_configs.find(c => c.config_type === 'model')?.config_value;
+      const providerConfig = configRes.agent_configs.find(c => c.config_type === 'provider')?.config_value;
+      setModelValue(typeof modelConfig === 'string' ? modelConfig : agentData.model || '');
+      if (typeof providerConfig === 'string') {
+        setProviderValue(providerConfig);
+        setProviderEnvValue('');
+      } else if (providerConfig && typeof providerConfig === 'object') {
+        const cfg = providerConfig as { name?: unknown; env?: unknown };
+        setProviderValue(typeof cfg.name === 'string' ? cfg.name : 'custom');
+        setProviderEnvValue(cfg.env ? JSON.stringify(cfg.env, null, 2) : '');
+      } else {
+        setProviderValue('');
+        setProviderEnvValue('');
+      }
       // Convert activity logs to workflow events
       const converted: WorkflowEvent[] = activityRes.logs.slice(0, 20).map(ev => ({
         id: ev.id,
@@ -117,6 +144,40 @@ export function AgentPage() {
   const handleSpawn = async () => {
     if (!token || !id) return;
     try { await post(`/agents/${id}/spawn`, token, {}); toast('启动成功', 'success'); loadAgent(); } catch (e) { toast(`启动失败: ${e instanceof Error ? e.message : '未知错误'}`); }
+  };
+
+  const handleSaveRuntimeConfig = async () => {
+    if (!token || !id) return;
+    setSavingConfig(true);
+    try {
+      const model = modelValue.trim();
+      await patch('/configs', token, {
+        agent_id: id,
+        config_type: 'model',
+        config_value: model || '',
+      });
+
+      const providerName = providerValue.trim();
+      let providerConfig: unknown = providerName;
+      const envText = providerEnvValue.trim();
+      if (envText) {
+        providerConfig = {
+          name: providerName || 'custom',
+          env: JSON.parse(envText),
+        };
+      }
+      await patch('/configs', token, {
+        agent_id: id,
+        config_type: 'provider',
+        config_value: providerConfig || '',
+      });
+      toast('运行配置已保存', 'success');
+      loadAgent();
+    } catch (e) {
+      toast(`保存失败: ${e instanceof Error ? e.message : '未知错误'}`);
+    } finally {
+      setSavingConfig(false);
+    }
   };
 
   if (loading) {
@@ -236,6 +297,51 @@ export function AgentPage() {
           </div>
 
           {/* Config Cards */}
+          <div className="mb-5">
+            <h4 className="text-sm font-semibold mb-2">运行配置</h4>
+            <div className="bg-surface border border-border rounded-[10px] p-4">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[11px] text-text-dim uppercase tracking-wider">Model</span>
+                  <input
+                    value={modelValue}
+                    onChange={e => setModelValue(e.target.value)}
+                    placeholder="opus / sonnet / claude-sonnet-4-6"
+                    className="input mt-1"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] text-text-dim uppercase tracking-wider">Provider</span>
+                  <input
+                    value={providerValue}
+                    onChange={e => setProviderValue(e.target.value)}
+                    placeholder="default / bedrock / xiavier"
+                    className="input mt-1"
+                  />
+                </label>
+              </div>
+              <label className="block mt-3">
+                <span className="text-[11px] text-text-dim uppercase tracking-wider">Provider Env JSON</span>
+                <textarea
+                  value={providerEnvValue}
+                  onChange={e => setProviderEnvValue(e.target.value)}
+                  placeholder='{"ANTHROPIC_BASE_URL":"https://...","ANTHROPIC_AUTH_TOKEN":"..."}'
+                  className="input mt-1 min-h-[92px] font-mono text-[11px] resize-y"
+                />
+              </label>
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-[11px] text-text-dim">{configs.length} 条配置</span>
+                <button
+                  onClick={handleSaveRuntimeConfig}
+                  disabled={savingConfig}
+                  className="px-4 py-2 rounded-full text-[12px] font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors"
+                >
+                  {savingConfig ? '保存中...' : '保存运行配置'}
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div>
             <h4 className="text-sm font-semibold mb-2">配置</h4>
             <div className="grid grid-cols-2 gap-2.5">

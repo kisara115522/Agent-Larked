@@ -1,13 +1,11 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
-import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
 import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
+import { ErrorCode } from '@flock/shared';
+import { ServerError } from '../middleware/error.js';
 
 export function configsRouter(db: Database.Database): Router {
   const router = Router();
-  const auth = authMiddleware(db);
-  const humanAuth = humanAuthMiddleware(db);
   const flexAuth = flexAuthMiddleware(db);
 
   // GET /token-budgets — get token budget for an agent
@@ -72,7 +70,7 @@ export function configsRouter(db: Database.Database): Router {
   // GET /configs — get agent configs
   router.get('/configs', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
-      const agentId = req.agentId!;
+      const agentId = resolveConfigAgentId(req);
       const rows = db.prepare(
         'SELECT config_type, config_value, is_global FROM agent_configs WHERE agent_id = ?',
       ).all(agentId) as Record<string, unknown>[];
@@ -101,7 +99,7 @@ export function configsRouter(db: Database.Database): Router {
   // PATCH /configs — update agent config
   router.patch('/configs', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
-      const agentId = req.agentId!;
+      const agentId = resolveConfigAgentId(req);
       const { config_type, config_value } = req.body;
 
       if (!config_type) {
@@ -123,4 +121,22 @@ export function configsRouter(db: Database.Database): Router {
   });
 
   return router;
+}
+
+function resolveConfigAgentId(req: FlexAuthenticatedRequest): string {
+  const requestedAgentId = typeof req.query.agent_id === 'string'
+    ? req.query.agent_id
+    : typeof req.body?.agent_id === 'string'
+      ? req.body.agent_id
+      : undefined;
+
+  if (req.humanId) {
+    return requestedAgentId ?? req.agentId!;
+  }
+
+  if (requestedAgentId && requestedAgentId !== req.agentId) {
+    throw new ServerError(ErrorCode.FORBIDDEN, 'Cannot manage another agent config', false, 403);
+  }
+
+  return req.agentId!;
 }

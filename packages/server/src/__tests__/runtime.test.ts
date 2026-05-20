@@ -282,6 +282,68 @@ describe('Runtime Management', () => {
     }
   });
 
+  it('passes agent model and provider configs to runtime callback on spawn', async () => {
+    const configuredAgent = await request(app).post('/agents').send({ name: 'RuntimeConfigBot' }).expect(201);
+    const callbackCalls: Array<{ path: string; body: unknown }> = [];
+    const callbackApp = await import('express').then(({ default: express }) => {
+      const app = express();
+      app.use(express.json());
+      app.post('/agents/:id/callback', (req, res) => {
+        callbackCalls.push({ path: req.path, body: req.body });
+        res.json({ ok: true });
+      });
+      return app;
+    });
+
+    const callbackServer = callbackApp.listen(0);
+    try {
+      const address = callbackServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('callback server did not bind to a TCP port');
+      }
+      const callbackUrl = `http://127.0.0.1:${address.port}`;
+
+      const runtime = await request(app)
+        .post('/runtimes')
+        .send({
+          host: '127.0.0.1',
+          port: address.port,
+          callback_url: callbackUrl,
+          max_agents: 10,
+        })
+        .expect(201);
+
+      await request(app)
+        .patch('/configs')
+        .set('Authorization', `Bearer ${configuredAgent.body.token}`)
+        .send({ config_type: 'model', config_value: 'opus' })
+        .expect(200);
+
+      await request(app)
+        .patch('/configs')
+        .set('Authorization', `Bearer ${configuredAgent.body.token}`)
+        .send({ config_type: 'provider', config_value: 'bedrock' })
+        .expect(200);
+
+      await request(app)
+        .post(`/agents/${configuredAgent.body.id}/spawn`)
+        .set('Cookie', humanCookie)
+        .send({ runtime_id: runtime.body.id, prompt: 'provider config probe' })
+        .expect(201);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callbackCalls).toHaveLength(1);
+      expect(callbackCalls[0].body).toMatchObject({
+        type: 'spawn',
+        agent_model: 'opus',
+        agent_provider: 'bedrock',
+      });
+    } finally {
+      await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
+    }
+  });
+
   it('stops agent and marks spawn as stopped', async () => {
     const res = await request(app)
       .post(`/agents/${agentId}/stop`)

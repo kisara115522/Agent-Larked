@@ -1,6 +1,6 @@
 import type { RuntimeConfig } from './config.js';
 import { createCallbackServer, type CallbackEvent } from './callback-server.js';
-import { AgentRunner } from './agent-runner.js';
+import { AgentRunner, type AgentSpawnOptions } from './agent-runner.js';
 
 export class FlockAgentRuntime {
   private config: RuntimeConfig;
@@ -157,7 +157,10 @@ export class FlockAgentRuntime {
       }
     }
 
-    await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name);
+    await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name, {
+      model: event.agent_model,
+      provider: normalizeProvider(event.agent_provider),
+    });
   }
 
   private async handleWake(event: CallbackEvent): Promise<void> {
@@ -175,7 +178,10 @@ export class FlockAgentRuntime {
       prompt = `${event.sender_name} said: "${event.excerpt}"\n\n${prompt}`;
     }
 
-    await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name);
+    await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name, {
+      model: event.agent_model,
+      provider: normalizeProvider(event.agent_provider),
+    });
   }
 
   private async handleStop(event: CallbackEvent): Promise<void> {
@@ -217,4 +223,23 @@ export class FlockAgentRuntime {
       console.error(`[activity] Error reporting for ${agentId}:`, err);
     }
   }
+}
+
+function normalizeProvider(provider: unknown): AgentSpawnOptions['provider'] {
+  if (provider === undefined || provider === null || provider === '') return undefined;
+  if (typeof provider === 'string') return provider;
+  if (typeof provider !== 'object' || Array.isArray(provider)) return undefined;
+
+  const candidate = provider as { name?: unknown; env?: unknown };
+  const env = typeof candidate.env === 'object' && candidate.env !== null && !Array.isArray(candidate.env)
+    ? Object.fromEntries(
+        Object.entries(candidate.env as Record<string, unknown>)
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+      )
+    : undefined;
+
+  return {
+    ...(typeof candidate.name === 'string' && candidate.name.trim() ? { name: candidate.name.trim() } : {}),
+    ...(env && Object.keys(env).length > 0 ? { env } : {}),
+  };
 }

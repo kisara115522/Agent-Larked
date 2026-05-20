@@ -7,6 +7,8 @@ export interface CallbackEvent {
   agent_id: string;
   agent_token?: string;
   agent_name?: string;
+  agent_model?: string;
+  agent_provider?: unknown;
   prompt?: string;
   trigger_type?: string;
   room_id?: string;
@@ -50,6 +52,8 @@ export function createCallbackServer(
       agent_id: agentId,
       agent_token: req.body.agent_token,
       agent_name: req.body.agent_name,
+      agent_model: req.body.agent_model,
+      agent_provider: req.body.agent_provider,
       prompt: req.body.prompt,
       trigger_type: req.body.trigger_type,
       room_id: req.body.room_id,
