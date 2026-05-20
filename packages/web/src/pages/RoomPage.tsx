@@ -180,7 +180,10 @@ export function RoomPage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">加载中...</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+          <p className="text-sm text-text-dim font-medium">加载中</p>
+        </div>
       </div>
     );
   }
@@ -188,36 +191,48 @@ export function RoomPage() {
   return (
     <div className="h-full flex">
       <div className={`flex-1 flex flex-col ${threadMessageId ? 'border-r border-border' : ''}`}>
-        <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
-          <h3 className="text-base font-semibold">💬 {roomName || `Room ${roomId?.slice(0, 8)}`}</h3>
+        {/* Header */}
+        <div className="px-8 py-4 border-b border-border flex items-center gap-3 shrink-0">
+          <div className="w-8 h-8 rounded-[8px] bg-accent-muted flex items-center justify-center">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-accent">
+              <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
+            </svg>
+          </div>
+          <h3 className="text-[15px] font-semibold">{roomName || `Room ${roomId?.slice(0, 8)}`}</h3>
           <div className="ml-auto">
             <button
               onClick={handleLeave}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold text-text-muted border border-border hover:border-error hover:text-error transition-colors"
+              className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-text-dim border border-border hover:border-error hover:text-error transition-all duration-200"
             >
               离开
             </button>
           </div>
         </div>
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative px-6 py-4">
+
+        {/* Messages */}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative px-8 py-6">
           {hasMore && (
-            <div className="p-4 text-center">
+            <div className="pb-4 text-center">
               <button
                 onClick={() => loadMessages(false)}
-                className="text-sm text-accent hover:underline"
+                className="text-[12px] text-accent font-medium hover:text-accent-hover transition-colors"
               >
                 加载更早的消息
               </button>
             </div>
           )}
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center px-4">
-              <p className="text-3xl mb-3">💬</p>
-              <p className="text-sm text-text-muted">暂无消息</p>
-              <p className="text-xs text-text-muted mt-1">发送第一条消息吧！</p>
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-16 h-16 rounded-full border border-border flex items-center justify-center mb-4">
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-dim">
+                  <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
+                </svg>
+              </div>
+              <p className="text-[13px] text-text-muted font-medium">暂无消息</p>
+              <p className="text-[12px] text-text-dim mt-1">发送第一条消息吧</p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="space-y-1">
               {messages.map(msg => (
                 <MessageCard
                   key={msg.id}
@@ -243,18 +258,19 @@ export function RoomPage() {
           {showScrollButton && (
             <button
               onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="sticky bottom-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-surface-elevated border border-border shadow-lg flex items-center justify-center text-text-muted hover:text-accent hover:border-accent transition-colors z-10"
+              className="sticky bottom-4 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-surface-elevated border border-border shadow-md flex items-center justify-center text-text-muted hover:text-accent transition-colors z-10"
               title="Scroll to bottom"
             >
-              ↓
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6l4 4 4-4"/></svg>
             </button>
           )}
         </div>
+
         <ComposeBar onSend={handleSend} placeholder="输入消息... 用 @名字 提及" roomId={roomId} token={token ?? undefined} />
         {error && (
-          <div className="px-4 py-2 bg-error/10 border-t border-error/20 text-error text-xs flex items-center justify-between">
+          <div className="px-6 py-2.5 bg-error-muted border-t border-error/20 text-error text-[12px] flex items-center justify-between">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="ml-2 text-error/60 hover:text-error">✕</button>
+            <button onClick={() => setError(null)} className="ml-2 text-error/60 hover:text-error transition-colors">✕</button>
           </div>
         )}
       </div>

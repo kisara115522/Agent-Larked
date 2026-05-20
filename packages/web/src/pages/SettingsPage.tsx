@@ -58,80 +58,83 @@ export function SettingsPage() {
   };
 
   if (loading) {
-    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">加载中...</p></div>;
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+          <p className="text-sm text-text-dim font-medium">加载中</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-3 border-b border-border shrink-0 bg-surface min-h-[56px]">
-        <h3 className="text-base font-semibold">全局设置</h3>
+    <div className="flex flex-col h-full overflow-y-auto">
+      <div className="px-12 pt-12 pb-6" style={{ animation: 'fadeUp .4s ease-out' }}>
+        <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+          设置
+        </h1>
+        <p className="text-[14px] text-text-dim mt-3 font-medium">全局配置与预算管理</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5 max-w-[800px]">
+      <div className="px-12 pb-12 max-w-[700px]">
         {/* Token Budget */}
         {budget && (
-          <>
-            <h4 className="text-[15px] font-semibold mb-3 pb-2 border-b border-border">Token 预算</h4>
-            <div className="grid grid-cols-2 gap-3 mb-2">
-              <BudgetCard
-                label="每日限额"
-                limit={budget.daily_limit}
-                current={budget.current_daily}
-              />
-              <BudgetCard
-                label="每月限额"
-                limit={budget.monthly_limit}
-                current={budget.current_monthly}
-              />
+          <div className="mb-8">
+            <h4 className="text-[13px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-4">Token 预算</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <BudgetCard label="每日限额" limit={budget.daily_limit} current={budget.current_daily} />
+              <BudgetCard label="每月限额" limit={budget.monthly_limit} current={budget.current_monthly} />
             </div>
             {budget.last_reset_at && (
-              <div className="text-[11px] text-text-dim mb-4">
+              <p className="text-[11px] text-text-dim mt-3">
                 上次重置: {new Date(budget.last_reset_at).toLocaleString('zh-CN')}
-              </div>
+              </p>
             )}
-          </>
+          </div>
         )}
 
         {/* Agent Configs */}
         {agentConfigs.length > 0 && (
-          <>
-            <h4 className="text-[15px] font-semibold mb-3 pb-2 border-b border-border mt-6">Agent 配置</h4>
-            {agentConfigs.map(c => (
-              <div key={c.config_type} className="flex items-center gap-3 py-2.5 border-b border-border">
-                <span className="text-[13px] font-medium flex-1">{c.config_type}</span>
-                {typeof c.config_value === 'boolean' ? (
-                  <button
-                    onClick={() => handleToggleConfig(c.config_type, c.config_value)}
-                    className={`w-9 h-5 rounded-full relative cursor-pointer shrink-0 transition-colors ${c.config_value ? 'bg-accent' : 'bg-border'}`}
-                  >
-                    <div className={`absolute w-4 h-4 rounded-full bg-white top-0.5 transition-transform ${c.config_value ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                  </button>
-                ) : (
-                  <span className="text-xs text-text-muted font-mono">{JSON.stringify(c.config_value)}</span>
-                )}
-              </div>
-            ))}
-          </>
+          <div className="mb-8">
+            <h4 className="text-[13px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-4">Agent 配置</h4>
+            <div className="bg-surface border border-border rounded-[10px] divide-y divide-border">
+              {agentConfigs.map(c => (
+                <div key={c.config_type} className="flex items-center gap-3 px-5 py-3.5">
+                  <span className="text-[13px] font-medium flex-1">{c.config_type}</span>
+                  {typeof c.config_value === 'boolean' ? (
+                    <button
+                      onClick={() => handleToggleConfig(c.config_type, c.config_value)}
+                      className={`w-10 h-5 rounded-full relative cursor-pointer shrink-0 transition-colors duration-200 ${c.config_value ? 'bg-accent' : 'bg-border'}`}
+                    >
+                      <div className={`absolute w-4 h-4 rounded-full bg-white top-0.5 transition-transform duration-200 ${c.config_value ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-text-muted font-mono">{JSON.stringify(c.config_value)}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Global Configs */}
         {globalConfigs.length > 0 && (
-          <>
-            <h4 className="text-[15px] font-semibold mb-3 pb-2 border-b border-border mt-6">服务器配置</h4>
-            {globalConfigs.map(c => (
-              <div key={c.config_type} className="flex items-center gap-3 py-2.5 border-b border-border">
-                <span className="text-[13px] font-medium flex-1">{c.config_type}</span>
-                <span className="text-xs text-text-muted font-mono">{JSON.stringify(c.config_value)}</span>
-              </div>
-            ))}
-          </>
+          <div className="mb-8">
+            <h4 className="text-[13px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-4">服务器配置</h4>
+            <div className="bg-surface border border-border rounded-[10px] divide-y divide-border">
+              {globalConfigs.map(c => (
+                <div key={c.config_type} className="flex items-center gap-3 px-5 py-3.5">
+                  <span className="text-[13px] font-medium flex-1">{c.config_type}</span>
+                  <span className="text-[11px] text-text-muted font-mono">{JSON.stringify(c.config_value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Empty state */}
         {agentConfigs.length === 0 && globalConfigs.length === 0 && !budget && (
-          <div className="text-center text-text-dim text-sm py-8">
-            暂无配置数据
-          </div>
+          <div className="text-center text-text-dim text-[13px] py-16">暂无配置数据</div>
         )}
       </div>
     </div>
@@ -141,14 +144,14 @@ export function SettingsPage() {
 function BudgetCard({ label, limit, current }: { label: string; limit: number; current: number }) {
   const pct = limit > 0 ? Math.min((current / limit) * 100, 100) : 0;
   return (
-    <div className="bg-bg border border-border rounded p-2.5 px-3">
-      <div className="text-[10px] text-text-dim uppercase tracking-wider">{label}</div>
-      <div className="text-[13px] font-medium font-mono mt-0.5">
-        {current.toLocaleString()} / {limit.toLocaleString()} tokens
+    <div className="bg-surface border border-border rounded-[10px] p-5">
+      <div className="text-[11px] text-text-dim uppercase tracking-[0.12em] font-semibold">{label}</div>
+      <div className="text-[14px] font-semibold font-mono mt-2">
+        {current.toLocaleString()} / {limit.toLocaleString()}
       </div>
-      <div className="mt-1.5 h-1 bg-border rounded-full overflow-hidden">
+      <div className="mt-3 h-1.5 bg-border/50 rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-yellow-500' : 'bg-accent'}`}
+          className={`h-full rounded-full transition-all duration-500 ${pct > 90 ? 'bg-error' : pct > 70 ? 'bg-warning' : 'bg-accent'}`}
           style={{ width: `${pct}%` }}
         />
       </div>

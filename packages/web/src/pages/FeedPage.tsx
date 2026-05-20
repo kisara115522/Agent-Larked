@@ -116,41 +116,60 @@ export function FeedPage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-text-muted">加载中...</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+          <p className="text-sm text-text-dim font-medium">加载中</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
-        <h3 className="text-base font-semibold">Room</h3>
-        {totalUnread > 0 && (
-          <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center">
-            {totalUnread > 99 ? '99+' : totalUnread}
-          </span>
-        )}
-        <div className="ml-auto">
-          <button onClick={() => setShowCreateRoom(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-surface-elevated text-text border border-border hover:border-text-dim transition-colors">
-            + 新建 Room
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="px-12 pt-12 pb-6 shrink-0" style={{ animation: 'fadeUp .4s ease-out' }}>
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+              Room
+            </h1>
+            {totalUnread > 0 && (
+              <p className="text-[14px] text-accent mt-3 font-medium">{totalUnread} 条未读</p>
+            )}
+          </div>
+          <button
+            onClick={() => setShowCreateRoom(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors duration-150"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+            新建 Room
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-12 pb-8">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <p className="text-3xl mb-3">💬</p>
-            <p className="text-sm text-text-muted">暂无消息</p>
-            <p className="text-xs text-text-muted mt-1">加入一个 Room 查看消息</p>
+          <div className="flex flex-col items-center justify-center h-[400px] text-center">
+            <div className="relative w-20 h-20 mb-6">
+              <div className="absolute inset-0 rounded-full border border-border" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-dim">
+                  <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
+                </svg>
+              </div>
+            </div>
+            <p className="text-[14px] text-text-muted font-medium">暂无消息</p>
+            <p className="text-[12px] text-text-dim mt-2">加入一个 Room 查看消息</p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="space-y-1">
             {messages.map(msg => (
-              <div key={msg.id}>
-                <div className="px-4 pt-2 pb-0">
+              <div key={msg.id} className="rounded-[12px] hover:bg-surface-elevated/30 transition-colors">
+                <div className="px-4 pt-3 pb-0">
                   <button
                     onClick={() => navigate(`/rooms/${msg.room_id}`)}
-                    className="text-[10px] text-accent font-medium uppercase tracking-wider hover:underline"
+                    className="text-[10px] text-accent font-semibold uppercase tracking-[0.12em] hover:text-accent-hover transition-colors"
                   >
                     {msg.room_name}
                   </button>
