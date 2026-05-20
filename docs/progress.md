@@ -182,19 +182,35 @@
 - `npm test -w @flock/mcp` 初次失败后，cc002 修复并由 codex 复跑确认：10 files / 55 tests passed（commit `40cbbce`）。
 
 ### 当前回归
-- cc001/cc003 开始修复后，`npm run typecheck` 当前失败：server 将 `spawning` 写入不支持该值的 `AgentStatus`；web `SpawnModal` 留下未使用 `selectedRoom/setSelectedRoom`。已回报到 `flock讨论`，需先恢复编译绿色。
+- cc001/cc003 修复过程中出现的 typecheck 回归已关闭：`npm run typecheck` 当前全 workspace 通过。
+- `npm run build --workspaces --if-present` 当前通过。
+- `npm test -w @flock/server` 当前通过：16 files / 112 tests（server Vitest 已排除 dist）。
+- `npm test -w @flock/agent-runtime` 当前通过：4 files / 22 tests。
+- `npm test -w @flock/mcp` 当前通过：10 files / 55 tests。
+- `npm test -w @flock/sdk` 当前通过：2 files / 34 tests。
+- 手动 API 复验：stale `localhost:4000` runtime 会被标记 offline；无可用 runtime 时 spawn 返回 400；`/agents/:id/activity` 无 token / bad token 均返回 401；`POST /rooms/:id/broadcast-wake` 返回 200。
+- 默认状态语义回归已关闭：`registerAgent()` 现在默认写 `profiles.status='dormant'` 和 `last_active_at=NULL`。codex 手动复验新建 agent 后 spawn 400 仍保持 dormant/runtime_id null。
+- 浏览器冒烟：`http://localhost:5174/` 首页正常渲染，Wake 页正常渲染；点击 Broadcast 唤醒按钮不再 404，显示成功 toast。
+- 2026-05-18 codex 针对 kisara 原始 4 个实测问题补强：
+  - Runtime 同 `callback_url` 重启注册会复用原 runtime id，不再无限叠加；`GET /runtimes` 会先清理 stale heartbeat，显式 stale `runtime_id` spawn 返回 400。
+  - GUI/人类私聊未传 `idempotency_key` 时服务端生成 UUID，不再因 `direct_idempotency_keys.key` 为 NULL 返回 500。
+  - 人类创建的空 Room 可通过 `GET /rooms` 立即看到；新增 `POST /rooms/:id/members` 支持把指定 agent 幂等加入 room。
+  - v2 `.mcp.json` 已与旧版隔离：MCP dist、DB_PATH、FLOCK_HOME 均指向 `Agent-Larked-v2`，不再写死 `AGENT_NAME`。
+  - 实际 runtime spawn 复验：v2 Runtime daemon 在 `:4000` 复用旧 runtime id，`POST /agents/:id/spawn` 触发 callback，runner 启动 Claude 子进程并上报 `Agent spawning` / `Agent active`，server 回写 `agent_spawns.session_id`。
 
 ### 阻断项
-- Runtime stale online：`/runtimes` 显示 `localhost:4000` online，但本机无 `:4000` 监听；此时 spawn 仍返回 201 并把 agent 标记 active。
-- @mention/broadcast wake callback 类型不匹配：server 发送 `mention` / `room_activity`，Runtime 只处理 `spawn` / `wake` / `stop`。
-- Dormant wake 状态模型矛盾：唤醒查询要求 active spawn，但 stop 会把 spawn 置 stopped，真正 dormant agent 可能无法被唤醒。
+- Runtime stale online：`/runtimes` 显示 `localhost:4000` online，但本机无 `:4000` 监听；此时 spawn 仍返回 201 并把 agent 标记 active。✅ cc001/codex 已修，codex 手动复验通过
+- @mention/broadcast wake callback 类型不匹配：server 发送 `mention` / `room_activity`，Runtime 只处理 `spawn` / `wake` / `stop`。✅ cc001 已修，代码已统一为 `wake` + `trigger_type`
+- Dormant wake 状态模型矛盾：唤醒查询要求 active spawn，但 stop 会把 spawn 置 stopped，真正 dormant agent 可能无法被唤醒。✅ cc001 已修为查询 last spawn
 - Runtime runner 未兑现 proposal 的 Agent SDK `query()` / resume / tool boundary 注入；当前是 CLI child process。
-- Runtime identity/status 回写不可靠：profile lookup 无 token、进程退出只写 activity、不回写 profile/spawn，activity 端点无鉴权。
-- GUI WakePage 调用不存在的 `/rooms/:id/broadcast-wake`；wake history 渲染后端不存在的 `status` 字段。
-- SpawnModal 的目标 Room 被 server 忽略，流程预览写 Agent SDK query() 与当前实现不一致。
-- Runtime/Workflow 页面存在硬编码假端口、静默吞 API 错误、runtime 指标语义不准。
+- Runtime identity/status 回写不可靠：profile lookup 无 token、进程退出只写 activity、不回写 profile/spawn，activity 端点无鉴权。✅ cc001/codex 已修主要链路，activity 鉴权和 session_id 回写手动复验通过
+- GUI WakePage 调用不存在的 `/rooms/:id/broadcast-wake`；wake history 渲染后端不存在的 `status` 字段。✅ cc001/cc003 已修，codex 手动复验 broadcast-wake 200
+- SpawnModal 的目标 Room 被 server 忽略，流程预览写 Agent SDK query() 与当前实现不一致。✅ cc003 已移除假 room_id 并改文案；spawn room context 作为后续 backlog
+- Runtime/Workflow 页面存在硬编码假端口、静默吞 API 错误、runtime 指标语义不准。✅ cc003 已修主要 UI，web typecheck/build 通过
+- 新 Agent Profile 默认 active，未成功 spawn 也显示 active/runtime_id null。✅ cc001 已修，codex 手动复验通过
 - root `npm run typecheck` 原因已从 root tsconfig 问题变为 workspace 真实红灯；根命令应保留并暴露这些失败。✅ cc002 已修
 - README/API/Schema/MCP 文档仍混有旧系统、旧端口、已删除工具和未实现端点。✅ cc002 已修
+- kisara 原始补充问题：DM 500、空 room 不可见/无法拉 agent、v2 agent 串旧版均已关闭；Runtime 是否真实启动已由 runtime 日志和 activity/status 回写复验。剩余未关闭的架构偏差：Runtime runner 仍是 Claude CLI child process，未实现 proposal 中的 Agent SDK `query()` / resume / tool boundary 注入。
 
 ### 分工
 - cc001：Server + Runtime 阻断项（stale runtime、spawn/wake 假成功、callback contract、dormant wake 模型、runner/session/status/auth）。
@@ -211,6 +227,18 @@
   - api.md: `/admin/runtimes` → `/runtimes`、修正认证方式、`/projects/:room_id/status` 标记为 MCP-only
   - schema.md: rooms/direct_chats/direct_messages/direct_idempotency_keys 移除 FK 约束
   - server package.json: 移除 dead exports（broadcast/follow）
+
+## 2026-05-20 GUI 视觉去 AI 化（DESIGN.md 对齐）
+
+- **背景**：v3 重设计落地后用户指出现状仍是典型 AI 审美——圆角 + 紫蓝渐变 + glass morphism + grain texture + 多 blur 光晕，与 `DESIGN.md` 规定的 Friendly Dark（`#111114` warm dark、`#3B82F6` 纯蓝、DM Sans only、实色 surface、克制装饰）冲突。
+- **基础层**：
+  - `packages/web/src/styles/tokens.css` 整文件重写：实色 `#111114`/`#19191D`/`#222226` surfaces，纯蓝 `#3b82f6` accent，DM Sans + JetBrains Mono only；删除 `.glass`/`.glass-elevated`/`.glass-card`、grain SVG、glow 工具类、`breathe`/`orbit`/`float`/`pulse-ring`/`gradient-shift`/`reveal` 动画；保留 `fadeUp`/`fadeIn`/`slideIn`/`scaleIn`/`shimmer` + `.surface`/`.input`/`.skeleton`/`.status-dot-online`。Light mode 同步使用 `#2563eb` sober accent。文件头注释显式列出禁止模式。
+  - `packages/web/index.html` 移除 Satoshi/Cabinet Grotesk fontshare 加载，仅保留 DM Sans + JetBrains Mono。
+- **布局层**：`App.tsx` 移除 `.grain` wrapper + 2 个 radial-gradient orbs。
+- **组件层**：`Sidebar`（logo 改实色 accent，连接点改 `.status-dot-online`）、`RightPanel`（状态点 glow → 工具类）、`ComposeBar`（glass → `bg-surface-elevated border border-border`）、`MessageCard`（glass-surface → `bg-surface hover:bg-accent-soft`）、`AgentAvatar`（`rounded-[10px]` → `rounded-full`，保留 HSL 渐变）、`StatusIndicator`（多重 blur glow → `0 0 0 2px` ring shadow，`spawning` 从紫色 `rgba(99,102,241,...)` 改为蓝色 `rgba(59,130,246,...)`）。
+- **页面层**：`LoginPage`（删 3 个 atmospheric orbs + grid lines + grain + 2 处 glow-accent + 紫色 logo 渐变 + display 字体；改实色 accent + `bg-surface` 卡片）、`SettingsPage`（3× glass-card → `bg-surface border border-border`）、`TaskBoardPage`（删 glow-accent + active:scale-95，卡片 + modal 改实色）、`RuntimesPage`（5 处 glass/glow 改为实色 surface + status-dot-online）、`FeedPage`（删按钮 glow + scale）、`WorkflowPage`（7 处：删 glow、删 EmptyTimeline 的 orbit 动画装饰、PALETTE `#6366f1` → `#3b82f6`、breathing dot → `.status-dot-online`、glass-card → `bg-surface`）、`AgentListPage`（3 处：按钮 glow、卡片 glass、modal 实色化）、`RoomPage`（scroll-to-bottom 按钮 `glass-elevated` → `bg-surface-elevated border border-border`）。
+- **验证**：`npx tsc --noEmit` 0 error；Vite dev server（端口 5175）所有改动模块返回 200；浏览器 DevTools 确认 `--color-bg: #111114`、`--color-accent: #3b82f6`、`--font-sans: 'DM Sans'`。
+- **范围限制**：仅视觉清理，未触碰任何业务逻辑、API 调用、组件 props、状态管理；HSL 渐变头像被 DESIGN.md 明确允许，保留。
 
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
