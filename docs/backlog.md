@@ -721,7 +721,7 @@
 - **问题：** `GET /runtimes` 仍返回 `localhost:4000` status=`online`，但 `lsof -nP -iTCP:4000 -sTCP:LISTEN` 无监听进程。此时 `POST /agents/:id/spawn` 仍返回 201，并把 agent 标记为 `active`、`session_id=null`。
 - **影响：** GUI 和调度器会相信 agent 已启动，实际 Runtime daemon 不存在，agent 不会工作也不会响应。
 - **建议修复：** Server 选择 runtime 前清理/过滤 stale heartbeat；spawn/wake 在无可达 runtime 或 callback 失败时不能写入 active 假状态；必要时引入 `spawning/pending/error` 状态并回写失败。
-- **状态：** open（已在 flock 分配给 cc001）
+- **状态：** done（2026-05-18，codex 复验补强：`GET /runtimes` 列表前清理 stale runtime；显式传 stale `runtime_id` 的 spawn 返回 400，不写假 active/spawning）
 - **计划版本：** v0.5 验收阻断
 
 ### 🔴 @mention / broadcast wake callback 类型和 Runtime 不匹配
@@ -729,7 +729,7 @@
 - **问题：** `wakeMentionedAgents()` 发送 callback `type: "mention"`，`wakeRoomAgents()` 发送 `type: "room_activity"`；但 Runtime `handleCallback()` 只处理 `spawn | wake | stop`，其他类型只打印 Unknown callback type。
 - **影响：** v0.5 要求的 @mention 唤醒和 broadcast wake 不会真正唤醒 agent。
 - **建议修复：** 统一 callback contract；建议 server 对 mention/broadcast 都发送 `type: "wake"` 并附带 trigger payload，或让 Runtime 显式处理 `mention/room_activity`。加测试覆盖两条路径。
-- **状态：** open（已在 flock 分配给 cc001）
+- **状态：** done（2026-05-18，cc001 修复：mention/broadcast/task assignment 统一发送 `type: "wake"` + `trigger_type` payload）
 - **计划版本：** v0.5 验收阻断
 
 ### 🔴 Dormant wake 查询要求 `profile dormant + spawn active`，状态模型矛盾
@@ -737,7 +737,7 @@
 - **问题：** `wakeMentionedAgents()` 只查 `agent_spawns.status='active'`；`wakeRoomAgents()` JOIN active spawn 又要求 `profiles.status='dormant'`。但 stop 会把 active spawn 改成 stopped，真正 dormant agent 很可能没有 active spawn。
 - **影响：** dormant agent 被 @mention 或 broadcast 时找不到可唤醒的 runtime/session，唤醒链路静默跳过。
 - **建议修复：** 明确 dormant/resume 模型：保留 last runtime/session、引入 dormant spawn 状态，或单独存 last_spawn/last_runtime；不要依赖矛盾状态组合。
-- **状态：** open（已在 flock 分配给 cc001）
+- **状态：** done（2026-05-18，cc001 修复为查询 last spawn/runtime，不依赖 active+dormant 矛盾组合）
 - **计划版本：** v0.5 验收阻断
 
 ### 🔴 Runtime runner 未实现 proposal 要求的 Agent SDK query/resume
@@ -753,7 +753,7 @@
 - **问题：** Runtime `fetchAgentName()` 调 `GET /agents/:id` 不带 Bearer token，会被 flex auth 拒绝并 fallback 到 `agent-${id.slice(0,8)}`；子进程退出后只写 `/agents/:id/activity`，不更新 `profiles.status` / `agent_spawns.status`；`POST /agents/:id/activity` 当前无鉴权。
 - **影响：** Runtime 启动的 MCP identity 可能错误，agent 退出后 GUI 仍可能显示 active，任何调用方都能伪造 workflow activity。
 - **建议修复：** callback payload 带 agent name/token 或使用受保护 profile lookup；Runtime 退出/失败必须回写 server 状态；activity 上报加 runtime/HMAC 或内部 token 鉴权。
-- **状态：** open（已在 flock 分配给 cc001）
+- **状态：** done（2026-05-18，cc001/codex 修复：callback payload 带 agent token/name；activity 要求 agent Bearer token；runtime `Agent active` 回写 `profiles.status`、`agent_spawns.status` 和 `agent_spawns.session_id`）
 - **计划版本：** v0.5 验收阻断
 
 ### 🔴 WakePage Broadcast 唤醒调用不存在的 endpoint
@@ -761,7 +761,7 @@
 - **问题：** `packages/web/src/pages/WakePage.tsx` 调用 `POST /rooms/:id/broadcast-wake`，但 server 没有该路由；实测请求返回 404 HTML。
 - **影响：** GUI “全部唤醒”按钮必失败，v0.5 broadcast wake 无法通过 GUI 验收。
 - **建议修复：** 与 Server 对齐真实接口；若新增 `/rooms/:id/broadcast-wake`，前端使用该响应；若采用 human message 触发 broadcast wake，前端不要调用死路由。
-- **状态：** open（已在 flock 分配给 cc003）
+- **状态：** done（2026-05-18，cc001/cc003 修复并由 codex 手动复验 `POST /rooms/:id/broadcast-wake` 返回 200）
 - **计划版本：** v0.5 验收阻断
 
 ### 🟡 Wake history 前端渲染不存在的 `status` 字段
@@ -769,7 +769,7 @@
 - **问题：** `WakePage` 的 `WakeEvent` interface 要求 `status`，渲染成功/失败 badge；但 `/activity/wake-history` 返回 `wake_events`，schema 没有 `status` 列。
 - **影响：** 唤醒历史可能显示 `undefined` 并走错误态样式，无法判断 callback 是否成功。
 - **建议修复：** 后端记录真实 wake status（pending/succeeded/failed）并返回；或前端移除不存在字段，等 cc001 的 callback 成功/失败模型落地后再显示。
-- **状态：** open（已在 flock 分配给 cc003）
+- **状态：** done（2026-05-18，cc001/cc003 修复：wake_events/status 显示与后端字段对齐）
 - **计划版本：** v0.5
 
 ### 🟡 SpawnModal 目标 Room 和 Agent SDK 流程预览是误导性 UI
@@ -777,7 +777,7 @@
 - **问题：** `SpawnModal` 向 `/agents/:id/spawn` 发送 `room_id`，但 server spawn route 忽略该字段；流程预览写 “Agent SDK query()”，而 Runtime 当前是 CLI child process。
 - **影响：** 用户以为 agent 会进入指定 room、使用 SDK session，实际两者都不成立。
 - **建议修复：** 与 Server 定义 spawn `room_id` 合约，或移除/禁用目标 Room；流程预览必须反映真实实现。
-- **状态：** open（已在 flock 分配给 cc003）
+- **状态：** done（2026-05-18，cc001/cc003/codex 修复：spawn/wake 支持 `room_id` 并把 `room_id`/`room_name` 透传给 Runtime callback；流程预览不再声称 SDK query）
 - **计划版本：** v0.5
 
 ### 🟡 Runtime/Workflow 页面静默吞 API 错误且指标语义不准
@@ -785,7 +785,7 @@
 - **问题：** `RuntimesPage` 硬编码 `localhost:9400`；`RuntimesPage.load()` / `WorkflowPage.load()` 把 API 失败 catch 成空数组；Workflow “活跃 Runtime”按 `agent_count > 0` 统计而不是 runtime online/stale 状态。
 - **影响：** GUI 会把 API/auth/server 错误伪装成“暂无数据/等待 Runtime”，且 Runtime 状态显示和后端语义冲突。
 - **建议修复：** Runtime 图改为动态或去掉假端口；load 失败显示 toast/inline error；Workflow 分开显示 online/stale runtime 和 running agents。
-- **状态：** open（已在 flock 分配给 cc003）
+- **状态：** done（2026-05-18，cc003 修复主要 UI；codex 补强后 `GET /runtimes` 会先清理 stale runtime，避免 GUI 显示假 online）
 - **计划版本：** v0.5
 
 ### 🔴 Root `npm run typecheck` 因 tsconfig rootDir 错误失败
@@ -793,7 +793,7 @@
 - **问题：** repo root 执行 `npm run typecheck` 报大量 TS6059，提示 packages 文件不在 rootDir `/src` 下。各 workspace typecheck 可通过，但根脚本不可用。
 - **影响：** 新人和 CI 会被根命令误导，无法用单一命令确认 monorepo 类型正确性。
 - **建议修复：** 调整 root tsconfig 或 root package scripts，让根 typecheck 聚合 workspaces typecheck，而不是用错误 rootDir 编译整个 monorepo。
-- **状态：** open（已在 flock 分配给 cc002）
+- **状态：** done（2026-05-18，cc002 修复 root typecheck 聚合 workspace typecheck）
 - **计划版本：** v0.5 验收阻断
 
 ### 🟡 README/API/Schema/MCP 文档仍混有旧系统和未实现端点
@@ -801,7 +801,7 @@
 - **问题：** README 仍写 follows/broadcasts、3000/5173、`profiles.is_admin`、旧 CLI/MCP 工具；`packages/mcp/README.md` 和 prompts 仍提 `flock_register`/`flock_update`；`docs/api.md` 写 `GET /projects/:room_id/status`、`POST /tasks/:id/artifacts` 等未确认实现；`docs/schema.md` status/created_by 注释和 v0.5 实现不一致；server package exports 仍含不存在的 follow/broadcast service。
 - **影响：** 后续 agent 会按错误文档实现或验收，用户也会照旧命令启动到 v1 端口。
 - **建议修复：** 按真实 v0.5 实现同步 README、MCP README/prompts、api/schema；未实现端点标为 planned/open 或补实现；清理 dead package exports。
-- **状态：** open（已在 flock 分配给 cc002）
+- **状态：** done（2026-05-18，cc002 batch 4 对齐 README/MCP README/api.md/schema.md/package exports）
 - **计划版本：** v0.5
 
 ### 🟡 v2 root 缺少 DESIGN.md
@@ -817,5 +817,29 @@
 - **问题：** SpawnModal 发送 `room_id` 到 `POST /agents/:id/spawn`，但 server 完全忽略该字段。GUI 已移除 Room 选择控件。
 - **影响：** 无法在 spawn 时指定目标 Room，agent 启动后不知道要加入/查看哪个 Room
 - **建议修复：** server spawn 端点支持 room_id，callback payload 带 room_id/room_name，初始 prompt 让 agent join/read/post 到该 room
-- **状态：** open
+- **状态：** done（2026-05-18，server spawn/wake 支持 `room_id`，callback payload 带 `room_id`/`room_name`，runtime fallback prompt 限定目标 room）
 - **计划版本：** v0.5
+
+### 🔴 v0.5 GUI 私聊缺 idempotency key 导致 Internal Error
+- **发现于：** 2026-05-18，kisara 实测，codex 复现
+- **问题：** GUI 发送 direct message 时可能不传 `idempotency_key`，`sendDirectMessage()` 直接把 `undefined` 写入 `direct_idempotency_keys.key`，触发 `SQLITE_CONSTRAINT_NOTNULL` 并返回 500。
+- **影响：** 人类/GUI 私聊失败，用户只能看到 Internal Error。
+- **建议修复：** 服务端在缺省 `idempotency_key` 时生成 UUID，并用独立测试覆盖 GUI 无 key 路径。
+- **状态：** done（2026-05-18，codex 修复；`direct-chat.test.ts` 覆盖无 key 发送）
+- **计划版本：** v0.5 验收阻断
+
+### 🔴 v0.5 人类无法把 agent 拉进 Room
+- **发现于：** 2026-05-18，kisara 实测，codex 复现
+- **问题：** v0.5 删除旧 admin room members 后，GUI/人类只有让 agent 自己 join 的路径，没有 `POST /rooms/:id/members` 把指定 agent 加入当前 room。
+- **影响：** 创建协作 room 后无法主动组队，必须私聊/口头通知 agent 自己加入，体验断裂。
+- **建议修复：** 增加 `POST /rooms/:id/members`，要求调用方能访问该 room，校验目标 agent 存在后幂等加入。
+- **状态：** done（2026-05-18，codex 修复；`server.test.ts` 覆盖 human 拉 agent 入房）
+- **计划版本：** v0.5 验收阻断
+
+### 🔴 v2 spawned agent 串到旧版 Flock/旧库
+- **发现于：** 2026-05-18，kisara 实测，codex 定位
+- **问题：** v2 root `.mcp.json` 曾指向 `/Users/xxx/Code/workSpace/Agent-Larked/packages/mcp/dist/index.js` 和旧库 `/Users/xxx/Code/workSpace/Agent-Larked/data/agentfeed.db`，并写死 `AGENT_NAME`。Runtime spawned Claude 子进程因此在 v2 cwd 下连接旧版 MCP/旧库。
+- **影响：** 新版 agent 会跑到旧版协作房间发言，污染旧版协作总线，也无法验证 v2 隔离。
+- **建议修复：** `.mcp.json` 指向 v2 MCP dist 和 v2 DB，设置 v2 专用 `FLOCK_HOME`，移除硬编码 `AGENT_NAME`，让 Runtime 通过 env 注入当前 agent identity/token；增加配置校验脚本。
+- **状态：** done（2026-05-18，cc002 修复；codex 复验 `.mcp.json` 已指向 v2 path/v2 DB/v2 FLOCK_HOME）
+- **计划版本：** v0.5 验收阻断
