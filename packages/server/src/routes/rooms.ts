@@ -175,7 +175,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
   router.get('/:id', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       requireRoomAccess(db, req.params.id as string, req.agentId!);
-      const result = getRoom(db, req.params.id as string);
+      const result = getRoom(db, req.params.id as string, req.agentId);
       res.json(result);
     } catch (err) {
       next(err);

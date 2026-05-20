@@ -198,6 +198,43 @@ export function wakeRoomAgents(
 }
 
 /**
+ * Wake a dormant agent when it receives a direct message.
+ * Direct messages do not belong to a room, so the runtime prompt carries only sender/context.
+ */
+export function wakeDirectMessageAgent(
+  db: Database.Database,
+  agentId: string,
+  senderName: string,
+  excerpt: string,
+): void {
+  const profile = db.prepare('SELECT status FROM profiles WHERE id = ?').get(agentId) as { status: string } | undefined;
+  if (!profile || profile.status !== 'dormant') return;
+
+  const spawn = db.prepare(
+    "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? ORDER BY spawned_at DESC LIMIT 1",
+  ).get(agentId) as { runtime_id: string } | undefined;
+  if (!spawn?.runtime_id) return;
+
+  const runtime = db.prepare(
+    'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
+  ).get(spawn.runtime_id) as RuntimeRow | undefined;
+  if (!runtime || runtime.status !== 'online') return;
+
+  const event: CallbackEvent = {
+    type: 'wake',
+    trigger_type: 'direct_message',
+    sender_name: senderName,
+    excerpt,
+  };
+
+  sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
+    console.error(`[callback] Failed to wake agent ${agentId} for direct message via runtime ${runtime.id}:`, err);
+  });
+
+  logWakeEvent(db, agentId, senderName, 'direct_message', 'sent', undefined, excerpt);
+}
+
+/**
  * Notify a runtime to spawn an agent.
  * Called when POST /agents/:id/spawn is invoked.
  */

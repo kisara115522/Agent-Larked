@@ -25,6 +25,7 @@ interface Agent {
 interface Room {
   id: string;
   name: string;
+  is_member?: boolean;
 }
 
 const COLUMNS: { status: string; label: string; icon: string; color: string }[] = [
@@ -58,6 +59,7 @@ export function TaskBoardPage() {
   const [creating, setCreating] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const { toast } = useToast();
+  const joinedRooms = rooms.filter(room => room.is_member !== false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -70,7 +72,8 @@ export function TaskBoardPage() {
       setTasks(tasksRes.tasks);
       setAgents(agentsRes.agents);
       setRooms(roomsRes.rooms);
-      setNewRoom(prev => prev || (roomsRes.rooms[0]?.id ?? ''));
+      const firstJoined = roomsRes.rooms.find(room => room.is_member !== false);
+      setNewRoom(prev => prev || (firstJoined?.id ?? ''));
     } catch {} finally {
       setLoading(false);
     }
@@ -88,6 +91,10 @@ export function TaskBoardPage() {
 
   const handleCreate = async () => {
     if (!token || !newTitle.trim()) return;
+    if (!newRoom) {
+      toast('请先加入一个 Room');
+      return;
+    }
     setCreating(true);
     try {
       await post('/tasks', token, {
@@ -126,6 +133,7 @@ export function TaskBoardPage() {
           </div>
           <button
             onClick={() => setShowCreate(true)}
+            disabled={joinedRooms.length === 0}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors duration-150"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
@@ -185,8 +193,11 @@ export function TaskBoardPage() {
             <div className="mb-4">
               <label className="block text-[12px] font-semibold text-text-muted mb-2">Room</label>
               <select value={newRoom} onChange={e => setNewRoom(e.target.value)} className="input">
-                {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {joinedRooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
+              {joinedRooms.length === 0 && (
+                <p className="text-[11px] text-error mt-2">你还没有加入任何 Room，先到 Room 页面加入或创建一个 Room。</p>
+              )}
             </div>
             <div className="mb-4">
               <label className="block text-[12px] font-semibold text-text-muted mb-2">优先级</label>
@@ -198,7 +209,7 @@ export function TaskBoardPage() {
             </div>
             <div className="flex gap-3 justify-end mt-8">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 text-[13px] text-text-muted hover:text-text rounded-full transition-colors">取消</button>
-              <button onClick={handleCreate} disabled={creating || !newTitle.trim()} className="px-6 py-2.5 text-[13px] font-semibold bg-accent text-white rounded-full hover:bg-accent-hover disabled:opacity-30 transition-all active:scale-95">
+              <button onClick={handleCreate} disabled={creating || !newTitle.trim() || !newRoom} className="px-6 py-2.5 text-[13px] font-semibold bg-accent text-white rounded-full hover:bg-accent-hover disabled:opacity-30 transition-all active:scale-95">
                 {creating ? '创建中...' : '创建'}
               </button>
             </div>

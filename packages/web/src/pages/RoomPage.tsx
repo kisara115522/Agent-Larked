@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { useMentions } from '../context/MentionContext';
@@ -14,6 +14,7 @@ export function RoomPage() {
   const { token, human } = useAuth();
   const { subscribe, connected } = useSSE();
   const { clearRoom } = useMentions();
+  const navigate = useNavigate();
 
   // Prevent browser from restoring scroll position on refresh — we handle it ourselves
   useEffect(() => {
@@ -25,6 +26,7 @@ export function RoomPage() {
   }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [roomName, setRoomName] = useState<string>('');
+  const [isMember, setIsMember] = useState(true);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const cursorRef = useRef<number | null>(null);
@@ -76,8 +78,11 @@ export function RoomPage() {
   // Fetch room name
   useEffect(() => {
     if (!token || !roomId) return;
-    get<{ name: string }>(`/rooms/${roomId}`, token)
-      .then(r => setRoomName(r.name))
+    get<{ name: string; is_member?: boolean }>(`/rooms/${roomId}`, token)
+      .then(r => {
+        setRoomName(r.name);
+        setIsMember(r.is_member !== false);
+      })
       .catch(() => {});
   }, [token, roomId]);
 
@@ -177,6 +182,19 @@ export function RoomPage() {
     }
   };
 
+  const handleJoin = async () => {
+    if (!token || !roomId) return;
+    try {
+      await post(`/rooms/${roomId}/join`, token);
+      setIsMember(true);
+      await loadMessages(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to join room');
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => setError(null), 5000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -193,19 +211,35 @@ export function RoomPage() {
       <div className={`flex-1 flex flex-col ${threadMessageId ? 'border-r border-border' : ''}`}>
         {/* Header */}
         <div className="px-8 py-4 border-b border-border flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => navigate('/feed')}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-elevated text-text-muted border border-border hover:border-text-dim transition-colors"
+            title="返回 Room"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 4L6 8l4 4"/></svg>
+          </button>
           <div className="w-8 h-8 rounded-[8px] bg-accent-muted flex items-center justify-center">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-accent">
               <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
             </svg>
           </div>
           <h3 className="text-[15px] font-semibold">{roomName || `Room ${roomId?.slice(0, 8)}`}</h3>
-          <div className="ml-auto">
-            <button
-              onClick={handleLeave}
-              className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-text-dim border border-border hover:border-error hover:text-error transition-all duration-200"
-            >
-              离开
-            </button>
+          <div className="ml-auto flex items-center gap-2">
+            {isMember ? (
+              <button
+                onClick={handleLeave}
+                className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-text-dim border border-border hover:border-error hover:text-error transition-all duration-200"
+              >
+                离开
+              </button>
+            ) : (
+              <button
+                onClick={handleJoin}
+                className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-accent text-white hover:bg-accent-hover transition-all duration-200"
+              >
+                加入
+              </button>
+            )}
           </div>
         </div>
 
@@ -266,7 +300,14 @@ export function RoomPage() {
           )}
         </div>
 
-        <ComposeBar onSend={handleSend} placeholder="输入消息... 用 @名字 提及" roomId={roomId} token={token ?? undefined} />
+        {isMember ? (
+          <ComposeBar onSend={handleSend} placeholder="输入消息... 用 @名字 提及" roomId={roomId} token={token ?? undefined} />
+        ) : (
+          <div className="px-8 py-4 border-t border-border bg-surface flex items-center justify-between">
+            <span className="text-[13px] text-text-muted">加入 Room 后可以发送消息和创建任务</span>
+            <button onClick={handleJoin} className="px-4 py-2 rounded-full text-[12px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">加入 Room</button>
+          </div>
+        )}
         {error && (
           <div className="px-6 py-2.5 bg-error-muted border-t border-error/20 text-error text-[12px] flex items-center justify-between">
             <span>{error}</span>

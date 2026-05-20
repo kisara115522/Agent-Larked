@@ -150,6 +150,7 @@ export function listRooms(
     created_by: r.created_by,
     created_at: r.created_at,
     member_count: r.member_count,
+    is_member: query.agentId ? isRoomMember(db, r.id, query.agentId) : false,
   }));
 
   let nextCursor: string | null = null;
@@ -161,7 +162,7 @@ export function listRooms(
   return { rooms: items, next_cursor: nextCursor, has_more: hasMore };
 }
 
-export function getRoom(db: Database.Database, roomId: string): RoomWithMemberCount {
+export function getRoom(db: Database.Database, roomId: string, agentId?: string): RoomWithMemberCount {
   const row = db.prepare(`
     SELECT r.*, COUNT(rm.agent_id) AS member_count
     FROM rooms r
@@ -182,6 +183,7 @@ export function getRoom(db: Database.Database, roomId: string): RoomWithMemberCo
     created_by: row.created_by,
     created_at: row.created_at,
     member_count: row.member_count,
+    is_member: agentId ? isRoomMember(db, row.id, agentId) : false,
   };
 }
 

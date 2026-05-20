@@ -8,7 +8,7 @@ import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware
 import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
-import { notifyRuntimeSpawn, notifyRuntimeStop } from '../services/callback.js';
+import { notifyRuntimeSpawn, notifyRuntimeStop, wakeDirectMessageAgent } from '../services/callback.js';
 import { cleanupStaleRuntimes, selectAvailableRuntime } from '../services/runtime.js';
 import { sendDirectMessage } from '../services/direct-chat.js';
 
@@ -426,6 +426,13 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         content: req.body.content,
         idempotency_key: req.body.idempotency_key ?? crypto.randomUUID(),
       });
+      const sender = db.prepare('SELECT name, display_name FROM profiles WHERE id = ?').get(req.agentId!) as { name: string; display_name: string | null } | undefined;
+      wakeDirectMessageAgent(
+        db,
+        req.params.id as string,
+        sender?.display_name || sender?.name || req.agentId!,
+        String(req.body.content ?? '').slice(0, 200),
+      );
       if (eventBus) {
         eventBus.emitDirectMessage(
           {

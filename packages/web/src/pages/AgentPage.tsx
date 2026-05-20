@@ -114,12 +114,13 @@ export function AgentPage() {
         }
       }
       if ((event.event === 'room_message' || event.event === 'direct_message') && id) {
-        const data = event.data as { from_agent?: string; from_name?: string; content?: string };
-        if (data.from_agent === id || data.from_name === agent?.name) {
+        const data = event.data as { from?: string; from_agent?: string; from_name?: string; content?: string };
+        const from = data.from_agent || data.from;
+        if (from === id || data.from_name === agent?.name) {
           setEvents(prev => [{
             id: `${Date.now()}-${Math.random()}`,
             type: 'msg' as const,
-            agent: data.from_name || data.from_agent || 'unknown',
+            agent: data.from_name || from || 'unknown',
             action: '发送消息',
             detail: data.content?.slice(0, 120) || '',
             time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),

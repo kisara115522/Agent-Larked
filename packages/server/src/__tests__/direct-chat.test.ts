@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
+import express from 'express';
 import type { Express } from 'express';
 import type Database from 'better-sqlite3';
 import { createApp } from '../index.js';
@@ -145,5 +146,57 @@ describe('Direct Chat', () => {
       .expect(200);
 
     expect(list.body.chats).toEqual([]);
+  });
+
+  it('wakes a dormant direct-message recipient with DM context', async () => {
+    const callbackCalls: Array<{ path: string; body: { type?: string; trigger_type?: string; sender_name?: string; excerpt?: string } }> = [];
+    const callbackApp = express();
+    callbackApp.use(express.json());
+    callbackApp.post('/agents/:id/callback', (req, res) => {
+      callbackCalls.push({ path: req.path, body: req.body });
+      res.json({ ok: true });
+    });
+
+    const callbackServer = callbackApp.listen(0);
+    try {
+      const address = callbackServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('callback server did not bind to a TCP port');
+      }
+
+      const runtime = await request(app)
+        .post('/runtimes')
+        .send({
+          host: '127.0.0.1',
+          port: address.port,
+          callback_url: `http://127.0.0.1:${address.port}`,
+          max_agents: 10,
+        })
+        .expect(201);
+
+      db.prepare("UPDATE profiles SET status = 'dormant' WHERE id = ?").run(bobId);
+      db.prepare(`
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
+        VALUES ('dm-wake-spawn', ?, ?, 'stopped', ?, ?, 'previous spawn')
+      `).run(bobId, runtime.body.id, new Date().toISOString(), new Date().toISOString());
+
+      await request(app)
+        .post(`/direct-chats/${bobId}/messages`)
+        .set('Authorization', `Bearer ${aliceToken}`)
+        .send({ content: 'please wake for this DM', idempotency_key: 'dm-wake-context' })
+        .expect(201);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callbackCalls).toHaveLength(1);
+      expect(callbackCalls[0].body).toMatchObject({
+        type: 'wake',
+        trigger_type: 'direct_message',
+        sender_name: 'DirectAlice',
+        excerpt: 'please wake for this DM',
+      });
+    } finally {
+      await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
+    }
   });
 });

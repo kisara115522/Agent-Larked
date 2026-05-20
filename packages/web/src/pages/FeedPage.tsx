@@ -14,6 +14,7 @@ interface Room {
   member_count: number;
   visibility?: string;
   created_at?: string;
+  is_member?: boolean;
 }
 
 interface FeedItem extends Message {
@@ -153,75 +154,78 @@ export function FeedPage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-12 pb-8">
-        {messages.length === 0 ? (
-          rooms.length > 0 ? (
-            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
-              {rooms.map((room, index) => (
+      <div className="flex-1 overflow-hidden px-12 pb-8">
+        <div className="h-full grid grid-cols-[280px_minmax(0,1fr)] gap-6">
+          <aside className="border border-border rounded-[8px] bg-surface overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-border text-[12px] font-semibold text-text-dim uppercase tracking-[0.12em]">
+              Rooms
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {rooms.length > 0 ? rooms.map(room => (
                 <button
                   key={room.id}
                   onClick={() => navigate(`/rooms/${room.id}`)}
-                  className="text-left bg-surface border border-border rounded-[8px] p-4 hover:border-accent/50 hover:bg-surface-elevated/40 transition-colors"
-                  style={{ animation: `fadeUp .25s ease-out ${index * 35}ms both` }}
+                  className="w-full text-left px-3 py-2.5 rounded-[6px] hover:bg-surface-elevated transition-colors"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-[8px] bg-accent-muted text-accent flex items-center justify-center shrink-0">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-                        <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
-                      </svg>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[14px] font-semibold truncate">{room.name}</div>
-                      <div className="text-[11px] text-text-dim mt-1">
-                        {room.member_count} 成员 · 暂无消息
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${room.is_member ? 'bg-success' : 'bg-text-dim'}`} />
+                    <span className="text-[13px] font-medium truncate flex-1">{room.name}</span>
+                    <span className="text-[10px] text-text-dim font-mono">{room.member_count}</span>
+                  </div>
+                  <div className="text-[10px] text-text-dim mt-1 pl-3.5">
+                    {room.is_member ? '已加入' : '未加入'}
                   </div>
                 </button>
-              ))}
+              )) : (
+                <div className="text-center text-text-dim text-[12px] py-10">暂无 Room</div>
+              )}
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-[400px] text-center">
-              <div className="relative w-20 h-20 mb-6">
-                <div className="absolute inset-0 rounded-full border border-border" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-dim">
-                    <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
-                  </svg>
+          </aside>
+
+          <section className="overflow-y-auto">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[400px] text-center">
+                <div className="relative w-20 h-20 mb-6">
+                  <div className="absolute inset-0 rounded-full border border-border" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-dim">
+                      <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
+                    </svg>
+                  </div>
                 </div>
+                <p className="text-[14px] text-text-muted font-medium">{rooms.length > 0 ? '暂无消息' : '暂无 Room'}</p>
+                <p className="text-[12px] text-text-dim mt-2">{rooms.length > 0 ? '从左侧选择一个 Room' : '新建一个 Room 开始协作'}</p>
               </div>
-              <p className="text-[14px] text-text-muted font-medium">暂无 Room</p>
-              <p className="text-[12px] text-text-dim mt-2">新建一个 Room 开始协作</p>
-            </div>
-          )
-        ) : (
-          <div className="space-y-1">
-            {messages.map(msg => (
-              <div key={msg.id} className="rounded-[12px] hover:bg-surface-elevated/30 transition-colors">
-                <div className="px-4 pt-3 pb-0">
-                  <button
-                    onClick={() => navigate(`/rooms/${msg.room_id}`)}
-                    className="text-[10px] text-accent font-semibold uppercase tracking-[0.12em] hover:text-accent-hover transition-colors"
-                  >
-                    {msg.room_name}
-                  </button>
-                </div>
-                <MessageCard
-                  id={msg.id}
-                  from={msg.from}
-                  fromName={msg.from_display_name || msg.from_name || msg.from}
-                  content={msg.content}
-                  mentions={msg.mentions}
-                  reactions={msg.reactions}
-                  createdAt={msg.created_at}
-                  senderType={msg.sender_type}
-                  currentUserId={human?.id}
-                  onReact={handleReact}
-                />
+            ) : (
+              <div className="space-y-1">
+                {messages.map(msg => (
+                  <div key={msg.id} className="rounded-[12px] hover:bg-surface-elevated/30 transition-colors">
+                    <div className="px-4 pt-3 pb-0">
+                      <button
+                        onClick={() => navigate(`/rooms/${msg.room_id}`)}
+                        className="text-[10px] text-accent font-semibold uppercase tracking-[0.12em] hover:text-accent-hover transition-colors"
+                      >
+                        {msg.room_name}
+                      </button>
+                    </div>
+                    <MessageCard
+                      id={msg.id}
+                      from={msg.from}
+                      fromName={msg.from_display_name || msg.from_name || msg.from}
+                      content={msg.content}
+                      mentions={msg.mentions}
+                      reactions={msg.reactions}
+                      createdAt={msg.created_at}
+                      senderType={msg.sender_type}
+                      currentUserId={human?.id}
+                      onReact={handleReact}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
+          </section>
+        </div>
       </div>
       {showCreateRoom && token && (
         <CreateRoomModal

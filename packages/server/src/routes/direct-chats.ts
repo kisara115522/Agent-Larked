@@ -4,6 +4,7 @@ import { getDirectMessages, listDirectChats, sendDirectMessage } from '../servic
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
+import { wakeDirectMessageAgent } from '../services/callback.js';
 
 export function directChatsRouter(db: Database.Database, eventBus: EventBus): Router {
   const router = Router();
@@ -32,6 +33,13 @@ export function directChatsRouter(db: Database.Database, eventBus: EventBus): Ro
   router.post('/:agentId/messages', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = sendDirectMessage(db, req.agentId!, req.params.agentId as string, req.body);
+      const sender = db.prepare('SELECT name, display_name FROM profiles WHERE id = ?').get(req.agentId!) as { name: string; display_name: string | null } | undefined;
+      wakeDirectMessageAgent(
+        db,
+        req.params.agentId as string,
+        sender?.display_name || sender?.name || req.agentId!,
+        String(req.body.content ?? '').slice(0, 200),
+      );
       eventBus.emitDirectMessage(
         {
           message_id: result.id,

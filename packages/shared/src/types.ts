@@ -155,6 +155,7 @@ export interface Room {
 
 export interface RoomWithMemberCount extends Room {
   member_count: number;
+  is_member?: boolean;
 }
 
 export interface CreateRoomRequest {
