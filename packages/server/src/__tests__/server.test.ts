@@ -97,6 +97,38 @@ describe('Room Operations', () => {
       .set('Authorization', `Bearer ${reg.body.token}`)
       .expect(200);
   });
+
+  it('POST /rooms/:id/members lets a human add an agent to a room', async () => {
+    const reg = await request(app)
+      .post('/agents')
+      .send({ name: 'PulledRoomBot' })
+      .expect(201);
+
+    const human = await request(app)
+      .post('/human/register')
+      .send({ username: 'room-owner', password: 'test-pass-123' })
+      .expect(201);
+    const humanCookie = human.headers['set-cookie'][0].split(';')[0];
+
+    const room = await request(app)
+      .post('/rooms')
+      .set('Cookie', humanCookie)
+      .send({ name: 'pull-agent-room' })
+      .expect(201);
+
+    await request(app)
+      .post(`/rooms/${room.body.id}/members`)
+      .set('Cookie', humanCookie)
+      .send({ agent_id: reg.body.id })
+      .expect(200);
+
+    const members = await request(app)
+      .get(`/rooms/${room.body.id}/members`)
+      .set('Cookie', humanCookie)
+      .expect(200);
+
+    expect(members.body.members.some((member: { id: string }) => member.id === reg.body.id)).toBe(true);
+  });
 });
 
 describe('Messaging', () => {

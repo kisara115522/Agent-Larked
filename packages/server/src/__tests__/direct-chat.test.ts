@@ -61,6 +61,20 @@ describe('Direct Chat', () => {
     expect(bobView.body.messages).toHaveLength(1);
   });
 
+  it('generates an idempotency key when GUI sends a DM without one', async () => {
+    const guiSender = await request(app).post('/agents').send({ name: 'DirectGuiSender' }).expect(201);
+    const guiPeer = await request(app).post('/agents').send({ name: 'DirectGuiPeer' }).expect(201);
+
+    const sent = await request(app)
+      .post(`/direct-chats/${guiPeer.body.id}/messages`)
+      .set('Authorization', `Bearer ${guiSender.body.token}`)
+      .send({ content: 'gui dm without key' })
+      .expect(201);
+
+    expect(sent.body.id).toBeDefined();
+    expect(sent.body.sequence).toBeGreaterThan(0);
+  });
+
   it('lists chats with unread counts and last message summaries', async () => {
     await request(app)
       .post(`/direct-chats/${bobId}/messages`)

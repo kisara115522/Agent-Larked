@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, requireRoomAccess } from '../services/room.js';
+import { addRoomMember, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, requireRoomAccess } from '../services/room.js';
 import { getMessages, sendMessage } from '../services/messaging.js';
 import { wakeRoomAgents } from '../services/callback.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
@@ -79,6 +79,22 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
     try {
       requireRoomAccess(db, req.params.id as string, req.agentId!);
       const result = getRoomMembers(db, req.params.id as string);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /rooms/:id/members — add an agent to a room (human or agent with room access)
+  router.post('/:id/members', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
+    try {
+      const roomId = req.params.id as string;
+      requireRoomAccess(db, roomId, req.agentId!);
+      const agentId = String(req.body.agent_id || '').trim();
+      if (!agentId) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'agent_id is required', false, 400);
+      }
+      const result = addRoomMember(db, roomId, agentId);
       res.json(result);
     } catch (err) {
       next(err);

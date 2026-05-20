@@ -68,9 +68,10 @@ export function sendDirectMessage(
   const requestHash = createHash('sha256')
     .update(JSON.stringify({ peer_id: peerId, content: req.content }))
     .digest('hex');
+  const idempotencyKey = req.idempotency_key ?? uuidv4();
   const existingKey = db.prepare(
     'SELECT request_hash, response FROM direct_idempotency_keys WHERE agent_id = ? AND peer_id = ? AND key = ?',
-  ).get(agentId, peerId, req.idempotency_key) as { request_hash: string; response: string } | undefined;
+  ).get(agentId, peerId, idempotencyKey) as { request_hash: string; response: string } | undefined;
 
   if (existingKey) {
     if (existingKey.request_hash === requestHash) {
@@ -102,7 +103,7 @@ export function sendDirectMessage(
     db.prepare(`
       INSERT INTO direct_idempotency_keys (agent_id, peer_id, key, request_hash, response, expires_at)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(agentId, peerId, req.idempotency_key, requestHash, JSON.stringify(response), expiresAt);
+    `).run(agentId, peerId, idempotencyKey, requestHash, JSON.stringify(response), expiresAt);
 
     return response;
   })();

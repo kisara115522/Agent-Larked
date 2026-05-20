@@ -53,6 +53,23 @@ export function joinRoom(db: Database.Database, roomId: string, agentId: string)
   return { ok: true };
 }
 
+export function addRoomMember(db: Database.Database, roomId: string, agentId: string): OkResponse {
+  const room = db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId);
+  if (!room) {
+    throw new ServerError(ErrorCode.ROOM_NOT_FOUND, 'Room not found', false, 404);
+  }
+
+  const agent = db.prepare('SELECT id FROM profiles WHERE id = ?').get(agentId);
+  if (!agent) {
+    throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
+  }
+
+  const now = new Date().toISOString();
+  db.prepare('INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at) VALUES (?, ?, ?)').run(roomId, agentId, now);
+
+  return { ok: true };
+}
+
 export function leaveRoom(db: Database.Database, roomId: string, agentId: string): OkResponse {
   const room = db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId);
   if (!room) {
@@ -185,4 +202,3 @@ export function getRoomMembers(db: Database.Database, roomId: string): GetRoomMe
 
   return { members };
 }
-
