@@ -31,40 +31,50 @@ export function RuntimesPage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
-        <h3 className="text-base font-semibold">Runtime 管理</h3>
-        <div className="ml-auto">
-          <button onClick={() => setShowHelp(true)} className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
-            + 注册新 Runtime
+    <div className="flex flex-col h-full overflow-y-auto">
+      {/* Header */}
+      <div className="px-12 pt-12 pb-6 shrink-0" style={{ animation: 'fadeUp .4s ease-out' }}>
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+              Runtime
+            </h1>
+            <p className="text-[14px] text-text-dim mt-3 font-medium">{runtimes.length} 个 daemon 已注册</p>
+          </div>
+          <button
+            onClick={() => setShowHelp(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors duration-150"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+            注册新 Runtime
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Architecture Info */}
-        <div className="p-6 text-center">
-          <div className="inline-block text-left text-xs text-text-muted bg-surface border border-border rounded-[10px] p-5 max-w-[480px]">
-            <div className="font-semibold text-sm mb-2">架构说明</div>
-            <div className="space-y-1.5">
-              <div>Flock Server (REST API + SSE + SQLite + MCP)</div>
-              <div className="text-text-dim">↓ HTTP Callbacks (HMAC-SHA256)</div>
-              <div>Runtime Daemon（自动注册，心跳保活）</div>
-              <div className="text-text-dim">↓ spawn/wake/stop</div>
-              <div>Agent 子进程（claude -p）</div>
-            </div>
+      {/* Architecture */}
+      <div className="px-12 pb-8">
+        <div className="bg-surface border border-border rounded-[10px] p-5 max-w-[500px]">
+          <div className="text-[11px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-3">架构</div>
+          <div className="space-y-2 text-[12px] text-text-muted font-mono">
+            <div>Flock Server (REST + SSE + SQLite + MCP)</div>
+            <div className="text-text-dim pl-4">↓ HTTP Callbacks (HMAC-SHA256)</div>
+            <div>Runtime Daemon（自动注册，心跳保活）</div>
+            <div className="text-text-dim pl-4">↓ spawn / wake / stop</div>
+            <div>Agent 子进程（claude -p）</div>
           </div>
         </div>
+      </div>
 
-        {/* Runtime Cards */}
-        <div className="grid grid-cols-2 gap-3 px-6 pb-6">
+      {/* Runtime Cards */}
+      <div className="px-12 pb-12">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {runtimes.length === 0 ? (
-            <div className="col-span-2 text-center text-text-dim text-sm py-8">
-              暂无注册的 Runtime。Runtime daemon 启动后将自动注册。
+            <div className="col-span-2 text-center text-text-dim text-[13px] py-16">
+              暂无注册的 Runtime。启动 daemon 后将自动注册。
             </div>
           ) : (
-            runtimes.map(rt => (
-              <RuntimeCard key={rt.id} runtime={rt} />
+            runtimes.map((rt, i) => (
+              <RuntimeCard key={rt.id} runtime={rt} index={i} />
             ))
           )}
         </div>
@@ -72,25 +82,25 @@ export function RuntimesPage() {
 
       {/* Help Modal */}
       {showHelp && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowHelp(false)}>
-          <div className="w-[520px] p-6 bg-surface border border-border rounded-[14px]" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">注册新 Runtime</h3>
-            <p className="text-sm text-text-muted mb-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowHelp(false)} style={{ animation: 'fadeIn .15s ease-out' }}>
+          <div className="w-[500px] p-7 bg-surface-elevated border border-border rounded-[14px] shadow-lg" onClick={e => e.stopPropagation()} style={{ animation: 'scaleIn .2s ease-out' }}>
+            <h3 className="text-[18px] font-bold mb-4">注册新 Runtime</h3>
+            <p className="text-[13px] text-text-muted mb-5">
               Runtime daemon 启动后会自动注册到 Flock Server。无需手动注册。
             </p>
-            <div className="bg-bg border border-border rounded p-4 font-mono text-xs leading-relaxed mb-4">
+            <div className="bg-bg-warm border border-border rounded-[6px] p-4 font-mono text-[11px] leading-relaxed mb-5">
               <div className="text-text-dim mb-2"># 在目标机器上启动 Runtime daemon</div>
               <div>CALLBACK_PORT=4000 \</div>
               <div>FLOCK_SERVER_URL=http://your-server:3001 \</div>
               <div>npx tsx packages/runtime/src/index.ts</div>
             </div>
-            <div className="text-xs text-text-muted space-y-1.5">
-              <p>• Runtime 启动后自动向 Server 注册，无需手动操作</p>
-              <p>• 心跳间隔默认 30 秒，Server 通过心跳判断 Runtime 是否在线</p>
-              <p>• spawn/wake 请求会自动路由到可用的 Runtime</p>
+            <div className="text-[12px] text-text-muted space-y-1.5">
+              <p>• Runtime 启动后自动向 Server 注册</p>
+              <p>• 心跳间隔默认 30 秒</p>
+              <p>• spawn/wake 请求自动路由到可用 Runtime</p>
             </div>
-            <div className="mt-5 flex justify-end">
-              <button onClick={() => setShowHelp(false)} className="px-4 py-2 rounded-full text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
+            <div className="mt-6 flex justify-end">
+              <button onClick={() => setShowHelp(false)} className="px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-all active:scale-95">
                 知道了
               </button>
             </div>
@@ -101,37 +111,32 @@ export function RuntimesPage() {
   );
 }
 
-function RuntimeCard({ runtime }: { runtime: Runtime }) {
+function RuntimeCard({ runtime, index }: { runtime: Runtime; index: number }) {
   const isOnline = runtime.status === 'online';
   const caps = Array.isArray(runtime.capabilities) ? runtime.capabilities : [];
 
   const heartbeat = runtime.last_heartbeat_at
-    ? `${Math.round((Date.now() - new Date(runtime.last_heartbeat_at).getTime()) / 1000)} 秒前`
+    ? `${Math.round((Date.now() - new Date(runtime.last_heartbeat_at).getTime()) / 1000)}s ago`
     : '从未';
 
   return (
-    <div className="bg-surface border border-border rounded-[10px] p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#34D399] shadow-[0_0_8px_rgba(52,211,153,.5)]' : 'bg-text-dim'}`} />
-        <span className="font-mono font-semibold text-sm">{runtime.host}:{runtime.port}</span>
-        <span className={`ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${isOnline ? 'bg-[#064E3B] text-[#34D399]' : 'bg-surface-elevated text-text-muted border border-border'}`}>
+    <div className="bg-surface border border-border rounded-[10px] p-5" style={{ animation: `fadeUp .35s ease-out ${index * 50}ms both` }}>
+      <div className="flex items-center gap-3 mb-4">
+        <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-success status-dot-online' : 'bg-text-dim'}`} />
+        <span className="font-mono font-semibold text-[13px]">{runtime.host}:{runtime.port}</span>
+        <span className={`ml-auto px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${isOnline ? 'bg-success-muted text-success' : 'bg-surface-elevated text-text-muted'}`}>
           {isOnline ? '在线' : runtime.status}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div><span className="text-text-dim block">Host</span><span className="font-mono">{runtime.host}</span></div>
-        <div><span className="text-text-dim block">Port</span><span className="font-mono">{runtime.port}</span></div>
-        <div><span className="text-text-dim block">心跳</span>{heartbeat}</div>
-        <div><span className="text-text-dim block">Capabilities</span>{caps.join(', ') || 'general'}</div>
+      <div className="grid grid-cols-2 gap-3 text-[11px]">
+        <div><span className="text-text-dim block mb-0.5">心跳</span><span className="font-mono">{heartbeat}</span></div>
+        <div><span className="text-text-dim block mb-0.5">Capabilities</span>{caps.join(', ') || 'general'}</div>
       </div>
-      <div className="mt-3 pt-3 border-t border-border text-xs">
-        <span className="text-text-dim">运行中 Agent:</span>
-        <div className="mt-1 font-mono">
-          {runtime.agent_count > 0
-            ? `${runtime.agent_count} / ${runtime.max_agents}`
-            : <span className="text-text-dim text-[11px]">暂无 agent 关联</span>
-          }
-        </div>
+      <div className="mt-4 pt-3 border-t border-border/50 text-[11px] flex items-center gap-2">
+        <span className="text-text-dim">Agent:</span>
+        <span className="font-mono font-medium">
+          {runtime.agent_count} / {runtime.max_agents}
+        </span>
       </div>
     </div>
   );

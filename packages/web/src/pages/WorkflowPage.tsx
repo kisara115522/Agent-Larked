@@ -4,29 +4,9 @@ import { useSSE } from '../context/SSEContext';
 import { get } from '../api/client';
 import { SpawnModal } from '../components/modals/SpawnModal';
 
-interface Agent {
-  id: string;
-  name: string;
-  display_name: string;
-  status: string;
-  bio?: string;
-}
-
-interface Task {
-  id: string;
-  title: string;
-  status: string;
-  assigned_to?: string;
-  priority: number;
-}
-
-interface Runtime {
-  id: string;
-  host: string;
-  port: number;
-  agent_count: number;
-  max_agents: number;
-}
+interface Agent { id: string; name: string; display_name: string; status: string; bio?: string; }
+interface Task { id: string; title: string; status: string; assigned_to?: string; priority: number; }
+interface Runtime { id: string; host: string; port: number; agent_count: number; max_agents: number; }
 
 interface WorkflowEvent {
   id: string;
@@ -36,15 +16,6 @@ interface WorkflowEvent {
   action: string;
   detail: string;
   time: string;
-  tokenUsage?: string;
-}
-
-const PALETTE = ['#10B981', '#F59E0B', '#8B5CF6', '#3B82F6', '#EF4444', '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#A855F7'];
-
-function getAgentColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
-  return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
 export function WorkflowPage() {
@@ -56,7 +27,6 @@ export function WorkflowPage() {
   const [runtimes, setRuntimes] = useState<Runtime[]>([]);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
   const [showSpawn, setShowSpawn] = useState(false);
-
   const [todayTokens, setTodayTokens] = useState(0);
 
   const load = useCallback(async () => {
@@ -74,7 +44,6 @@ export function WorkflowPage() {
       setTasks(tasksRes.tasks);
       setRooms(roomsRes.rooms);
       setRuntimes(runtimesRes.runtimes);
-      // Convert activity log to workflow events
       const converted: WorkflowEvent[] = activityRes.logs.slice(0, 30).map(ev => ({
         id: ev.id,
         type: ev.activity_type === 'tool_call' ? 'tool' : ev.activity_type === 'message' ? 'msg' : ev.activity_type === 'think' ? 'think' : ev.activity_type === 'error' ? 'error' : 'system',
@@ -85,7 +54,6 @@ export function WorkflowPage() {
         time: new Date(ev.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       }));
       if (converted.length > 0) setEvents(prev => [...converted, ...prev].slice(0, 50));
-      // Sum today's token usage
       const totalTokens = usageRes.usage.reduce((sum, u) => sum + u.input_tokens + u.output_tokens, 0);
       setTodayTokens(totalTokens);
     } catch {}
@@ -93,7 +61,6 @@ export function WorkflowPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Generate workflow events from SSE
   useEffect(() => {
     return subscribe(event => {
       if (event.event === 'room_message' || event.event === 'direct_message') {
@@ -139,106 +106,193 @@ export function WorkflowPage() {
   const activeCount = agents.filter(a => a.status === 'active').length;
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
   const todoTasks = tasks.filter(t => t.status === 'todo').length;
-  const reviewTasks = tasks.filter(t => t.status === 'review').length;
   const totalAgents = agents.length;
   const onlineRuntimes = runtimes.length;
-  const totalAgentSlots = runtimes.reduce((sum, r) => sum + r.agent_count, 0);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
-        <h3 className="text-base font-semibold">Agent 工作流</h3>
-        <div className="ml-auto flex items-center gap-3 text-xs text-text-muted">
-          <span>实时更新</span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#064E3B] text-[#34D399]">
-            {activeCount} 个 agent 活跃中
-          </span>
-          <button onClick={() => setShowSpawn(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
-            + 启动 Agent
+    <div className="flex flex-col h-full overflow-y-auto">
+      {/* Hero section with massive breathing room */}
+      <div className="px-12 pt-16 pb-8" style={{ animation: 'fadeUp .4s ease-out' }}>
+        <div className="flex items-end justify-between mb-2">
+          <div>
+            <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+              工作流
+            </h1>
+            <p className="text-[14px] text-text-dim mt-3 font-medium">
+              {activeCount > 0
+                ? `${activeCount} 个 Agent 正在运行`
+                : '所有 Agent 处于休眠状态'}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowSpawn(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors duration-150"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+            启动 Agent
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-3 p-5">
-          <StatCard label="在线 Agent" value={String(activeCount)} sub={`共 ${totalAgents} 个 Profile`} color="text-[#34D399]" />
-          <StatCard label="Runtime" value={onlineRuntimes > 0 ? String(onlineRuntimes) : '-'} sub={onlineRuntimes > 0 ? `${totalAgentSlots} 个 agent 槽位` : '等待 Runtime daemon'} color="text-accent" />
-          <StatCard label="进行中任务" value={String(inProgressTasks)} sub={`待办 ${todoTasks} / 审查 ${reviewTasks}`} color="text-[#FBBF24]" />
-          <StatCard label="今日 Token" value={todayTokens > 0 ? todayTokens.toLocaleString() : '-'} sub={todayTokens > 0 ? '输入 + 输出' : '暂无使用记录'} />
+      {/* Stats */}
+      <div className="px-12 pb-10">
+        <div className="grid grid-cols-4 gap-4">
+          <GlassStatCard
+            label="在线 Agent"
+            value={activeCount}
+            total={totalAgents}
+            color="#34d399"
+            delay={0}
+          />
+          <GlassStatCard
+            label="Runtime"
+            value={onlineRuntimes}
+            sub={onlineRuntimes > 0 ? `${runtimes.reduce((s, r) => s + r.agent_count, 0)} 槽位` : '等待连接'}
+            color="#3b82f6"
+            delay={50}
+          />
+          <GlassStatCard
+            label="进行中"
+            value={inProgressTasks}
+            sub={`待办 ${todoTasks}`}
+            color="#fbbf24"
+            delay={100}
+          />
+          <GlassStatCard
+            label="今日 Token"
+            value={todayTokens > 0 ? formatNumber(todayTokens) : '—'}
+            sub={todayTokens > 0 ? 'input + output' : '暂无'}
+            color="#f0f0f5"
+            delay={150}
+          />
         </div>
+      </div>
 
-        {/* Live Workflow Timeline */}
-        <div className="px-6 py-4">
-          <h4 className="text-[11px] text-text-muted uppercase tracking-wider mb-3">实时执行流</h4>
-          {events.length === 0 ? (
-            <div className="text-center text-text-dim text-sm py-12">
-              等待事件... 发送消息或 agent 状态变更将在此显示
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {events.map(ev => (
-                <WorkflowItem key={ev.id} event={ev} />
-              ))}
+      {/* Timeline */}
+      <div className="px-12 pb-12 flex-1">
+        <div className="flex items-center gap-3 mb-6">
+          <h2 className="text-[13px] font-semibold text-text-muted uppercase tracking-[0.15em]">实时执行流</h2>
+          {events.length > 0 && (
+            <span className="text-[11px] text-text-dim font-mono px-2 py-0.5 rounded-full bg-surface-elevated">{events.length}</span>
+          )}
+          <div className="flex-1" />
+          {activeCount > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-success status-dot-online" />
+              <span className="text-[11px] text-success font-medium">运行中</span>
             </div>
           )}
         </div>
+
+        {events.length === 0 ? (
+          <EmptyTimeline />
+        ) : (
+          <div className="space-y-2">
+            {events.map((ev, i) => (
+              <TimelineRow key={ev.id} event={ev} index={i} />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Spawn Modal */}
-      {showSpawn && (
-        <SpawnModal
-          agents={agents}
-          runtimes={runtimes}
-          rooms={rooms}
-          onClose={() => setShowSpawn(false)}
-          onSpawned={load}
-        />
-      )}
+      {showSpawn && <SpawnModal agents={agents} runtimes={runtimes} rooms={rooms} onClose={() => setShowSpawn(false)} onSpawned={load} />}
     </div>
   );
 }
 
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub: string; color?: string }) {
+function GlassStatCard({ label, value, total, sub, color, delay }: {
+  label: string; value: number | string; total?: number; sub?: string; color: string; delay: number;
+}) {
   return (
-    <div className="bg-surface border border-border rounded-[10px] p-4">
-      <div className="text-[11px] text-text-muted uppercase tracking-wider">{label}</div>
-      <div className={`text-[28px] font-bold tracking-tight mt-0.5 ${color || 'text-text'}`}>{value}</div>
-      <div className="text-xs text-text-muted mt-0.5">{sub}</div>
+    <div
+      className="bg-surface border border-border rounded-[10px] p-6 group"
+      style={{ animation: `fadeUp .4s ease-out ${delay}ms both` }}
+    >
+      <div className="text-[11px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-4">{label}</div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-[32px] font-black tracking-tight leading-none" style={{ color }}>
+          {value}
+        </span>
+        {total !== undefined && (
+          <span className="text-[13px] text-text-dim font-mono">/ {total}</span>
+        )}
+      </div>
+      {sub && <p className="text-[11px] text-text-dim mt-3 font-medium">{sub}</p>}
     </div>
   );
 }
 
-function WorkflowItem({ event }: { event: WorkflowEvent }) {
-  const iconMap = {
-    tool: { icon: '🔧', cls: 'border-accent bg-accent-muted' },
-    msg: { icon: '💬', cls: 'border-[#34D399] bg-[#064E3B]' },
-    think: { icon: '💭', cls: 'border-[#FBBF24] bg-[#78350F]' },
-    system: { icon: '⚡', cls: 'border-text-dim bg-surface' },
-    error: { icon: '❌', cls: 'border-error bg-error-muted' },
+// PLACEHOLDER_TIMELINE_COMPONENTS
+
+const PALETTE = ['#3b82f6', '#34d399', '#f59e0b', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#ef4444', '#a855f7'];
+function getAgentColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  return PALETTE[Math.abs(hash) % PALETTE.length];
+}
+
+function TimelineRow({ event, index }: { event: WorkflowEvent; index: number }) {
+  const typeStyles: Record<string, { dot: string; label: string }> = {
+    tool: { dot: 'bg-accent', label: '工具' },
+    msg: { dot: 'bg-success', label: '消息' },
+    think: { dot: 'bg-warning', label: '思考' },
+    system: { dot: 'bg-text-dim', label: '系统' },
+    error: { dot: 'bg-error', label: '错误' },
   };
-  const { icon, cls } = iconMap[event.type] || iconMap.system;
+  const style = typeStyles[event.type] || typeStyles.system;
 
   return (
-    <div className="flex gap-3 py-2 relative">
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 border-2 z-10 ${cls}`}>
-        {icon}
+    <div
+      className="flex items-start gap-4 px-4 py-3 rounded-[12px] hover:bg-surface-elevated/50 transition-all duration-200 group"
+      style={index < 8 ? { animation: `fadeUp .3s ease-out ${index * 40}ms both` } : undefined}
+    >
+      {/* Dot */}
+      <div className="pt-1.5 shrink-0">
+        <div className={`w-2 h-2 rounded-full ${style.dot}`} />
       </div>
+
+      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
           <span className="text-[13px] font-semibold" style={{ color: getAgentColor(event.agent) }}>
             {event.agentDisplay}
           </span>
-          <span className="text-xs text-text-muted">{event.action}</span>
-          <span className="text-[11px] text-text-dim font-mono ml-auto">{event.time}</span>
+          <span className="text-[11px] text-text-dim font-medium">{event.action}</span>
         </div>
         {event.detail && (
-          <div className="mt-1 text-xs text-text-muted leading-relaxed">{event.detail}</div>
-        )}
-        {event.tokenUsage && (
-          <div className="text-[11px] text-text-dim font-mono mt-0.5">{event.tokenUsage}</div>
+          <p className="mt-1 text-[12px] text-text-muted leading-relaxed line-clamp-2">{event.detail}</p>
         )}
       </div>
+
+      {/* Time */}
+      <span className="text-[11px] text-text-dim font-mono tabular-nums shrink-0 pt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {event.time}
+      </span>
     </div>
   );
+}
+
+function EmptyTimeline() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center" style={{ animation: 'fadeUp .5s ease-out' }}>
+      {/* Orbital animation */}
+      <div className="relative w-32 h-32 mb-8">
+        <div className="absolute inset-0 rounded-full border border-border" />
+        <div className="absolute inset-4 rounded-full border border-border/50" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-4 h-4 rounded-full bg-accent/20 flex items-center justify-center">
+            <div className="w-2 h-2 rounded-full bg-accent" />
+          </div>
+        </div>
+      </div>
+      <p className="text-[14px] text-text-muted font-medium">等待事件</p>
+      <p className="text-[12px] text-text-dim mt-2 max-w-[240px]">启动 Agent 后，活动将在此实时显示</p>
+    </div>
+  );
+}
+
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
