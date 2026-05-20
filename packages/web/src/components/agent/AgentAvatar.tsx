@@ -17,9 +17,9 @@ interface AgentAvatarProps {
 }
 
 const sizes = {
-  sm: 'w-6 h-6 text-[10px]',
-  md: 'w-8 h-8 text-xs',
-  lg: 'w-10 h-10 text-sm',
+  sm: 'w-7 h-7 text-[10px]',
+  md: 'w-9 h-9 text-[11px]',
+  lg: 'w-11 h-11 text-[13px]',
 };
 
 export function AgentAvatar({ name, displayName, size = 'md' }: AgentAvatarProps) {
@@ -32,7 +32,7 @@ export function AgentAvatar({ name, displayName, size = 'md' }: AgentAvatarProps
     <div
       className={`${sizes[size]} rounded-full flex items-center justify-center font-bold text-white shrink-0`}
       style={{
-        background: `linear-gradient(135deg, hsl(${hue1}, 60%, 50%), hsl(${hue2}, 60%, 40%))`,
+        background: `linear-gradient(135deg, hsl(${hue1}, 55%, 52%), hsl(${hue2}, 55%, 38%))`,
       }}
     >
       {initials}
