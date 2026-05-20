@@ -2,9 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SSEProvider } from './context/SSEContext';
 import { MentionProvider } from './context/MentionContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './components/ui/Toast';
 import { Sidebar } from './components/layout/Sidebar';
-import { RightPanel } from './components/layout/RightPanel';
 import { LoginPage } from './pages/LoginPage';
 import { FeedPage } from './pages/FeedPage';
 import { RoomPage } from './pages/RoomPage';
@@ -24,8 +24,11 @@ function AppLayout() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-bg text-text-muted">
-        <p>加载中...</p>
+      <div className="h-screen flex items-center justify-center bg-bg">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+          <p className="text-sm text-text-dim font-medium tracking-wide">加载中</p>
+        </div>
       </div>
     );
   }
@@ -37,9 +40,9 @@ function AppLayout() {
   return (
     <SSEProvider>
       <MentionProvider>
-        <div className="grid grid-cols-[220px_1fr_360px] h-screen bg-bg">
+        <div className="flex h-screen bg-bg">
           <Sidebar />
-          <main className="flex flex-col overflow-hidden bg-bg">
+          <main className="flex-1 flex flex-col overflow-hidden">
             <Routes>
               <Route path="/" element={<WorkflowPage />} />
               <Route path="/feed" element={<FeedPage />} />
@@ -56,7 +59,6 @@ function AppLayout() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
-          <RightPanel />
         </div>
       </MentionProvider>
     </SSEProvider>
@@ -66,11 +68,13 @@ function AppLayout() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <AppLayout />
-        </ToastProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <AppLayout />
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }
