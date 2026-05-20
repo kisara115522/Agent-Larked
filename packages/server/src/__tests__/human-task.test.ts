@@ -60,4 +60,43 @@ describe('Human Tasks', () => {
       .send({ room_id: publicRoomId, title: 'not joined task' })
       .expect(403);
   });
+
+  it('backfills a missing legacy human profile before creating a task', async () => {
+    db.prepare('DELETE FROM profiles WHERE id = ?').run(humanId);
+
+    const task = await request(app)
+      .post('/tasks')
+      .set('Authorization', `Bearer ${humanToken}`)
+      .send({ room_id: memberRoomId, title: 'legacy human task' })
+      .expect(201);
+
+    expect(task.body.created_by).toBe(humanId);
+
+    const profile = db.prepare('SELECT id, token_hash FROM profiles WHERE id = ?').get(humanId) as { id: string; token_hash: string } | undefined;
+    expect(profile).toMatchObject({ id: humanId, token_hash: 'human-no-login' });
+  });
+
+  it('backfills human profiles when username conflicts with an agent name', async () => {
+    await request(app).post('/agents').send({ name: 'conflict-human' }).expect(201);
+    const human = await request(app)
+      .post('/human/register')
+      .send({ username: 'conflict-human', password: 'password123', display_name: 'Conflict Human' })
+      .expect(201);
+
+    const room = await request(app)
+      .post('/rooms')
+      .set('Authorization', `Bearer ${human.body.token}`)
+      .send({ name: 'conflict-human-task-room' })
+      .expect(201);
+
+    const task = await request(app)
+      .post('/tasks')
+      .set('Authorization', `Bearer ${human.body.token}`)
+      .send({ room_id: room.body.id, title: 'conflict human task' })
+      .expect(201);
+
+    expect(task.body.created_by).toBe(human.body.id);
+    const profile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(human.body.id) as { name: string } | undefined;
+    expect(profile?.name).toBe(`human-${human.body.id}`);
+  });
 });

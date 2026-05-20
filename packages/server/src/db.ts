@@ -456,6 +456,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateMessagesFromAgentHistoryField(db);
   migrateAgentSpawnsRuntimeNullable(db);
   migrateRemoveHumanFkConstraints(db);
+  backfillHumanProfiles(db);
   migrateColumn(db, 'wake_events', 'status', "TEXT NOT NULL DEFAULT 'queued'");
 
   // v0.3.5 stores admin privileges on agent profiles, so remove the legacy separate human admin model.
@@ -477,6 +478,25 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_broadcast ON messages(broadcast, created_order)');
 
   return db;
+}
+
+function backfillHumanProfiles(db: Database.Database): void {
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT OR IGNORE INTO profiles (id, name, display_name, bio, capabilities, token_hash, status, created_at, updated_at)
+    SELECT h.id,
+           'human-' || h.id,
+           COALESCE(NULLIF(h.display_name, ''), h.username),
+           '',
+           '[]',
+           'human-no-login',
+           'active',
+           h.created_at,
+           ?
+    FROM humans h
+    LEFT JOIN profiles p ON p.id = h.id
+    WHERE p.id IS NULL
+  `).run(now);
 }
 
 function migrateColumn(db: Database.Database, table: string, column: string, definition: string): void {

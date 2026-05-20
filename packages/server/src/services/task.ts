@@ -71,6 +71,8 @@ export function createTask(
     throw new ServerError(ErrorCode.NOT_ROOM_MEMBER, 'Not a member of this room', false, 403);
   }
 
+  ensureTaskActorProfile(db, agentId);
+
   const id = uuidv4();
   const now = new Date().toISOString();
 
@@ -100,6 +102,30 @@ export function createTask(
   `).run(uuidv4(), id, agentId, JSON.stringify({ title: req.title }), now);
 
   return getTask(db, id);
+}
+
+function ensureTaskActorProfile(db: Database.Database, actorId: string): void {
+  const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(actorId);
+  if (profile) return;
+
+  const human = db.prepare('SELECT username, display_name, created_at FROM humans WHERE id = ?').get(actorId) as {
+    username: string;
+    display_name: string | null;
+    created_at: string;
+  } | undefined;
+  if (!human) return;
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO profiles (id, name, display_name, bio, capabilities, token_hash, status, created_at, updated_at)
+    VALUES (?, ?, ?, '', '[]', 'human-no-login', 'active', ?, ?)
+  `).run(
+    actorId,
+    `human-${actorId}`,
+    human.display_name ?? human.username,
+    human.created_at ?? now,
+    now,
+  );
 }
 
 export function getTask(db: Database.Database, taskId: string): TaskInfo {
