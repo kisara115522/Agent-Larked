@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { get } from '../../api/client';
+import { get, patch } from '../../api/client';
 import { getToken } from '../../context/tokenStorage';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -48,6 +48,15 @@ const EVENT_LABEL: Record<string, string> = {
   status_changed: '状态变更',
 };
 
+const NEXT_STATUSES: Record<string, string[]> = {
+  todo: ['in_progress'],
+  in_progress: ['review', 'done', 'error'],
+  review: ['done', 'rejected', 'in_progress'],
+  done: [],
+  rejected: ['todo'],
+  error: ['in_progress'],
+};
+
 interface Task {
   id: string;
   title: string;
@@ -73,46 +82,79 @@ interface TaskEventItem {
   created_at: string;
 }
 
-export function TaskDetailModal({ task, agents, onClose }: {
+export function TaskDetailModal({ task, agents, onUpdated, onClose }: {
   task: Task;
   agents: Agent[];
+  onUpdated?: (task: Task) => void;
   onClose: () => void;
 }) {
   const [events, setEvents] = useState<TaskEventItem[]>([]);
-  const assignee = task.assigned_to ? agents.find(a => a.id === task.assigned_to) : null;
-  const createdTime = new Date(task.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  const [currentTask, setCurrentTask] = useState(task);
+  const [assigneeId, setAssigneeId] = useState(task.assigned_to ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const assignee = currentTask.assigned_to ? agents.find(a => a.id === currentTask.assigned_to) : null;
+  const createdTime = new Date(currentTask.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    get<{ events: TaskEventItem[] }>(`/tasks/${task.id}/events`, token)
+    get<{ events: TaskEventItem[] }>(`/tasks/${currentTask.id}/events`, token)
       .then(res => setEvents(res.events))
       .catch(() => {});
-  }, [task.id]);
+  }, [currentTask.id]);
+
+  useEffect(() => {
+    setCurrentTask(task);
+    setAssigneeId(task.assigned_to ?? '');
+  }, [task]);
+
+  const reloadEvents = async (token: string) => {
+    const res = await get<{ events: TaskEventItem[] }>(`/tasks/${currentTask.id}/events`, token);
+    setEvents(res.events);
+  };
+
+  const updateTask = async (body: Record<string, unknown>) => {
+    const token = getToken();
+    if (!token || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await patch<Task>(`/tasks/${currentTask.id}`, token, body);
+      setCurrentTask(updated);
+      setAssigneeId(updated.assigned_to ?? '');
+      onUpdated?.(updated);
+      await reloadEvents(token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新失败');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div className="w-[600px] max-h-[80vh] overflow-y-auto p-6 bg-surface border border-border rounded-[14px] relative" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-text-muted hover:text-text text-xl">×</button>
 
-        <h3 className="text-lg font-bold mb-4">{task.title}</h3>
+        <h3 className="text-lg font-bold mb-4">{currentTask.title}</h3>
 
         <div className="flex gap-2 mb-4">
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_BADGE[task.status] || STATUS_BADGE.todo}`}>
-            {STATUS_LABEL[task.status] || task.status}
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_BADGE[currentTask.status] || STATUS_BADGE.todo}`}>
+            {STATUS_LABEL[currentTask.status] || currentTask.status}
           </span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${PRIORITY_BADGE[task.priority] || PRIORITY_BADGE[1]}`}>
-            {PRIORITY_LABEL[task.priority] || '中'}优先级
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${PRIORITY_BADGE[currentTask.priority] || PRIORITY_BADGE[1]}`}>
+            {PRIORITY_LABEL[currentTask.priority] || '中'}优先级
           </span>
-          {task.ring !== undefined && (
+          {currentTask.ring !== undefined && (
             <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-surface-elevated text-text-muted border border-border">
-              Ring {task.ring}
+              Ring {currentTask.ring}
             </span>
           )}
         </div>
 
-        {task.description && (
-          <p className="text-[13px] text-text-muted mb-4">{task.description}</p>
+        {currentTask.description && (
+          <p className="text-[13px] text-text-muted mb-4">{currentTask.description}</p>
         )}
 
         {/* Detail Grid */}
@@ -126,6 +168,47 @@ export function TaskDetailModal({ task, agents, onClose }: {
             <div className="text-[13px] font-medium mt-0.5">{assignee ? (assignee.display_name || assignee.name) : '未分配'}</div>
           </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="block text-[11px] font-semibold text-text-muted mb-1.5">分配</label>
+            <div className="flex gap-2">
+              <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} className="input">
+                <option value="">未分配</option>
+                {agents.map(agent => (
+                  <option key={agent.id} value={agent.id}>{agent.display_name || agent.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => updateTask({ assigned_to: assigneeId || null })}
+                disabled={saving || assigneeId === (currentTask.assigned_to ?? '')}
+                className="px-4 py-2 text-[12px] font-semibold bg-accent text-white rounded-full hover:bg-accent-hover disabled:opacity-30 transition-colors"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-text-muted mb-1.5">状态</label>
+            <div className="flex flex-wrap gap-2 min-h-[42px] items-center">
+              {(NEXT_STATUSES[currentTask.status] ?? []).map(status => (
+                <button
+                  key={status}
+                  onClick={() => updateTask({ status })}
+                  disabled={saving}
+                  className="px-3 py-2 text-[12px] font-semibold bg-surface-elevated border border-border rounded-full hover:border-accent/60 disabled:opacity-30 transition-colors"
+                >
+                  {STATUS_LABEL[status] || status}
+                </button>
+              ))}
+              {(NEXT_STATUSES[currentTask.status] ?? []).length === 0 && (
+                <span className="text-[12px] text-text-dim">无后续状态</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {error && <div className="text-[12px] text-error mb-3">{error}</div>}
 
         {/* Timeline */}
         <h4 className="text-sm font-semibold mt-4 mb-2">事件时间线</h4>

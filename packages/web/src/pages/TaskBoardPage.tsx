@@ -55,6 +55,7 @@ export function TaskBoardPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newRoom, setNewRoom] = useState('');
+  const [newAssignee, setNewAssignee] = useState('');
   const [newPriority, setNewPriority] = useState(1);
   const [creating, setCreating] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -101,9 +102,11 @@ export function TaskBoardPage() {
         title: newTitle.trim(),
         room_id: newRoom || undefined,
         priority: newPriority,
+        assigned_to: newAssignee || undefined,
       });
       toast('任务创建成功', 'success');
       setNewTitle('');
+      setNewAssignee('');
       setShowCreate(false);
       load();
     } catch (e) { toast(`创建失败: ${e instanceof Error ? e.message : '未知错误'}`); } finally { setCreating(false); }
@@ -207,6 +210,15 @@ export function TaskBoardPage() {
                 <option value={2}>高</option>
               </select>
             </div>
+            <div className="mb-4">
+              <label className="block text-[12px] font-semibold text-text-muted mb-2">分配给</label>
+              <select value={newAssignee} onChange={e => setNewAssignee(e.target.value)} className="input">
+                <option value="">暂不分配</option>
+                {agents.map(agent => (
+                  <option key={agent.id} value={agent.id}>{agent.display_name || agent.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-3 justify-end mt-8">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 text-[13px] text-text-muted hover:text-text rounded-full transition-colors">取消</button>
               <button onClick={handleCreate} disabled={creating || !newTitle.trim() || !newRoom} className="px-6 py-2.5 text-[13px] font-semibold bg-accent text-white rounded-full hover:bg-accent-hover disabled:opacity-30 transition-all active:scale-95">
@@ -221,6 +233,11 @@ export function TaskBoardPage() {
         <TaskDetailModal
           task={selectedTask}
           agents={agents}
+          onUpdated={(task) => {
+            setSelectedTask(task);
+            setTasks(prev => prev.map(item => item.id === task.id ? task : item));
+            load();
+          }}
           onClose={() => setSelectedTask(null)}
         />
       )}

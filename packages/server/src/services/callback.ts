@@ -1,5 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
+import { regenerateToken } from './identity.js';
 
 export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
@@ -31,6 +32,19 @@ interface AgentRuntimeConfig {
   provider?: unknown;
 }
 
+interface AgentCallbackFields {
+  agent_token?: string;
+  agent_name?: string;
+  agent_model?: string;
+  agent_provider?: unknown;
+}
+
+interface WakeSession {
+  runtime: RuntimeRow;
+  agent: { name: string; model: string | null; status: string };
+  token: string;
+}
+
 /** Log a wake event to the wake_events table */
 function logWakeEvent(
   db: Database.Database,
@@ -45,6 +59,84 @@ function logWakeEvent(
     INSERT INTO wake_events (id, agent_id, triggered_by, trigger_type, status, room_id, prompt, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(randomUUID(), agentId, triggeredBy, triggerType, status, roomId ?? null, prompt ?? null, new Date().toISOString());
+}
+
+function createWakeSession(
+  db: Database.Database,
+  agentId: string,
+  runtimeId: string,
+  prompt: string | undefined,
+): WakeSession | null {
+  const runtime = db.prepare(
+    'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
+  ).get(runtimeId) as RuntimeRow | undefined;
+  if (!runtime || runtime.status !== 'online') return null;
+
+  const agent = db.prepare('SELECT name, model, status FROM profiles WHERE id = ?').get(agentId) as { name: string; model: string | null; status: string } | undefined;
+  if (!agent) return null;
+  if (agent.status === 'active' || agent.status === 'spawning') return null;
+
+  const { token } = regenerateToken(db, agentId);
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
+    VALUES (?, ?, ?, 'spawning', ?, ?, ?)
+  `).run(randomUUID(), agentId, runtimeId, now, now, prompt ?? null);
+  db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
+
+  return { runtime, agent, token };
+}
+
+function agentCallbackFields(
+  db: Database.Database,
+  agentId: string,
+  agent?: { name: string; model: string | null },
+  token?: string,
+): AgentCallbackFields {
+  const profile = agent ?? db.prepare('SELECT name, model FROM profiles WHERE id = ?').get(agentId) as { name: string; model: string | null } | undefined;
+  const config = getAgentRuntimeConfig(db, agentId);
+  return {
+    agent_token: token,
+    agent_name: profile?.name,
+    agent_model: config.model ?? profile?.model ?? undefined,
+    agent_provider: config.provider,
+  };
+}
+
+function recentRoomContext(db: Database.Database, roomId: string, limit = 10): string {
+  const rows = db.prepare(`
+    SELECT m.content, m.sequence, p.name, p.display_name
+    FROM messages m
+    LEFT JOIN profiles p ON p.id = m.from_agent
+    WHERE m.room_id = ?
+    ORDER BY m.sequence DESC
+    LIMIT ?
+  `).all(roomId, limit) as Array<{ content: string; sequence: number; name: string | null; display_name: string | null }>;
+
+  return rows
+    .reverse()
+    .map((row) => {
+      const sender = row.display_name || row.name || 'unknown';
+      return `#${row.sequence} ${sender}: ${row.content}`;
+    })
+    .join('\n');
+}
+
+function roomWakePrompt(
+  db: Database.Database,
+  roomId: string,
+  roomName: string,
+  reason: string,
+  fallbackExcerpt?: string,
+): string {
+  const context = recentRoomContext(db, roomId);
+  const recent = context || (fallbackExcerpt ? `Recent message: ${fallbackExcerpt}` : 'No recent messages are available.');
+  return [
+    `You were woken in room "${roomName}" (${roomId}) because ${reason}.`,
+    'Recent room messages:',
+    recent,
+    'Use the Flock MCP tools to inspect the room or task if needed, then respond in this room only when a response is useful. Do not post in other rooms.',
+  ].join('\n\n');
 }
 
 /** Compute HMAC-SHA256 signature for a callback payload */
@@ -126,14 +218,18 @@ export function wakeMentionedAgents(
 
     if (!runtime || runtime.status !== 'online') continue;
 
+    const prompt = roomWakePrompt(db, roomId, roomName, `${senderName} mentioned you`, excerpt);
+    const session = createWakeSession(db, agentId, runtime.id, prompt);
+    if (!session) continue;
+
     const event: CallbackEvent = {
       type: 'wake',
       trigger_type: 'mention',
+      ...agentCallbackFields(db, agentId, session.agent, session.token),
+      prompt,
       room_id: roomId,
       room_name: roomName,
       message_id: messageId,
-      sender_name: senderName,
-      excerpt,
     };
 
     // Fire and forget — don't block the message response
@@ -142,7 +238,7 @@ export function wakeMentionedAgents(
     });
 
     // Log wake event
-    logWakeEvent(db, agentId, senderName, 'mention', 'sent', roomId);
+    logWakeEvent(db, agentId, senderName, 'mention', 'sent', roomId, prompt);
   }
 }
 
@@ -179,13 +275,17 @@ export function wakeRoomAgents(
 
     if (!runtime || runtime.status !== 'online') continue;
 
+    const prompt = roomWakePrompt(db, roomId, roomName, `${senderName} sent a broadcast wake`, excerpt);
+    const session = createWakeSession(db, agent_id, runtime.id, prompt);
+    if (!session) continue;
+
     const event: CallbackEvent = {
       type: 'wake',
       trigger_type: 'broadcast',
+      ...agentCallbackFields(db, agent_id, session.agent, session.token),
+      prompt,
       room_id: roomId,
       room_name: roomName,
-      sender_name: senderName,
-      excerpt,
     };
 
     sendCallbackWithRetry(runtime, agent_id, event).catch((err) => {
@@ -193,7 +293,7 @@ export function wakeRoomAgents(
     });
 
     // Log wake event
-    logWakeEvent(db, agent_id, senderName, 'broadcast', 'sent', roomId);
+    logWakeEvent(db, agent_id, senderName, 'broadcast', 'sent', roomId, prompt);
   }
 }
 
@@ -220,9 +320,15 @@ export function wakeDirectMessageAgent(
   ).get(spawn.runtime_id) as RuntimeRow | undefined;
   if (!runtime || runtime.status !== 'online') return;
 
+  const prompt = `${senderName} sent you a direct message:\n\n"${excerpt}"\n\nUse the Flock direct-message tools to read the conversation and reply directly if useful.`;
+  const session = createWakeSession(db, agentId, runtime.id, prompt);
+  if (!session) return;
+
   const event: CallbackEvent = {
     type: 'wake',
     trigger_type: 'direct_message',
+    ...agentCallbackFields(db, agentId, session.agent, session.token),
+    prompt,
     sender_name: senderName,
     excerpt,
   };
@@ -231,7 +337,7 @@ export function wakeDirectMessageAgent(
     console.error(`[callback] Failed to wake agent ${agentId} for direct message via runtime ${runtime.id}:`, err);
   });
 
-  logWakeEvent(db, agentId, senderName, 'direct_message', 'sent', undefined, excerpt);
+  logWakeEvent(db, agentId, senderName, 'direct_message', 'sent', undefined, prompt);
 }
 
 /**
@@ -256,17 +362,10 @@ export function notifyRuntimeSpawn(
     return;
   }
 
-  // Fetch agent name/config so runtime doesn't need separate API calls.
-  const agent = db.prepare('SELECT name, model FROM profiles WHERE id = ?').get(agentId) as { name: string; model: string | null } | undefined;
-  const config = getAgentRuntimeConfig(db, agentId);
-
   const event: RuntimeCallbackEvent = {
     type: 'spawn',
-    agent_token: token ?? undefined,
+    ...agentCallbackFields(db, agentId, undefined, token),
     prompt: prompt ?? undefined,
-    agent_name: agent?.name,
-    agent_model: config.model ?? agent?.model ?? undefined,
-    agent_provider: config.provider,
     room_id: roomId,
     room_name: roomName,
   };
@@ -330,10 +429,20 @@ export function notifyTaskAssignment(
 
   const room = db.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string } | undefined;
   const roomName = room?.name ?? roomId;
+  const prompt = [
+    `You were assigned task "${taskTitle}" (${taskId}) in room "${roomName}" (${roomId}).`,
+    'Recent room messages:',
+    recentRoomContext(db, roomId) || 'No recent messages are available.',
+    'Use the Flock task tools to inspect the task, update its status, and post progress in the room if appropriate.',
+  ].join('\n\n');
+  const session = createWakeSession(db, agentId, runtime.id, prompt);
+  if (!session) return;
 
   const event: RuntimeCallbackEvent = {
     type: 'wake',
-    prompt: `你有一个新任务: "${taskTitle}"。请查看任务详情并开始处理。`,
+    trigger_type: 'task_assignment',
+    ...agentCallbackFields(db, agentId, session.agent, session.token),
+    prompt,
     room_id: roomId,
     room_name: roomName,
   };
@@ -342,7 +451,7 @@ export function notifyTaskAssignment(
     console.error(`[callback] Failed to notify agent ${agentId} about task assignment:`, err);
   });
 
-  logWakeEvent(db, agentId, 'system', 'task_assignment', 'sent', roomId, taskTitle);
+  logWakeEvent(db, agentId, 'system', 'task_assignment', 'sent', roomId, prompt);
 }
 
 /**
