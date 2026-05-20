@@ -9,7 +9,7 @@ import type { EventBus } from '../sse/event-bus.js';
 import { ErrorCode } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 import { notifyRuntimeSpawn, notifyRuntimeStop } from '../services/callback.js';
-import { selectAvailableRuntime } from '../services/runtime.js';
+import { cleanupStaleRuntimes, selectAvailableRuntime } from '../services/runtime.js';
 import { sendDirectMessage } from '../services/direct-chat.js';
 
 export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router {
@@ -145,11 +145,18 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         roomName = room?.name ?? null;
       }
 
+      cleanupStaleRuntimes(db);
+
       // Select an available runtime (auto-cleans stale runtimes first)
       const runtimeId = req.body.runtime_id ?? selectAvailableRuntime(db);
 
       if (!runtimeId) {
         throw new ServerError(ErrorCode.VALIDATION_ERROR, 'No online runtime available. Start a runtime daemon first.', false, 400);
+      }
+
+      const runtime = db.prepare("SELECT id FROM agent_runtimes WHERE id = ? AND status = 'online'").get(runtimeId);
+      if (!runtime) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Runtime is offline or unavailable. Start a runtime daemon first.', false, 400);
       }
 
       // Use 'spawning' status — runtime will update to 'active' once process starts
@@ -234,11 +241,18 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         roomName = room?.name ?? null;
       }
 
+      cleanupStaleRuntimes(db);
+
       // Select an available runtime (auto-cleans stale runtimes first)
       const runtimeId = req.body.runtime_id ?? selectAvailableRuntime(db);
 
       if (!runtimeId) {
         throw new ServerError(ErrorCode.VALIDATION_ERROR, 'No online runtime available. Start a runtime daemon first.', false, 400);
+      }
+
+      const runtime = db.prepare("SELECT id FROM agent_runtimes WHERE id = ? AND status = 'online'").get(runtimeId);
+      if (!runtime) {
+        throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Runtime is offline or unavailable. Start a runtime daemon first.', false, 400);
       }
 
       // Create new spawn record for the wake
@@ -384,7 +398,8 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
           db.prepare("UPDATE profiles SET status = 'dormant', updated_at = ? WHERE id = ?").run(now, agentId);
           if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'dormant' });
         } else if (detail === 'Agent active') {
-          db.prepare("UPDATE agent_spawns SET status = 'active', last_active_at = ? WHERE agent_id = ? AND status = 'spawning'").run(now, agentId);
+          db.prepare("UPDATE agent_spawns SET status = 'active', session_id = COALESCE(?, session_id), last_active_at = ? WHERE agent_id = ? AND status = 'spawning'")
+            .run(typeof meta.session_id === 'string' ? meta.session_id : null, now, agentId);
           db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
           if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
         }

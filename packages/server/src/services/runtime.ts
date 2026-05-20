@@ -34,10 +34,41 @@ export function registerRuntime(
     throw new ServerError(ErrorCode.VALIDATION_ERROR, 'host, port, and callback_url are required', false, 400);
   }
 
+  const now = new Date().toISOString();
+
+  // Dedup by callback_url — if a runtime with the same URL exists, update it
+  const existing = db.prepare(
+    'SELECT id, callback_secret FROM agent_runtimes WHERE callback_url = ?',
+  ).get(req.callback_url) as { id: string; callback_secret: string } | undefined;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE agent_runtimes SET host = ?, port = ?, capabilities = ?, max_agents = ?, status = 'online', last_heartbeat_at = ?
+      WHERE id = ?
+    `).run(req.host, req.port, JSON.stringify(req.capabilities ?? []), req.max_agents ?? 10, now, existing.id);
+
+    const agentCount = (db.prepare(
+      'SELECT COUNT(*) AS count FROM agent_spawns WHERE runtime_id = ? AND status IN (\'active\', \'spawning\')',
+    ).get(existing.id) as { count: number }).count;
+
+    return {
+      id: existing.id,
+      host: req.host,
+      port: req.port,
+      callback_url: req.callback_url,
+      capabilities: req.capabilities ?? [],
+      max_agents: req.max_agents ?? 10,
+      agent_count: agentCount,
+      status: 'online',
+      last_heartbeat_at: now,
+      created_at: now,
+      callback_secret: existing.callback_secret,
+    };
+  }
+
   const id = randomBytes(16).toString('hex');
   const callbackSecret = randomBytes(32).toString('hex');
   const callbackSecretHash = createHash('sha256').update(callbackSecret).digest('hex');
-  const now = new Date().toISOString();
 
   db.prepare(`
     INSERT INTO agent_runtimes (id, host, port, callback_url, callback_secret_hash, callback_secret, capabilities, max_agents, status, last_heartbeat_at, created_at)
@@ -71,6 +102,8 @@ export function registerRuntime(
 }
 
 export function listRuntimes(db: Database.Database): RuntimeInfo[] {
+  cleanupStaleRuntimes(db);
+
   const rows = db.prepare(`
     SELECT r.id, r.host, r.port, r.callback_url, r.capabilities, r.max_agents, r.status, r.last_heartbeat_at, r.created_at,
            COALESCE((SELECT COUNT(*) FROM agent_spawns s WHERE s.runtime_id = r.id AND s.status = 'active'), 0) AS agent_count

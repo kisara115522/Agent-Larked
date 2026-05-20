@@ -53,16 +53,101 @@ describe('Runtime Management', () => {
     expect(res.body.callback_secret.length).toBe(64); // 32 bytes hex
   });
 
+  it('reuses the existing runtime when the same callback URL registers again', async () => {
+    const first = await request(app)
+      .post('/runtimes')
+      .send({
+        host: 'localhost',
+        port: 9100,
+        callback_url: 'http://localhost:9100',
+        max_agents: 3,
+      })
+      .expect(201);
+
+    const second = await request(app)
+      .post('/runtimes')
+      .send({
+        host: 'localhost',
+        port: 9100,
+        callback_url: 'http://localhost:9100',
+        max_agents: 7,
+      })
+      .expect(201);
+
+    expect(second.body.id).toBe(first.body.id);
+    expect(second.body.callback_secret).toBe(first.body.callback_secret);
+    expect(second.body.max_agents).toBe(7);
+
+    const list = await request(app)
+      .get('/runtimes')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    const matching = list.body.runtimes.filter((runtime: { callback_url: string }) => runtime.callback_url === 'http://localhost:9100');
+    expect(matching).toHaveLength(1);
+  });
+
   it('lists registered runtimes', async () => {
     const res = await request(app)
       .get('/runtimes')
       .set('Authorization', `Bearer ${agentToken}`)
       .expect(200);
 
-    expect(res.body.runtimes).toHaveLength(1);
-    expect(res.body.runtimes[0].host).toBe('localhost');
+    const runtime = res.body.runtimes.find((item: { callback_url: string }) => item.callback_url === 'http://localhost:9000');
+    expect(runtime).toBeDefined();
+    expect(runtime.host).toBe('localhost');
     // callback_secret should NOT be in list response
-    expect(res.body.runtimes[0].callback_secret).toBeUndefined();
+    expect(runtime.callback_secret).toBeUndefined();
+  });
+
+  it('marks stale runtimes offline before listing them', async () => {
+    const stale = await request(app)
+      .post('/runtimes')
+      .send({
+        host: 'localhost',
+        port: 9200,
+        callback_url: 'http://localhost:9200',
+        max_agents: 1,
+      })
+      .expect(201);
+
+    db.prepare("UPDATE agent_runtimes SET last_heartbeat_at = datetime('now', '-2 minutes') WHERE id = ?").run(stale.body.id);
+
+    const res = await request(app)
+      .get('/runtimes')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    const runtime = res.body.runtimes.find((item: { id: string }) => item.id === stale.body.id);
+    expect(runtime.status).toBe('offline');
+  });
+
+  it('rejects spawn when an explicit runtime id is stale', async () => {
+    const stale = await request(app)
+      .post('/runtimes')
+      .send({
+        host: 'localhost',
+        port: 9300,
+        callback_url: 'http://localhost:9300',
+        max_agents: 1,
+      })
+      .expect(201);
+
+    db.prepare("UPDATE agent_runtimes SET last_heartbeat_at = datetime('now', '-2 minutes') WHERE id = ?").run(stale.body.id);
+
+    await request(app)
+      .post(`/agents/${agentId}/spawn`)
+      .set('Cookie', humanCookie)
+      .send({ runtime_id: stale.body.id, prompt: 'should not spawn' })
+      .expect(400);
+
+    const statusRes = await request(app)
+      .get(`/agents/${agentId}/status`)
+      .set('Cookie', humanCookie)
+      .expect(200);
+
+    expect(statusRes.body.status).not.toBe('spawning');
+    expect(statusRes.body.status).not.toBe('active');
   });
 
   it('updates runtime heartbeat', async () => {
@@ -114,6 +199,87 @@ describe('Runtime Management', () => {
       .expect(200);
 
     expect(statusRes.body.status).toBe('spawning');
+  });
+
+  it('records runtime session id when an agent reports active', async () => {
+    const res = await request(app)
+      .post(`/agents/${agentId}/spawn`)
+      .set('Cookie', humanCookie)
+      .send({ prompt: 'Session id probe' })
+      .expect(201);
+
+    await request(app)
+      .post(`/agents/${agentId}/activity`)
+      .set('Authorization', `Bearer ${res.body.agent_token}`)
+      .send({
+        activity_type: 'status_change',
+        detail: 'Agent active',
+        metadata: { session_id: 'session-from-runtime', pid: 12345 },
+      })
+      .expect(201);
+
+    const statusRes = await request(app)
+      .get(`/agents/${agentId}/status`)
+      .set('Cookie', humanCookie)
+      .expect(200);
+
+    expect(statusRes.body.status).toBe('active');
+    expect(statusRes.body.session_id).toBe('session-from-runtime');
+  });
+
+  it('passes room context to runtime callback on spawn', async () => {
+    const callbackCalls: Array<{ path: string; body: unknown }> = [];
+    const callbackApp = await import('express').then(({ default: express }) => {
+      const app = express();
+      app.use(express.json());
+      app.post('/agents/:id/callback', (req, res) => {
+        callbackCalls.push({ path: req.path, body: req.body });
+        res.json({ ok: true });
+      });
+      return app;
+    });
+
+    const callbackServer = callbackApp.listen(0);
+    try {
+      const address = callbackServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('callback server did not bind to a TCP port');
+      }
+      const callbackUrl = `http://127.0.0.1:${address.port}`;
+
+      const runtime = await request(app)
+        .post('/runtimes')
+        .send({
+          host: '127.0.0.1',
+          port: address.port,
+          callback_url: callbackUrl,
+          max_agents: 10,
+        })
+        .expect(201);
+
+      const room = await request(app)
+        .post('/rooms')
+        .set('Cookie', humanCookie)
+        .send({ name: 'spawn-room-context' })
+        .expect(201);
+
+      await request(app)
+        .post(`/agents/${agentId}/spawn`)
+        .set('Cookie', humanCookie)
+        .send({ runtime_id: runtime.body.id, room_id: room.body.id })
+        .expect(201);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callbackCalls).toHaveLength(1);
+      expect(callbackCalls[0].body).toMatchObject({
+        type: 'spawn',
+        room_id: room.body.id,
+        room_name: 'spawn-room-context',
+      });
+    } finally {
+      await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
+    }
   });
 
   it('stops agent and marks spawn as stopped', async () => {

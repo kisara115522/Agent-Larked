@@ -28,21 +28,15 @@ export function flexAuthMiddleware(db: Database.Database) {
 
   return (req: FlexAuthenticatedRequest, res: Response, next: NextFunction): void => {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      const queryToken = req.query.token as string | undefined;
-      if (queryToken) {
-        const result = resolveToken(queryToken, agentStmt, humanStmt);
-        if (result) {
-          applyResult(req, result);
-          next();
-          return;
-        }
-      }
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : req.cookies?.flock_session ?? (req.query.token as string | undefined);
+
+    if (!token) {
       res.status(401).json({ error: createError(ErrorCode.INVALID_TOKEN) });
       return;
     }
 
-    const token = authHeader.slice(7);
     const result = resolveToken(token, agentStmt, humanStmt);
 
     if (!result) {

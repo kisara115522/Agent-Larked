@@ -9,7 +9,6 @@ async function main(): Promise<void> {
   } catch (err) {
     console.error(`[runtime] Configuration error:`, err);
     console.error(`[runtime] Required environment variables:`);
-    console.error(`  AGENT_TOKEN    — Flock agent token for authentication`);
     console.error(`  FLOCK_SERVER_URL — Flock server URL (default: http://localhost:3001)`);
     console.error(`  CALLBACK_PORT  — Port for receiving callbacks (default: 4000)`);
     console.error(`  CALLBACK_HOST  — Hostname for callback server (default: localhost)`);
