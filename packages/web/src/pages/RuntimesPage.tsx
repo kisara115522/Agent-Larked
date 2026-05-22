@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { get } from '../api/client';
+import { EmptyState, ErrorState, Metric, MetricStrip, PageHeader, PageShell, Panel } from '../components/ui/PageState';
 
 interface Runtime {
   id: string;
@@ -19,28 +20,33 @@ export function RuntimesPage() {
   const { token } = useAuth();
   const [runtimes, setRuntimes] = useState<Runtime[]>([]);
   const [showHelp, setShowHelp] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     if (!token) return;
     try {
       const res = await get<{ runtimes: Runtime[] }>('/runtimes', token).catch(() => ({ runtimes: [] }));
       setRuntimes(res.runtimes);
-    } catch {}
+      setLoadError('');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Runtime 数据加载失败');
+    }
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
 
+  const onlineCount = runtimes.filter(runtime => runtime.status === 'online').length;
+  const usedSlots = runtimes.reduce((sum, runtime) => sum + runtime.agent_count, 0);
+  const totalSlots = runtimes.reduce((sum, runtime) => sum + runtime.max_agents, 0);
+  const saturatedCount = runtimes.filter(runtime => runtime.max_agents > 0 && runtime.agent_count >= runtime.max_agents).length;
+
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      {/* Header */}
-      <div className="px-12 pt-12 pb-6 shrink-0" style={{ animation: 'fadeUp .4s ease-out' }}>
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
-              Runtime
-            </h1>
-            <p className="text-[14px] text-text-dim mt-3 font-medium">{runtimes.length} 个 daemon 已注册</p>
-          </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageHeader
+        title="Runtime"
+        eyebrow="Operations"
+        subtitle={`${onlineCount}/${runtimes.length} 在线 · ${usedSlots}/${totalSlots || 0} 槽位占用`}
+        action={
           <button
             onClick={() => setShowHelp(true)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors duration-150"
@@ -48,37 +54,64 @@ export function RuntimesPage() {
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
             注册新 Runtime
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Architecture */}
-      <div className="px-12 pb-8">
-        <div className="bg-surface border border-border rounded-[10px] p-5 max-w-[500px]">
-          <div className="text-[11px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-3">架构</div>
-          <div className="space-y-2 text-[12px] text-text-muted font-mono">
-            <div>Flock Server (REST + SSE + SQLite + MCP)</div>
-            <div className="text-text-dim pl-4">↓ HTTP Callbacks (HMAC-SHA256)</div>
-            <div>Runtime Daemon（自动注册，心跳保活）</div>
-            <div className="text-text-dim pl-4">↓ spawn / wake / stop</div>
-            <div>Agent 子进程（claude -p）</div>
-          </div>
-        </div>
-      </div>
+      <PageShell>
+        {loadError && <div className="mb-4"><ErrorState message={loadError} onRetry={load} /></div>}
+        <MetricStrip className="mb-5">
+          <Metric label="Runtime" value={runtimes.length} detail={`${onlineCount} online`} tone="accent" />
+          <Metric label="槽位占用" value={`${usedSlots}/${totalSlots || 0}`} detail={`${saturatedCount} 台满载`} tone={usedSlots > 0 ? 'success' : 'muted'} />
+          <Metric label="离线" value={runtimes.length - onlineCount} detail="心跳断开的 daemon" tone={runtimes.length - onlineCount > 0 ? 'warning' : 'muted'} />
+          <Metric label="能力集合" value={new Set(runtimes.flatMap(runtime => runtime.capabilities || [])).size} detail="capability tags" tone="muted" />
+        </MetricStrip>
 
-      {/* Runtime Cards */}
-      <div className="px-12 pb-12">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {runtimes.length === 0 ? (
-            <div className="col-span-2 text-center text-text-dim text-[13px] py-16">
-              暂无注册的 Runtime。启动 daemon 后将自动注册。
-            </div>
-          ) : (
-            runtimes.map((rt, i) => (
-              <RuntimeCard key={rt.id} runtime={rt} index={i} />
-            ))
-          )}
+        <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5 max-[1100px]:grid-cols-1">
+          <Panel title="Runtime 队列" meta={`${runtimes.length}`}>
+            {runtimes.length === 0 ? (
+              <EmptyState
+                className="py-16"
+                title="还没有 Runtime"
+                description="启动 Runtime daemon 后，它会自动注册并出现在这里。"
+                action={
+                  <button
+                    onClick={() => setShowHelp(true)}
+                    className="px-4 py-2 rounded-full bg-accent text-white text-[12px] font-semibold hover:bg-accent-hover transition-colors"
+                  >
+                    查看启动方式
+                  </button>
+                }
+              />
+            ) : (
+              <>
+                <div className="grid grid-cols-[minmax(220px,1fr)_100px_140px_120px_minmax(180px,1fr)] gap-3 px-4 py-2.5 border-b border-border bg-surface-elevated/60 text-[10px] text-text-dim uppercase tracking-[0.12em] font-semibold max-[900px]:hidden">
+                  <span>Endpoint</span>
+                  <span>状态</span>
+                  <span>槽位</span>
+                  <span>心跳</span>
+                  <span>Capabilities</span>
+                </div>
+                <div className="divide-y divide-border/70">
+                  {runtimes.map((rt, i) => (
+                    <RuntimeRow key={rt.id} runtime={rt} index={i} />
+                  ))}
+                </div>
+              </>
+            )}
+          </Panel>
+
+          <aside className="space-y-4">
+            <Panel title="调用链" meta="architecture">
+              <div className="p-4 space-y-3 text-[12px]">
+                <RuntimeStep title="Flock Server" desc="REST、SSE、SQLite、MCP" />
+                <RuntimeStep title="HTTP Callback" desc="HMAC-SHA256 保护的控制通道" />
+                <RuntimeStep title="Runtime Daemon" desc="注册、心跳、spawn / wake / stop" />
+                <RuntimeStep title="Agent 子进程" desc="按 Runtime 槽位拉起" last />
+              </div>
+            </Panel>
+          </aside>
         </div>
-      </div>
+      </PageShell>
 
       {/* Help Modal */}
       {showHelp && (
@@ -111,7 +144,7 @@ export function RuntimesPage() {
   );
 }
 
-function RuntimeCard({ runtime, index }: { runtime: Runtime; index: number }) {
+function RuntimeRow({ runtime, index }: { runtime: Runtime; index: number }) {
   const isOnline = runtime.status === 'online';
   const caps = Array.isArray(runtime.capabilities) ? runtime.capabilities : [];
 
@@ -120,23 +153,44 @@ function RuntimeCard({ runtime, index }: { runtime: Runtime; index: number }) {
     : '从未';
 
   return (
-    <div className="bg-surface border border-border rounded-[10px] p-5" style={{ animation: `fadeUp .35s ease-out ${index * 50}ms both` }}>
-      <div className="flex items-center gap-3 mb-4">
+    <div
+      className="grid grid-cols-[minmax(220px,1fr)_100px_140px_120px_minmax(180px,1fr)] gap-3 px-4 py-3 hover:bg-surface-elevated/45 transition-colors max-[900px]:grid-cols-1"
+      style={{ animation: `fadeUp .35s ease-out ${index * 50}ms both` }}
+    >
+      <div className="flex items-center gap-3 min-w-0">
         <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-success status-dot-online' : 'bg-text-dim'}`} />
-        <span className="font-mono font-semibold text-[13px]">{runtime.host}:{runtime.port}</span>
-        <span className={`ml-auto px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${isOnline ? 'bg-success-muted text-success' : 'bg-surface-elevated text-text-muted'}`}>
+        <span className="font-mono font-semibold text-[13px] truncate">{runtime.host}:{runtime.port}</span>
+      </div>
+      <div>
+        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${isOnline ? 'bg-success-muted text-success' : 'bg-surface-elevated text-text-muted'}`}>
           {isOnline ? '在线' : runtime.status}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-3 text-[11px]">
-        <div><span className="text-text-dim block mb-0.5">心跳</span><span className="font-mono">{heartbeat}</span></div>
-        <div><span className="text-text-dim block mb-0.5">Capabilities</span>{caps.join(', ') || 'general'}</div>
+      <div className="min-w-0">
+        <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+          <span>{runtime.agent_count}/{runtime.max_agents}</span>
+          <span className="text-text-dim">{runtime.max_agents > 0 ? `${Math.round(runtime.agent_count / runtime.max_agents * 100)}%` : '0%'}</span>
+        </div>
+        <div className="mt-1 h-1.5 rounded-full bg-surface-elevated overflow-hidden">
+          <div className="h-full rounded-full bg-accent" style={{ width: `${runtime.max_agents > 0 ? Math.min(runtime.agent_count / runtime.max_agents * 100, 100) : 0}%` }} />
+        </div>
       </div>
-      <div className="mt-4 pt-3 border-t border-border/50 text-[11px] flex items-center gap-2">
-        <span className="text-text-dim">Agent:</span>
-        <span className="font-mono font-medium">
-          {runtime.agent_count} / {runtime.max_agents}
-        </span>
+      <div className="text-[11px] text-text-muted font-mono">{heartbeat}</div>
+      <div className="text-[11px] text-text-muted truncate">{caps.join(', ') || 'general'}</div>
+    </div>
+  );
+}
+
+function RuntimeStep({ title, desc, last = false }: { title: string; desc: string; last?: boolean }) {
+  return (
+    <div className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <span className="w-2 h-2 rounded-full bg-accent mt-1.5" />
+        {!last && <span className="w-px flex-1 bg-border mt-2" />}
+      </div>
+      <div className="pb-3">
+        <div className="text-[13px] font-semibold">{title}</div>
+        <div className="text-[11px] text-text-muted mt-0.5">{desc}</div>
       </div>
     </div>
   );

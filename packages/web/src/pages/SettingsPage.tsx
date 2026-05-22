@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { get, patch } from '../api/client';
+import { EmptyState, ErrorState, PageHeader, PageLoader, PageShell, Panel } from '../components/ui/PageState';
 
 interface AgentConfig {
   config_type: string;
@@ -28,6 +29,7 @@ export function SettingsPage() {
   const [globalConfigs, setGlobalConfigs] = useState<GlobalConfig[]>([]);
   const [budget, setBudget] = useState<TokenBudget | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -39,7 +41,10 @@ export function SettingsPage() {
       setAgentConfigs(configRes.agent_configs);
       setGlobalConfigs(configRes.global_configs);
       setBudget(budgetRes);
-    } catch {} finally {
+      setLoadError('');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '设置加载失败');
+    } finally {
       setLoading(false);
     }
   }, [token]);
@@ -54,89 +59,116 @@ export function SettingsPage() {
       setAgentConfigs(prev =>
         prev.map(c => c.config_type === configType ? { ...c, config_value: newValue } : c),
       );
-    } catch {}
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '配置更新失败');
+    }
   };
 
   if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
-          <p className="text-sm text-text-dim font-medium">加载中</p>
-        </div>
-      </div>
-    );
+    return <PageLoader label="加载设置" />;
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      <div className="px-12 pt-12 pb-6" style={{ animation: 'fadeUp .4s ease-out' }}>
-        <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
-          设置
-        </h1>
-        <p className="text-[14px] text-text-dim mt-3 font-medium">全局配置与预算管理</p>
-      </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageHeader title="设置" eyebrow="Admin" subtitle="全局配置与预算管理" />
 
-      <div className="px-12 pb-12 max-w-[700px]">
-        {/* Token Budget */}
-        {budget && (
-          <div className="mb-8">
-            <h4 className="text-[13px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-4">Token 预算</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <BudgetCard label="每日限额" limit={budget.daily_limit} current={budget.current_daily} />
-              <BudgetCard label="每月限额" limit={budget.monthly_limit} current={budget.current_monthly} />
-            </div>
-            {budget.last_reset_at && (
-              <p className="text-[11px] text-text-dim mt-3">
-                上次重置: {new Date(budget.last_reset_at).toLocaleString('zh-CN')}
-              </p>
+      <PageShell>
+        {loadError && <div className="mb-4"><ErrorState message={loadError} onRetry={load} /></div>}
+        <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-5 max-[1100px]:grid-cols-1">
+          <div className="space-y-5">
+            {agentConfigs.length > 0 && (
+              <ConfigList title="Agent 配置" items={agentConfigs} onToggle={handleToggleConfig} />
+            )}
+
+            {globalConfigs.length > 0 && (
+              <Panel title="服务器配置" meta={`${globalConfigs.length}`}>
+                <div className="divide-y divide-border">
+                  {globalConfigs.map(c => (
+                    <div key={c.config_type} className="grid grid-cols-[minmax(180px,260px)_minmax(0,1fr)] gap-4 px-5 py-3.5 max-[760px]:grid-cols-1">
+                      <span className="text-[13px] font-semibold">{c.config_type}</span>
+                      <span className="text-[11px] text-text-muted font-mono break-all">{JSON.stringify(c.config_value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            )}
+
+            {agentConfigs.length === 0 && globalConfigs.length === 0 && (
+              <Panel title="配置项" meta="0">
+                <EmptyState
+                  className="py-16"
+                  title="还没有配置项"
+                  description={budget ? '预算记录已加载，Server 或 Agent 配置返回后会出现在这里。' : 'Server 返回配置后，这里会显示全局设置、Agent 配置和预算状态。'}
+                />
+              </Panel>
             )}
           </div>
-        )}
 
-        {/* Agent Configs */}
-        {agentConfigs.length > 0 && (
-          <div className="mb-8">
-            <h4 className="text-[13px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-4">Agent 配置</h4>
-            <div className="bg-surface border border-border rounded-[10px] divide-y divide-border">
-              {agentConfigs.map(c => (
-                <div key={c.config_type} className="flex items-center gap-3 px-5 py-3.5">
-                  <span className="text-[13px] font-medium flex-1">{c.config_type}</span>
-                  {typeof c.config_value === 'boolean' ? (
-                    <button
-                      onClick={() => handleToggleConfig(c.config_type, c.config_value)}
-                      className={`w-10 h-5 rounded-full relative cursor-pointer shrink-0 transition-colors duration-200 ${c.config_value ? 'bg-accent' : 'bg-border'}`}
-                    >
-                      <div className={`absolute w-4 h-4 rounded-full bg-white top-0.5 transition-transform duration-200 ${c.config_value ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-                    </button>
-                  ) : (
-                    <span className="text-[11px] text-text-muted font-mono">{JSON.stringify(c.config_value)}</span>
+          <aside className="space-y-5">
+            {budget && (
+              <Panel title="Token 预算" meta="budget">
+                <div className="p-4 space-y-4">
+                  <BudgetCard label="每日限额" limit={budget.daily_limit} current={budget.current_daily} />
+                  <BudgetCard label="每月限额" limit={budget.monthly_limit} current={budget.current_monthly} />
+                  {budget.last_reset_at && (
+                    <p className="text-[11px] text-text-dim">
+                      上次重置: {new Date(budget.last_reset_at).toLocaleString('zh-CN')}
+                    </p>
                   )}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </Panel>
+            )}
 
-        {/* Global Configs */}
-        {globalConfigs.length > 0 && (
-          <div className="mb-8">
-            <h4 className="text-[13px] font-semibold text-text-dim uppercase tracking-[0.12em] mb-4">服务器配置</h4>
-            <div className="bg-surface border border-border rounded-[10px] divide-y divide-border">
-              {globalConfigs.map(c => (
-                <div key={c.config_type} className="flex items-center gap-3 px-5 py-3.5">
-                  <span className="text-[13px] font-medium flex-1">{c.config_type}</span>
-                  <span className="text-[11px] text-text-muted font-mono">{JSON.stringify(c.config_value)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+            <Panel title="配置状态">
+              <div className="p-4 space-y-3 text-[12px]">
+                <StatusLine label="Agent 配置" value={agentConfigs.length} />
+                <StatusLine label="Server 配置" value={globalConfigs.length} />
+                <StatusLine label="预算记录" value={budget ? 1 : 0} />
+              </div>
+            </Panel>
+          </aside>
+        </div>
+      </PageShell>
+    </div>
+  );
+}
 
-        {agentConfigs.length === 0 && globalConfigs.length === 0 && !budget && (
-          <div className="text-center text-text-dim text-[13px] py-16">暂无配置数据</div>
-        )}
+function ConfigList({ title, items, onToggle }: {
+  title: string;
+  items: AgentConfig[];
+  onToggle: (configType: string, currentValue: unknown) => void;
+}) {
+  return (
+    <Panel title={title} meta={`${items.length}`}>
+      <div className="divide-y divide-border">
+        {items.map(c => (
+          <div key={c.config_type} className="grid grid-cols-[minmax(180px,260px)_minmax(0,1fr)_64px] gap-4 px-5 py-3.5 items-center max-[760px]:grid-cols-1">
+            <span className="text-[13px] font-semibold">{c.config_type}</span>
+            <span className="text-[11px] text-text-muted font-mono break-all">
+              {typeof c.config_value === 'boolean' ? String(c.config_value) : JSON.stringify(c.config_value)}
+            </span>
+            {typeof c.config_value === 'boolean' ? (
+              <button
+                onClick={() => onToggle(c.config_type, c.config_value)}
+                className={`w-10 h-5 rounded-full relative cursor-pointer shrink-0 transition-colors duration-200 ${c.config_value ? 'bg-accent' : 'bg-border'}`}
+              >
+                <div className={`absolute w-4 h-4 rounded-full bg-white top-0.5 transition-transform duration-200 ${c.config_value ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+              </button>
+            ) : (
+              <span className="text-[10px] text-text-dim">只读</span>
+            )}
+          </div>
+        ))}
       </div>
+    </Panel>
+  );
+}
+
+function StatusLine({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-text-muted">{label}</span>
+      <span className="font-mono text-text">{value}</span>
     </div>
   );
 }

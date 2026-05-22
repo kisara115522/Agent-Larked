@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { get } from '../api/client';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
+import { EmptyState, ErrorState, Metric, MetricStrip, PageHeader, PageLoader, PageShell, Panel } from '../components/ui/PageState';
 
 interface Agent {
   id: string;
@@ -30,6 +31,8 @@ export function TokensPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [budgets, setBudgets] = useState<TokenBudget[]>([]);
   const [usage, setUsage] = useState<TokenUsage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -42,7 +45,12 @@ export function TokensPage() {
       setAgents(agentsRes.agents);
       setBudgets(budgetRes ? [budgetRes] : []);
       setUsage(usageRes.usage);
-    } catch {}
+      setLoadError('');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Token 数据加载失败');
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
@@ -62,47 +70,36 @@ export function TokensPage() {
   const totalCost = usage.reduce((sum, u) => sum + (u.cost_usd || 0), 0);
   const defaultDailyLimit = budgets[0]?.daily_limit || 100000;
 
+  if (loading) return <PageLoader label="加载 Token 数据" />;
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
-        <h3 className="text-base font-semibold">Token 消耗</h3>
-        <div className="ml-auto text-xs text-text-muted">今日: {new Date().toISOString().slice(0, 10)}</div>
-      </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageHeader
+        title="Token 消耗"
+        eyebrow="Operations"
+        subtitle={`今日: ${new Date().toISOString().slice(0, 10)}`}
+      />
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-3 p-5">
-          <div className="bg-surface border border-border rounded-[10px] p-4">
-            <div className="text-[11px] text-text-muted uppercase tracking-wider">今日总消耗</div>
-            <div className="text-[28px] font-bold tracking-tight mt-0.5">{totalDaily.toLocaleString()}</div>
-            <TokenBar value={totalDaily} max={defaultDailyLimit} color="bg-accent" />
-            <div className="text-xs text-text-muted mt-1">预算 {defaultDailyLimit.toLocaleString()} / 日 ({(totalDaily / defaultDailyLimit * 100).toFixed(1)}%)</div>
-          </div>
-          <div className="bg-surface border border-border rounded-[10px] p-4">
-            <div className="text-[11px] text-text-muted uppercase tracking-wider">本月总消耗</div>
-            <div className="text-[28px] font-bold tracking-tight mt-0.5">-</div>
-            <TokenBar value={0} max={3000000} color="bg-[#34D399]" />
-            <div className="text-xs text-text-muted mt-1">预算 3M / 月</div>
-          </div>
-          <div className="bg-surface border border-border rounded-[10px] p-4">
-            <div className="text-[11px] text-text-muted uppercase tracking-wider">估算费用</div>
-            <div className="text-[28px] font-bold tracking-tight mt-0.5">${totalCost.toFixed(2)}</div>
-            <div className="text-xs text-text-muted mt-1">输入 + 输出</div>
-          </div>
-        </div>
+      <PageShell>
+        {loadError && <div className="mb-4"><ErrorState message={loadError} onRetry={load} /></div>}
+        <MetricStrip className="mb-5">
+          <Metric label="今日总消耗" value={totalDaily.toLocaleString()} detail={`预算 ${defaultDailyLimit.toLocaleString()} / 日`} tone={totalDaily > 0 ? 'accent' : 'muted'} />
+          <Metric label="本月总消耗" value="—" detail="预算 3M / 月" tone="muted" />
+          <Metric label="估算费用" value={`$${totalCost.toFixed(2)}`} detail="input + output" tone={totalCost > 0 ? 'warning' : 'muted'} />
+          <Metric label="Agent" value={agents.length} detail="纳入预算统计" tone="muted" />
+        </MetricStrip>
 
-        {/* Per-Agent Breakdown */}
-        <div className="px-6 pb-6">
-          <h4 className="text-sm font-semibold mb-3">按 Agent 分解</h4>
-          <table className="w-full text-[13px]">
+        <Panel title="按 Agent 分解" meta={`${agents.length}`}>
+          <div className="overflow-x-auto">
+          <table className="w-full text-[13px] min-w-[720px]">
             <thead>
               <tr className="text-left">
-                <th className="py-2 px-3 border-b border-border text-[11px] text-text-dim uppercase">Agent</th>
-                <th className="py-2 px-3 border-b border-border text-[11px] text-text-dim">输入</th>
-                <th className="py-2 px-3 border-b border-border text-[11px] text-text-dim">输出</th>
-                <th className="py-2 px-3 border-b border-border text-[11px] text-text-dim">总计</th>
-                <th className="py-2 px-3 border-b border-border text-[11px] text-text-dim">费用</th>
-                <th className="py-2 px-3 border-b border-border text-[11px] text-text-dim">预算</th>
+                <th className="py-2.5 px-4 border-b border-border text-[10px] text-text-dim uppercase tracking-[0.12em]">Agent</th>
+                <th className="py-2.5 px-4 border-b border-border text-[10px] text-text-dim uppercase tracking-[0.12em]">输入</th>
+                <th className="py-2.5 px-4 border-b border-border text-[10px] text-text-dim uppercase tracking-[0.12em]">输出</th>
+                <th className="py-2.5 px-4 border-b border-border text-[10px] text-text-dim uppercase tracking-[0.12em]">总计</th>
+                <th className="py-2.5 px-4 border-b border-border text-[10px] text-text-dim uppercase tracking-[0.12em]">费用</th>
+                <th className="py-2.5 px-4 border-b border-border text-[10px] text-text-dim uppercase tracking-[0.12em]">预算</th>
               </tr>
             </thead>
             <tbody>
@@ -112,29 +109,37 @@ export function TokensPage() {
                 const dailyLimit = budget?.daily_limit || defaultDailyLimit;
                 return (
                   <tr key={agent.id} className="border-b border-border">
-                    <td className="py-2 px-3">
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <AgentAvatar name={agent.name} displayName={agent.display_name} size="sm" />
                         {agent.display_name || agent.name}
                       </div>
                     </td>
-                    <td className="py-2 px-3 font-mono">{u ? u.input.toLocaleString() : '0'}</td>
-                    <td className="py-2 px-3 font-mono">{u ? u.output.toLocaleString() : '0'}</td>
-                    <td className="py-2 px-3 font-mono font-semibold">{u ? u.total.toLocaleString() : '0'}</td>
-                    <td className="py-2 px-3 font-mono">{u ? `$${u.cost.toFixed(2)}` : '$0.00'}</td>
-                    <td className="py-2 px-3 w-[120px]">
+                    <td className="py-3 px-4 font-mono">{u ? u.input.toLocaleString() : '0'}</td>
+                    <td className="py-3 px-4 font-mono">{u ? u.output.toLocaleString() : '0'}</td>
+                    <td className="py-3 px-4 font-mono font-semibold">{u ? u.total.toLocaleString() : '0'}</td>
+                    <td className="py-3 px-4 font-mono">{u ? `$${u.cost.toFixed(2)}` : '$0.00'}</td>
+                    <td className="py-3 px-4 w-[160px]">
                       <TokenBar value={u?.total || 0} max={dailyLimit} color="bg-accent" />
                     </td>
                   </tr>
                 );
               })}
               {agents.length === 0 && (
-                <tr><td colSpan={6} className="py-8 text-center text-text-dim">暂无 agent</td></tr>
+                <tr>
+                  <td colSpan={6} className="py-10">
+                    <EmptyState
+                      title="还没有 Agent"
+                      description="创建 Agent 后，这里会显示每个 Agent 的输入、输出、总量和预算消耗。"
+                    />
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+          </div>
+        </Panel>
+      </PageShell>
     </div>
   );
 }

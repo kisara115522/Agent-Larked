@@ -4,6 +4,7 @@ import { get, post } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { WakeSingleModal } from '../components/modals/WakeSingleModal';
+import { EmptyState, ErrorState, Metric, MetricStrip, PageHeader, PageLoader, PageShell, Panel } from '../components/ui/PageState';
 
 interface Agent {
   id: string;
@@ -38,6 +39,8 @@ export function WakePage() {
   const [wakeHistory, setWakeHistory] = useState<WakeEvent[]>([]);
   const [selectedRoom, setSelectedRoom] = useState('');
   const [wakeAgent, setWakeAgent] = useState<Agent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const { toast } = useToast();
 
   const load = useCallback(async () => {
@@ -52,14 +55,18 @@ export function WakePage() {
       setRooms(roomsRes.rooms);
       setWakeHistory(historyRes.events);
       if (roomsRes.rooms.length > 0 && !selectedRoom) setSelectedRoom(roomsRes.rooms[0].id);
+      setLoadError('');
     } catch (e) {
-      toast(`加载失败: ${e instanceof Error ? e.message : '未知错误'}`);
+      setLoadError(e instanceof Error ? e.message : '唤醒数据加载失败');
+    } finally {
+      setLoading(false);
     }
   }, [token, selectedRoom, toast]);
 
   useEffect(() => { load(); }, [load]);
 
   const dormantAgents = agents.filter(a => a.status === 'dormant' || a.status === 'error');
+  const errorAgents = agents.filter(a => a.status === 'error');
 
   const handleBroadcastWake = async () => {
     if (!token || !selectedRoom) return;
@@ -83,23 +90,36 @@ export function WakePage() {
     }
   };
 
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
-        <h3 className="text-base font-semibold">唤醒控制</h3>
-        <div className="ml-auto text-xs text-text-muted">三种唤醒方式: 人类启动 / @mention / Broadcast</div>
-      </div>
+  if (loading) return <PageLoader label="加载唤醒状态" />;
 
-      <div className="flex-1 overflow-y-auto p-6">
-        {/* Manual Wake */}
-        <h4 className="text-sm font-semibold mb-3">手动唤醒</h4>
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageHeader
+        title="唤醒"
+        eyebrow="Operations"
+        subtitle={`${dormantAgents.length} 个 Agent 可唤醒 · ${wakeHistory.length} 条历史记录`}
+      />
+
+      <PageShell>
+        {loadError && <div className="mb-4"><ErrorState message={loadError} onRetry={load} /></div>}
+        <MetricStrip className="mb-5">
+          <Metric label="可唤醒" value={dormantAgents.length} detail={`${errorAgents.length} error`} tone={dormantAgents.length > 0 ? 'warning' : 'muted'} />
+          <Metric label="Room" value={rooms.length} detail="可广播目标" tone="accent" />
+          <Metric label="历史" value={wakeHistory.length} detail="wake events" tone="muted" />
+        </MetricStrip>
+
+        <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-5 max-[1100px]:grid-cols-1">
+          <Panel title="手动唤醒" meta={`${dormantAgents.length}`}>
         {dormantAgents.length === 0 ? (
-          <div className="text-center text-text-dim text-sm py-6 bg-surface border border-border rounded-[10px]">
-            所有 agent 都已活跃，无需唤醒
-          </div>
+          <EmptyState
+            className="py-16"
+            title="没有需要唤醒的 Agent"
+            description="当前没有 dormant 或 error 状态的 Agent。Agent 休眠后会出现在这里。"
+          />
         ) : (
-          dormantAgents.map(agent => (
-            <div key={agent.id} className="bg-surface border border-border rounded-[10px] p-4 mb-3 flex items-center gap-3">
+          <div className="divide-y divide-border/70">
+          {dormantAgents.map(agent => (
+            <div key={agent.id} className="px-4 py-3 flex items-center gap-3">
               <AgentAvatar name={agent.name} displayName={agent.display_name} size="lg" />
               <div className="flex-1">
                 <div className="text-sm font-semibold">{agent.display_name || agent.name}</div>
@@ -107,50 +127,51 @@ export function WakePage() {
                   {agent.status} · {agent.last_active_at ? `${formatRelativeTime(agent.last_active_at)}未活跃` : '从未活跃'} · 最后 Session: 无
                 </div>
               </div>
-              <button onClick={() => setWakeAgent(agent)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white transition-colors">
-                🔔 唤醒
+              <button onClick={() => setWakeAgent(agent)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-success-muted text-success hover:bg-success hover:text-white transition-colors">
+                唤醒
               </button>
               <button onClick={() => handleQuickWake(agent.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">
                 启动到 Runtime
               </button>
             </div>
-          ))
+          ))}
+          </div>
         )}
+          </Panel>
 
-        {/* Broadcast Wake */}
-        <h4 className="text-sm font-semibold mt-6 mb-3">Broadcast 唤醒</h4>
-        <div className="bg-surface border border-border rounded-[10px] p-4 flex items-center gap-4">
-          <div className="flex-1">
+          <aside className="space-y-5">
+            <Panel title="Broadcast 唤醒">
+        <div className="p-4 space-y-4">
+          <div>
             <div className="text-sm font-semibold">唤醒 Room 内所有 dormant agent</div>
             <div className="text-xs text-text-muted mt-0.5">向 Room 内所有处于 dormant 状态的 agent 发送唤醒 callback</div>
           </div>
-          <select value={selectedRoom} onChange={e => setSelectedRoom(e.target.value)} className="px-3 py-2 bg-surface border border-border rounded-[14px] text-sm text-text w-[200px]">
+          <select value={selectedRoom} onChange={e => setSelectedRoom(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-[10px] text-sm text-text">
             {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             {rooms.length === 0 && <option>选择 Room...</option>}
           </select>
-          <button onClick={handleBroadcastWake} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white transition-colors">
-            🔔 全部唤醒
+          <button onClick={handleBroadcastWake} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold bg-success-muted text-success hover:bg-success hover:text-white transition-colors">
+            全部唤醒
           </button>
         </div>
+            </Panel>
 
-        {/* Wake History */}
-        <h4 className="text-sm font-semibold mt-6 mb-3">唤醒历史</h4>
+            <Panel title="唤醒历史" meta={`${wakeHistory.length}`}>
         {wakeHistory.length === 0 ? (
-          <div className="text-xs text-text-muted">
-            <div className="py-1.5 border-b border-border flex gap-3">
-              <span className="font-mono text-text-dim w-[60px]">--:--</span>
-              <span>暂无唤醒记录</span>
-            </div>
-          </div>
+          <EmptyState
+            className="py-10"
+            title="还没有唤醒记录"
+            description="手动唤醒、@mention 或 broadcast wake 触发后，记录会按时间出现在这里。"
+          />
         ) : (
-          <div className="text-xs text-text-muted">
+          <div className="text-xs text-text-muted p-2 max-h-[460px] overflow-y-auto">
             {wakeHistory.slice(0, 20).map(ev => (
-              <div key={ev.id} className="py-1.5 border-b border-border flex gap-3 items-center">
+              <div key={ev.id} className="py-2 px-2 rounded-[8px] hover:bg-surface-elevated/50 flex gap-2 items-center">
                 <span className="font-mono text-text-dim w-[60px] shrink-0">
                   {new Date(ev.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                 </span>
                 <span className="font-semibold">{ev.agent_name || ev.agent_id.slice(0, 8)}</span>
-                <span className="text-text-dim">被 {ev.triggered_by_name || ev.triggered_by.slice(0, 8)} 唤醒</span>
+                <span className="text-text-dim truncate">被 {ev.triggered_by_name || ev.triggered_by.slice(0, 8)} 唤醒</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface-elevated text-text-muted border border-border">
                   {ev.trigger_type === 'manual' ? '手动' : ev.trigger_type === 'mention' ? '@mention' : ev.trigger_type === 'broadcast' ? '广播' : ev.trigger_type === 'spawn' ? '启动' : ev.trigger_type}
                 </span>
@@ -161,7 +182,10 @@ export function WakePage() {
             ))}
           </div>
         )}
-      </div>
+            </Panel>
+          </aside>
+        </div>
+      </PageShell>
 
       {/* Wake Single Modal */}
       {wakeAgent && (

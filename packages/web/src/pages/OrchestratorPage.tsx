@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { get } from '../api/client';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
+import { EmptyState, ErrorState, Metric, MetricStrip, PageHeader, PageShell, Panel } from '../components/ui/PageState';
 
 interface Task {
   id: string;
@@ -42,6 +43,7 @@ export function OrchestratorPage() {
   const { token } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -52,7 +54,10 @@ export function OrchestratorPage() {
       ]);
       setTasks(tasksRes.tasks);
       setAgents(agentsRes.agents);
-    } catch {}
+      setLoadError('');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '编排数据加载失败');
+    }
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
@@ -60,24 +65,38 @@ export function OrchestratorPage() {
   const getAgentName = (id: string) => agents.find(a => a.id === id)?.display_name || agents.find(a => a.id === id)?.name || id;
 
   const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'rejected' && t.status !== 'error');
+  const assignedTasks = activeTasks.filter(t => t.assigned_to);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
-        <h3 className="text-base font-semibold">任务编排</h3>
-        <div className="ml-auto text-xs text-text-muted">每个任务有自己的编排者 — 任何 agent 都可以是编排者</div>
-      </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageHeader
+        title="任务编排"
+        eyebrow="Operations"
+        subtitle="每个任务有自己的编排者，当前焦点由任务和对话决定。"
+      />
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <PageShell>
+        {loadError && <div className="mb-4"><ErrorState message={loadError} onRetry={load} /></div>}
+        <MetricStrip className="mb-5">
+          <Metric label="活跃任务" value={activeTasks.length} detail={`${assignedTasks.length} 已分配`} tone="accent" />
+          <Metric label="Agent" value={agents.length} detail="可编排执行者" tone="muted" />
+          <Metric label="待办" value={tasks.filter(t => t.status === 'todo').length} detail="尚未启动" tone="warning" />
+          <Metric label="完成" value={tasks.filter(t => t.status === 'done').length} detail="历史结果" tone="success" />
+        </MetricStrip>
+
         {activeTasks.length === 0 ? (
-          <div className="text-center text-text-dim text-sm py-16">
-            暂无活跃任务。在任务看板创建任务后，编排链将在此显示。
-          </div>
+          <EmptyState
+            className="py-16"
+            title="还没有活跃任务"
+            description="在任务看板创建任务并分配 Agent 后，编排链会在这里展示。"
+          />
         ) : (
-          <div className="max-w-[700px] space-y-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5 max-[1100px]:grid-cols-1">
+            <Panel title="编排队列" meta={`${activeTasks.length}`}>
+              <div className="divide-y divide-border/70">
             {activeTasks.map(task => (
-              <div key={task.id} className="bg-surface border border-border rounded-[10px] p-4 border-l-[3px] border-l-accent">
-                <div className="flex items-center gap-3 mb-3">
+              <div key={task.id} className="p-4">
+                <div className="flex items-center gap-3 mb-4">
                   <div className="flex-1">
                     <div className="text-[15px] font-semibold">{task.title}</div>
                     <div className="text-xs text-text-muted mt-0.5">{task.description || '无描述'}</div>
@@ -87,7 +106,7 @@ export function OrchestratorPage() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3 p-2 px-3 bg-bg rounded text-xs mb-3">
+                <div className="flex items-center gap-3 p-2 px-3 bg-surface-elevated rounded-[8px] text-xs mb-4">
                   <span className="text-text-dim">编排者:</span>
                   <AgentAvatar name={getAgentName(task.created_by)} displayName={getAgentName(task.created_by)} size="sm" />
                   <span className="text-[13px] font-medium">{getAgentName(task.created_by)}</span>
@@ -96,14 +115,12 @@ export function OrchestratorPage() {
                 <div className="flex flex-col gap-0">
                   <OrchStep
                     nodeType="human"
-                    icon="👤"
                     title="任务创建"
                     desc={`${getAgentName(task.created_by)} 创建了任务`}
                   />
                   {task.assigned_to && (
                     <OrchStep
                       nodeType="worker"
-                      icon="🤖"
                       title={`${getAgentName(task.assigned_to)} 执行中`}
                       desc={task.description || '正在处理...'}
                     />
@@ -111,36 +128,45 @@ export function OrchestratorPage() {
                 </div>
               </div>
             ))}
+              </div>
+            </Panel>
 
-            <div className="mt-8">
-              <h4 className="text-sm font-semibold mb-4">编排原理</h4>
-              <div className="grid grid-cols-2 gap-3">
+            <aside>
+              <Panel title="编排原理" meta="model">
+              <div className="p-3 space-y-2">
                 <InfoCard title="没有固定主 agent" desc="任何 agent 都可以是 Orchestrator。人类和谁对话，谁就是当前焦点。" />
                 <InfoCard title="按任务分配编排者" desc="每个任务有自己的编排者。创建任务时可以指定任意 agent。" />
                 <InfoCard title="Harness ≠ Orchestrator" desc="Harness = Server 内置模块（状态机）。Orchestrator = agent 角色（AI 驱动）。" />
                 <InfoCard title="平等交流" desc="进入房间的 agent 都可以互相交流。协作是 peer-to-peer 的。" />
               </div>
-            </div>
+              </Panel>
+            </aside>
           </div>
         )}
-      </div>
+      </PageShell>
     </div>
   );
 }
 
-function OrchStep({ nodeType, icon, title, desc }: { nodeType: 'human' | 'orch' | 'worker' | 'result'; icon: string; title: string; desc: string }) {
+function OrchStep({ nodeType, title, desc }: { nodeType: 'human' | 'orch' | 'worker' | 'result'; title: string; desc: string }) {
   const borderMap = {
     human: 'border-accent bg-accent-muted',
     orch: 'border-[#FBBF24] bg-[#78350F]',
     worker: 'border-[#34D399] bg-[#064E3B]',
     result: 'border-text-dim bg-surface',
   };
+  const labelMap = {
+    human: '人',
+    orch: '编',
+    worker: 'Agent',
+    result: '果',
+  };
 
   return (
     <div className="flex gap-4 relative">
       <div className="absolute left-[20px] top-[44px] bottom-[-16px] w-0.5 bg-border last:hidden" />
       <div className={`w-[42px] h-[42px] rounded-full flex items-center justify-center text-base shrink-0 border-2 z-10 ${borderMap[nodeType]}`}>
-        {icon}
+        <span className="text-[11px] font-bold">{labelMap[nodeType]}</span>
       </div>
       <div className="flex-1 pb-6">
         <div className="text-sm font-semibold">{title}</div>
@@ -152,7 +178,7 @@ function OrchStep({ nodeType, icon, title, desc }: { nodeType: 'human' | 'orch' 
 
 function InfoCard({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="bg-surface border border-border rounded-[10px] p-4">
+    <div className="rounded-[8px] p-3 hover:bg-surface-elevated/50 transition-colors">
       <div className="text-[13px] font-semibold mb-1.5">{title}</div>
       <div className="text-xs text-text-muted">{desc}</div>
     </div>
