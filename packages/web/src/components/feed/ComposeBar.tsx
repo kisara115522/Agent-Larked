@@ -8,9 +8,26 @@ interface ComposeBarProps {
   onSend: (content: string, mentions: string[]) => Promise<void>;
   roomId?: string;
   token?: string;
+  refreshKey?: unknown;
 }
 
-export function ComposeBar({ placeholder = '输入消息...', onSend, roomId, token }: ComposeBarProps) {
+const MENTION_PATTERN = /@([\w.-]+)/g;
+
+export function getMentionInsertText(member: Member): string {
+  return `@${member.name} `;
+}
+
+export function extractMentionIds(content: string, members: Member[]): string[] {
+  const ids = new Set<string>();
+  for (const match of content.matchAll(MENTION_PATTERN)) {
+    const name = match[1];
+    const member = members.find(m => m.name === name);
+    if (member) ids.add(member.id);
+  }
+  return [...ids];
+}
+
+export function ComposeBar({ placeholder = '输入消息...', onSend, roomId, token, refreshKey }: ComposeBarProps) {
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -26,17 +43,16 @@ export function ComposeBar({ placeholder = '输入消息...', onSend, roomId, to
     get<{ members: Member[] }>(`/rooms/${roomId}/members`, token)
       .then(res => setMembers(res.members))
       .catch(() => {});
-  }, [roomId, token]);
+  }, [roomId, token, refreshKey]);
 
   const filteredMembers = members.filter(m =>
     (m.display_name || m.name).toLowerCase().includes(mentionFilter.toLowerCase())
   );
 
   const handleMentionSelect = useCallback((member: Member) => {
-    const name = member.display_name || member.name;
     const start = mentionStartRef.current ?? 0;
     const after = content.slice(inputRef.current?.selectionStart ?? content.length);
-    setContent(content.slice(0, start) + '@' + name + ' ' + after);
+    setContent(content.slice(0, start) + getMentionInsertText(member) + after);
     setShowMentions(false);
     setMentionFilter('');
     mentionStartRef.current = null;
@@ -47,7 +63,7 @@ export function ComposeBar({ placeholder = '输入消息...', onSend, roomId, to
     const val = e.target.value;
     setContent(val);
     const cursor = e.target.selectionStart ?? val.length;
-    const atMatch = val.slice(0, cursor).match(/@([\w-]*)$/);
+    const atMatch = val.slice(0, cursor).match(/@([\w.-]*)$/);
     if (atMatch) {
       mentionStartRef.current = cursor - atMatch[0].length;
       setMentionFilter(atMatch[1]);
@@ -78,10 +94,7 @@ export function ComposeBar({ placeholder = '输入消息...', onSend, roomId, to
     if (!trimmed || sending) return;
     setSending(true);
     try {
-      const mentionNames = (trimmed.match(/@([\w-]+)/g) ?? []).map(m => m.slice(1));
-      const mentionIds = mentionNames
-        .map(name => members.find(m => m.name === name || m.display_name === name)?.id)
-        .filter((id): id is string => !!id);
+      const mentionIds = extractMentionIds(trimmed, members);
       await onSend(trimmed, mentionIds);
       setContent('');
       if (inputRef.current) { inputRef.current.style.height = 'auto'; }

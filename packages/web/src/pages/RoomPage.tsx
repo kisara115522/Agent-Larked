@@ -9,6 +9,13 @@ import { ComposeBar } from '../components/feed/ComposeBar';
 import { ThreadView } from '../components/feed/ThreadView';
 import type { Message, GetMessagesResponse } from '@flock/shared';
 
+interface AgentOption {
+  id: string;
+  name: string;
+  display_name?: string;
+  status?: string;
+}
+
 export function sendHumanRoomMessage(token: string, roomId: string, content: string, mentions: string[]) {
   return post(`/rooms/${roomId}/messages`, token, {
     content,
@@ -44,6 +51,8 @@ export function RoomPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showAddAgent, setShowAddAgent] = useState(false);
+  const [memberRefreshKey, setMemberRefreshKey] = useState(0);
 
   // Cleanup error timeout on unmount
   useEffect(() => {
@@ -229,12 +238,20 @@ export function RoomPage() {
           <h3 className="text-[15px] font-semibold">{roomName || `Room ${roomId?.slice(0, 8)}`}</h3>
           <div className="ml-auto flex items-center gap-2">
             {isMember ? (
-              <button
-                onClick={handleLeave}
-                className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-text-dim border border-border hover:border-error hover:text-error transition-all duration-200"
-              >
-                离开
-              </button>
+              <>
+                <button
+                  onClick={() => setShowAddAgent(true)}
+                  className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors"
+                >
+                  添加 Agent
+                </button>
+                <button
+                  onClick={handleLeave}
+                  className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-text-dim border border-border hover:border-error hover:text-error transition-all duration-200"
+                >
+                  离开
+                </button>
+              </>
             ) : (
               <button
                 onClick={handleJoin}
@@ -304,7 +321,13 @@ export function RoomPage() {
         </div>
 
         {isMember ? (
-          <ComposeBar onSend={handleSend} placeholder="输入消息... 用 @名字 提及" roomId={roomId} token={token ?? undefined} />
+          <ComposeBar
+            onSend={handleSend}
+            placeholder="输入消息... 用 @名字 提及"
+            roomId={roomId}
+            token={token ?? undefined}
+            refreshKey={memberRefreshKey}
+          />
         ) : (
           <div className="px-8 py-4 border-t border-border bg-surface flex items-center justify-between">
             <span className="text-[13px] text-text-muted">加入 Room 后可以发送消息和创建任务</span>
@@ -327,6 +350,149 @@ export function RoomPage() {
           />
         </div>
       )}
+      {showAddAgent && token && roomId && (
+        <AddAgentToRoomModal
+          token={token}
+          roomId={roomId}
+          onClose={() => setShowAddAgent(false)}
+          onAdded={() => {
+            setShowAddAgent(false);
+            setMemberRefreshKey(value => value + 1);
+            loadMessages(true);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddAgentToRoomModal({
+  token,
+  roomId,
+  onClose,
+  onAdded,
+}: {
+  token: string;
+  roomId: string;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [members, setMembers] = useState<AgentOption[]>([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [addingId, setAddingId] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [agentsRes, membersRes] = await Promise.all([
+        get<{ agents: AgentOption[] }>('/agents?limit=100', token),
+        get<{ members: AgentOption[] }>(`/rooms/${roomId}/members`, token),
+      ]);
+      setAgents(agentsRes.agents);
+      setMembers(membersRes.members);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Agent 列表加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [roomId, token]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const memberIds = new Set(members.map(member => member.id));
+  const candidates = agents.filter(agent => !memberIds.has(agent.id));
+  const filtered = candidates.filter(agent => {
+    const text = `${agent.name} ${agent.display_name ?? ''}`.toLowerCase();
+    return text.includes(query.toLowerCase());
+  });
+
+  const addAgent = async (agentId: string) => {
+    try {
+      setAddingId(agentId);
+      await post(`/rooms/${roomId}/members`, token, { agent_id: agentId });
+      await load();
+      onAdded();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '添加失败');
+    } finally {
+      setAddingId('');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" onMouseDown={onClose}>
+      <div
+        className="w-full max-w-lg max-h-[80vh] bg-surface border border-border rounded-[10px] shadow-xl flex flex-col"
+        onMouseDown={event => event.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-border flex items-center gap-3">
+          <div>
+            <h3 className="text-[15px] font-semibold">添加 Agent 到 Room</h3>
+            <p className="text-[12px] text-text-muted mt-1">加入后才能被 @ 提及和接收 Room 上下文。</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-auto w-8 h-8 rounded-full border border-border text-text-muted hover:text-text hover:bg-surface-elevated transition-colors"
+            aria-label="关闭"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-border">
+          <input
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            placeholder="搜索 agent 名称"
+            className="w-full px-3 py-2 rounded-[8px] border border-border bg-surface-elevated text-[13px] outline-none focus:border-accent"
+          />
+        </div>
+
+        {error && (
+          <div className="mx-4 mt-4 px-3 py-2 rounded-[8px] bg-error-muted text-error text-[12px]">
+            {error}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-3">
+          {loading ? (
+            <div className="py-10 text-center text-[13px] text-text-muted">加载中</div>
+          ) : filtered.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="text-[13px] text-text-muted font-medium">没有可添加的 Agent</p>
+              <p className="text-[12px] text-text-dim mt-1">可能已经都在这个 Room 里。</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {filtered.map(agent => (
+                <div key={agent.id} className="flex items-center gap-3 px-3 py-2.5 rounded-[8px] hover:bg-surface-elevated/60">
+                  <div className="w-8 h-8 rounded-full bg-accent-muted text-accent flex items-center justify-center text-[11px] font-bold">
+                    {(agent.display_name || agent.name).slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold truncate">{agent.display_name || agent.name}</div>
+                    <div className="text-[11px] text-text-dim font-mono truncate">@{agent.name}</div>
+                  </div>
+                  <span className="text-[10px] text-text-dim">{agent.status ?? 'dormant'}</span>
+                  <button
+                    onClick={() => addAgent(agent.id)}
+                    disabled={addingId === agent.id}
+                    className="px-3 py-1.5 rounded-full bg-accent text-white text-[11px] font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
+                  >
+                    {addingId === agent.id ? '添加中' : '添加'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
