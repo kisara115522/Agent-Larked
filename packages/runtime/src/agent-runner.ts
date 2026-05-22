@@ -174,16 +174,23 @@ export class AgentRunner {
       });
 
       instance.process = child;
-      instance.status = 'active';
-      instance.lastActiveAt = new Date();
-
-      await this.reportActivity(instance.agentId, 'status_change', 'Agent active', {
-        session_id: instance.sessionId,
-        pid: child.pid,
-      }, instance.agentToken);
-
       let stdout = '';
       let stderr = '';
+      let finished = false;
+
+      const reportError = (label: string, err: unknown) => {
+        console.error(`[runner] ${label} for ${instance.agentId}:`, err);
+        return this.reportActivity(instance.agentId, 'error', `${label}: ${formatError(err)}`, {
+          session_id: instance.sessionId,
+        }, instance.agentToken);
+      };
+
+      const completeOnce = (): boolean => {
+        if (finished) return false;
+        finished = true;
+        this.agents.delete(instance.agentId);
+        return true;
+      };
 
       child.stdout?.on('data', (data: Buffer) => {
         stdout += data.toString();
@@ -195,44 +202,59 @@ export class AgentRunner {
         instance.lastActiveAt = new Date();
       });
 
-      child.on('close', async (code) => {
+      child.once('spawn', () => {
+        if (finished) return;
+        instance.status = 'active';
+        instance.lastActiveAt = new Date();
+
+        void this.reportActivity(instance.agentId, 'status_change', 'Agent active', {
+          session_id: instance.sessionId,
+          pid: child.pid,
+        }, instance.agentToken).catch((err) => {
+          console.error(`[runner] Failed to report active for ${instance.agentId}:`, err);
+        });
+      });
+
+      child.once('close', (code) => {
+        if (!completeOnce()) return;
         console.log(`[runner] Agent ${instance.agentId} exited with code ${code}`);
 
         if (code === 0) {
           instance.status = 'dormant';
-          await this.reportActivity(instance.agentId, 'status_change', 'Agent completed', {
+          void this.reportActivity(instance.agentId, 'status_change', 'Agent completed', {
             session_id: instance.sessionId,
             exit_code: code,
             output_length: stdout.length,
-          }, instance.agentToken);
+          }, instance.agentToken).catch((err) => {
+            console.error(`[runner] Failed to report completion for ${instance.agentId}:`, err);
+          });
         } else {
           instance.status = 'error';
           const stdoutTail = tail(stdout);
           const stderrTail = tail(stderr);
           const summary = summarizeFailure(stdoutTail, stderrTail);
-          await this.reportActivity(instance.agentId, 'error', `Agent exited with code ${code}${summary ? `: ${summary}` : ''}`, {
+          void this.reportActivity(instance.agentId, 'error', `Agent exited with code ${code}${summary ? `: ${summary}` : ''}`, {
             session_id: instance.sessionId,
             exit_code: code,
             stdout: stdoutTail,
             stderr: stderrTail,
-          }, instance.agentToken);
+          }, instance.agentToken).catch((err) => {
+            console.error(`[runner] Failed to report exit for ${instance.agentId}:`, err);
+          });
         }
-
-        this.agents.delete(instance.agentId);
       });
 
-      child.on('error', async (err) => {
-        console.error(`[runner] Agent ${instance.agentId} process error:`, err);
+      child.once('error', (err) => {
+        if (!completeOnce()) return;
         instance.status = 'error';
-        await this.reportActivity(instance.agentId, 'error', `Process error: ${err.message}`, {
-          session_id: instance.sessionId,
-        }, instance.agentToken);
-        this.agents.delete(instance.agentId);
+        void reportError('Process error', err).catch((reportErr) => {
+          console.error(`[runner] Failed to report process error for ${instance.agentId}:`, reportErr);
+        });
       });
     } catch (err) {
       console.error(`[runner] Failed to spawn agent ${instance.agentId}:`, err);
       instance.status = 'error';
-      await this.reportActivity(instance.agentId, 'error', `Spawn failed: ${err}`, {
+      await this.reportActivity(instance.agentId, 'error', `Spawn failed: ${formatError(err)}`, {
         session_id: instance.sessionId,
       }, instance.agentToken);
       this.agents.delete(instance.agentId);
@@ -267,6 +289,10 @@ function sanitizeEnv(env: Record<string, string> | undefined): Record<string, st
 
 function tail(value: string, max = 4000): string {
   return value.length > max ? value.slice(value.length - max) : value;
+}
+
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function summarizeFailure(stdout: string, stderr: string): string {

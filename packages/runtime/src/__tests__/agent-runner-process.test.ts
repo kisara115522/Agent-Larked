@@ -80,4 +80,30 @@ describe('AgentRunner process reporting', () => {
     });
     expect(spawnOptions?.env?.AGENT_PROVIDER).toBe('custom');
   });
+
+  it('reports spawn errors even if the child process errors before active reporting completes', async () => {
+    const child = new MockChildProcess();
+    spawnMock.mockReturnValue(child);
+    let resolveActiveReport: (() => void) | undefined;
+    const reporter: ActivityReporter = vi.fn().mockImplementation((_agentId, _type, detail) => {
+      if (detail === 'Agent active') {
+        return new Promise<void>((resolve) => {
+          resolveActiveReport = resolve;
+        });
+      }
+      return Promise.resolve();
+    });
+    const runner = new AgentRunner(reporter, 'http://localhost:3001');
+
+    await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
+
+    expect(() => child.emit('error', new Error('spawn claude EACCES'))).not.toThrow();
+    resolveActiveReport?.();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const errorCall = vi.mocked(reporter).mock.calls.find((call) => call[1] === 'error');
+    expect(errorCall).toBeDefined();
+    expect(errorCall?.[2]).toContain('spawn claude EACCES');
+    expect(runner.getAgent('agent-1')).toBeUndefined();
+  });
 });
