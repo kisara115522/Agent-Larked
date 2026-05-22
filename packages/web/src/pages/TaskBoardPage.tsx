@@ -4,6 +4,7 @@ import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { TaskDetailModal } from '../components/modals/TaskDetailModal';
+import { EmptyState, ErrorState, Metric, MetricStrip, PageHeader, PageLoader, PageShell, Panel } from '../components/ui/PageState';
 
 interface Task {
   id: string;
@@ -28,13 +29,13 @@ interface Room {
   is_member?: boolean;
 }
 
-const COLUMNS: { status: string; label: string; icon: string; color: string }[] = [
-  { status: 'todo', label: '待办', icon: '📋', color: 'bg-text-dim' },
-  { status: 'in_progress', label: '进行中', icon: '⚡', color: 'bg-[#FBBF24]' },
-  { status: 'review', label: '审查中', icon: '👀', color: 'bg-accent' },
-  { status: 'done', label: '完成', icon: '✅', color: 'bg-[#34D399]' },
-  { status: 'rejected', label: '退回', icon: '🚫', color: 'bg-[#FBBF24]' },
-  { status: 'error', label: '错误', icon: '❌', color: 'bg-error' },
+const COLUMNS: { status: string; label: string; color: string }[] = [
+  { status: 'todo', label: '待办', color: 'bg-text-dim' },
+  { status: 'in_progress', label: '进行中', color: 'bg-[#FBBF24]' },
+  { status: 'review', label: '审查中', color: 'bg-accent' },
+  { status: 'done', label: '完成', color: 'bg-[#34D399]' },
+  { status: 'rejected', label: '退回', color: 'bg-[#FBBF24]' },
+  { status: 'error', label: '错误', color: 'bg-error' },
 ];
 
 const PRIORITY_LABEL: Record<number, string> = { '-1': '最低', 0: '低', 1: '中', 2: '高' };
@@ -59,6 +60,7 @@ export function TaskBoardPage() {
   const [newPriority, setNewPriority] = useState(1);
   const [creating, setCreating] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [loadError, setLoadError] = useState('');
   const { toast } = useToast();
   const joinedRooms = rooms.filter(room => room.is_member !== false);
 
@@ -75,7 +77,10 @@ export function TaskBoardPage() {
       setRooms(roomsRes.rooms);
       const firstJoined = roomsRes.rooms.find(room => room.is_member !== false);
       setNewRoom(prev => prev || (firstJoined?.id ?? ''));
-    } catch {} finally {
+      setLoadError('');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '任务看板加载失败');
+    } finally {
       setLoading(false);
     }
   }, [token]);
@@ -113,76 +118,95 @@ export function TaskBoardPage() {
   };
 
   if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
-          <p className="text-sm text-text-dim font-medium">加载中</p>
-        </div>
-      </div>
-    );
+    return <PageLoader label="加载任务" />;
   }
 
+  const openTasks = tasks.filter(t => !['done', 'rejected', 'error'].includes(t.status));
+  const activeTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'review');
+  const blockedTasks = tasks.filter(t => t.status === 'rejected' || t.status === 'error');
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-12 pt-12 pb-6 shrink-0" style={{ animation: 'fadeUp .4s ease-out' }}>
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
-              任务
-            </h1>
-            <p className="text-[14px] text-text-dim mt-3 font-medium">{tasks.length} 个任务</p>
-          </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageHeader
+        title="任务"
+        eyebrow="Workspace"
+        subtitle={`${openTasks.length} 个未完成 · ${activeTasks.length} 个推进中`}
+        action={
           <button
             onClick={() => setShowCreate(true)}
             disabled={joinedRooms.length === 0}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors duration-150"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
             创建任务
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="flex-1 overflow-x-auto px-8 pb-8">
-        <div className="grid grid-cols-6 gap-3 min-w-[1100px]">
-          {COLUMNS.map(col => {
-            const colTasks = tasks.filter(t => t.status === col.status);
-            return (
-              <div key={col.status} className="bg-surface border border-border rounded-[10px] flex flex-col min-h-[400px]">
-                <div className="p-3 px-4 border-b border-border flex items-center gap-2 shrink-0">
-                  <div className={`w-2 h-2 rounded-full ${col.color}`} />
-                  <h4 className="text-[12px] font-semibold flex-1">{col.label}</h4>
-                  <span className="text-[10px] text-text-dim font-mono">{colTasks.length}</span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                  {colTasks.map(task => (
-                    <div
-                      key={task.id}
-                      onClick={() => setSelectedTask(task)}
-                      className="bg-surface-elevated border border-border rounded-[6px] p-3 cursor-pointer hover:border-accent/40 transition-colors duration-150"
-                    >
-                      <div className="text-[12px] font-medium mb-2 leading-snug">{task.title}</div>
-                      <div className="flex items-center gap-2 text-[10px] text-text-dim">
-                        <span className={`px-1.5 py-0.5 rounded-full font-semibold ${PRIORITY_BADGE[task.priority] || PRIORITY_BADGE[1]}`}>
-                          {PRIORITY_LABEL[task.priority] || '中'}
-                        </span>
-                        {task.assigned_to && (
-                          <span className="truncate">{agents.find(a => a.id === task.assigned_to)?.display_name || task.assigned_to.slice(0, 8)}</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {colTasks.length === 0 && (
-                    <div className="text-center text-text-dim text-[11px] py-8">暂无</div>
+      <PageShell>
+        {loadError && <div className="mb-4"><ErrorState message={loadError} onRetry={load} /></div>}
+        <MetricStrip className="mb-5">
+          <Metric label="全部任务" value={tasks.length} detail={`${openTasks.length} 未完成`} tone="accent" />
+          <Metric label="进行中" value={activeTasks.length} detail="in progress + review" tone={activeTasks.length > 0 ? 'warning' : 'muted'} />
+          <Metric label="阻塞" value={blockedTasks.length} detail="退回或错误" tone={blockedTasks.length > 0 ? 'error' : 'muted'} />
+          <Metric label="Room" value={joinedRooms.length} detail="可创建任务的空间" tone="muted" />
+        </MetricStrip>
+
+        {tasks.length === 0 ? (
+          <EmptyState
+            className="h-[420px]"
+            title="还没有任务"
+            description={joinedRooms.length > 0 ? '创建第一个任务后，看板会按状态显示推进过程。' : '你还没有加入任何 Room。先加入或创建 Room，才能创建任务。'}
+            action={joinedRooms.length > 0 && (
+              <button
+                onClick={() => setShowCreate(true)}
+                className="px-4 py-2 rounded-full bg-accent text-white text-[12px] font-semibold hover:bg-accent-hover transition-colors"
+              >
+                创建任务
+              </button>
+            )}
+          />
+        ) : (
+          <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5 max-[1100px]:grid-cols-1">
+            <div className="grid grid-cols-3 gap-4 max-[1200px]:grid-cols-2 max-[760px]:grid-cols-1">
+              {COLUMNS.filter(col => ['todo', 'in_progress', 'review'].includes(col.status)).map(col => (
+                <TaskColumn
+                  key={col.status}
+                  column={col}
+                  tasks={tasks.filter(t => t.status === col.status)}
+                  agents={agents}
+                  onSelect={setSelectedTask}
+                />
+              ))}
+            </div>
+
+            <aside className="space-y-4">
+              <Panel title="完成与异常" meta={`${tasks.length - openTasks.length}`}>
+                <div className="p-2 space-y-1 max-h-[360px] overflow-y-auto">
+                  {tasks.filter(t => ['done', 'rejected', 'error'].includes(t.status)).length === 0 ? (
+                    <div className="py-8 text-center text-[12px] text-text-dim">还没有历史任务</div>
+                  ) : (
+                    tasks.filter(t => ['done', 'rejected', 'error'].includes(t.status)).slice(0, 12).map(task => (
+                      <TaskRow key={task.id} task={task} agents={agents} onSelect={() => setSelectedTask(task)} compact />
+                    ))
                   )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              </Panel>
+              <Panel title="高优先级" meta={`${tasks.filter(t => t.priority >= 2).length}`}>
+                <div className="p-2 space-y-1">
+                  {tasks.filter(t => t.priority >= 2).length === 0 ? (
+                    <div className="py-8 text-center text-[12px] text-text-dim">没有高优先级任务</div>
+                  ) : (
+                    tasks.filter(t => t.priority >= 2).slice(0, 8).map(task => (
+                      <TaskRow key={task.id} task={task} agents={agents} onSelect={() => setSelectedTask(task)} compact />
+                    ))
+                  )}
+                </div>
+              </Panel>
+            </aside>
+          </div>
+        )}
+      </PageShell>
 
       {/* Create Task Modal */}
       {showCreate && (
@@ -242,5 +266,56 @@ export function TaskBoardPage() {
         />
       )}
     </div>
+  );
+}
+
+function TaskColumn({ column, tasks, agents, onSelect }: {
+  column: { status: string; label: string; color: string };
+  tasks: Task[];
+  agents: Agent[];
+  onSelect: (task: Task) => void;
+}) {
+  return (
+    <Panel
+      title={column.label}
+      meta={`${tasks.length}`}
+      action={<span className={`w-2 h-2 rounded-full ${column.color}`} />}
+      className="min-h-[460px]"
+    >
+      <div className="p-2 space-y-2">
+        {tasks.map(task => (
+          <TaskRow key={task.id} task={task} agents={agents} onSelect={() => onSelect(task)} />
+        ))}
+        {tasks.length === 0 && (
+          <div className="py-12 text-center text-[12px] text-text-dim">没有任务</div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function TaskRow({ task, agents, onSelect, compact = false }: {
+  task: Task;
+  agents: Agent[];
+  onSelect: () => void;
+  compact?: boolean;
+}) {
+  const assignee = task.assigned_to ? agents.find(a => a.id === task.assigned_to) : undefined;
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full text-left bg-surface-elevated border border-border rounded-[8px] hover:border-accent/40 transition-colors ${compact ? 'p-2.5' : 'p-3'}`}
+    >
+      <div className="text-[13px] font-semibold leading-snug line-clamp-2">{task.title}</div>
+      <div className="mt-2 flex items-center gap-2 text-[10px] text-text-dim">
+        <span className={`px-1.5 py-0.5 rounded-full font-semibold ${PRIORITY_BADGE[task.priority] || PRIORITY_BADGE[1]}`}>
+          {PRIORITY_LABEL[task.priority] || '中'}
+        </span>
+        <span className="px-1.5 py-0.5 rounded-full bg-surface border border-border">
+          {task.status}
+        </span>
+        {assignee && <span className="truncate">{assignee.display_name || assignee.name}</span>}
+      </div>
+    </button>
   );
 }

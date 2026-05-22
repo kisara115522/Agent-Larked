@@ -80,13 +80,13 @@ export function LoginPage() {
 
           {/* Form */}
           <div className="space-y-3">
-            <LoginInput type="text" value={username} onChange={setUsername} onSubmit={submit} placeholder="用户名" autoFocus />
+            <LoginInput type="text" value={username} onChange={setUsername} onSubmit={submit} label="用户名" placeholder="kisara" autoComplete="username" autoFocus />
             {mode === 'register' && (
-              <LoginInput type="text" value={displayName} onChange={setDisplayName} onSubmit={submit} placeholder="显示名称" />
+              <LoginInput type="text" value={displayName} onChange={setDisplayName} onSubmit={submit} label="显示名称" placeholder="Kisara" autoComplete="name" />
             )}
-            <LoginInput type="password" value={password} onChange={setPassword} onSubmit={submit} placeholder="密码" />
+            <LoginInput type="password" value={password} onChange={setPassword} onSubmit={submit} label="密码" placeholder="输入密码" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
             {mode === 'register' && (
-              <LoginInput type="password" value={confirmPassword} onChange={setConfirmPassword} onSubmit={submit} placeholder="确认密码" />
+              <LoginInput type="password" value={confirmPassword} onChange={setConfirmPassword} onSubmit={submit} label="确认密码" placeholder="再次输入密码" autoComplete="new-password" />
             )}
           </div>
 
@@ -122,19 +122,25 @@ export function LoginPage() {
   );
 }
 
-function LoginInput({ type, value, onChange, onSubmit, placeholder, autoFocus }: {
+function LoginInput({ type, value, onChange, onSubmit, label, placeholder, autoComplete, autoFocus }: {
   type: string; value: string; onChange: (v: string) => void;
-  onSubmit: () => void; placeholder: string; autoFocus?: boolean;
+  onSubmit: () => void; label: string; placeholder: string; autoComplete?: string; autoFocus?: boolean;
 }) {
+  const id = `login-${label}`;
   return (
-    <input
-      type={type}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      onKeyDown={e => e.key === 'Enter' && onSubmit()}
-      placeholder={placeholder}
-      autoFocus={autoFocus}
-      className="input"
-    />
+    <label htmlFor={id} className="block">
+      <span className="block text-[12px] font-semibold text-text-muted mb-1.5">{label}</span>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && onSubmit()}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        autoFocus={autoFocus}
+        className="input"
+      />
+    </label>
   );
 }

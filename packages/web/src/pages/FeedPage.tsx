@@ -6,6 +6,7 @@ import { useMentions } from '../context/MentionContext';
 import { get, post } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
 import { CreateRoomModal } from '../components/room/CreateRoomModal';
+import { EmptyState, ErrorState, Metric, MetricStrip, PageHeader, PageLoader, PageShell, Panel } from '../components/ui/PageState';
 import type { Message, GetMessagesResponse } from '@flock/shared';
 
 interface Room {
@@ -30,6 +31,7 @@ export function FeedPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const loadFeed = useCallback(async () => {
     if (!token) return;
@@ -64,9 +66,11 @@ export function FeedPage() {
       }
       allMessages.sort((a, b) => b.created_at.localeCompare(a.created_at));
       setMessages(allMessages.slice(0, 50));
-    } catch {
+      setLoadError('');
+    } catch (error) {
       setMessages([]);
       setRooms([]);
+      setLoadError(error instanceof Error ? error.message : 'Room 数据加载失败');
     } finally {
       setLoading(false);
     }
@@ -120,29 +124,16 @@ export function FeedPage() {
   };
 
   if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
-          <p className="text-sm text-text-dim font-medium">加载中</p>
-        </div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="px-12 pt-12 pb-6 shrink-0" style={{ animation: 'fadeUp .4s ease-out' }}>
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
-              Room
-            </h1>
-            {totalUnread > 0 && (
-              <p className="text-[14px] text-accent mt-3 font-medium">{totalUnread} 条未读</p>
-            )}
-          </div>
+      <PageHeader
+        title="Room"
+        eyebrow="Workspace"
+        subtitle={totalUnread > 0 ? <span className="text-accent">{totalUnread} 条未读</span> : '最近消息和已加入的协作空间'}
+        action={
           <button
             onClick={() => setShowCreateRoom(true)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors duration-150"
@@ -150,16 +141,19 @@ export function FeedPage() {
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
             新建 Room
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Messages */}
-      <div className="flex-1 overflow-hidden px-12 pb-8">
-        <div className="h-full grid grid-cols-[280px_minmax(0,1fr)] gap-6">
-          <aside className="border border-border rounded-[8px] bg-surface overflow-hidden flex flex-col">
-            <div className="px-4 py-3 border-b border-border text-[12px] font-semibold text-text-dim uppercase tracking-[0.12em]">
-              Rooms
-            </div>
+      <PageShell scroll={false}>
+        {loadError && <div className="mb-4"><ErrorState message={loadError} onRetry={loadFeed} /></div>}
+        <MetricStrip className="mb-5">
+          <Metric label="Room" value={rooms.length} detail={`${rooms.filter(room => room.is_member).length} 已加入`} tone="accent" />
+          <Metric label="最近消息" value={messages.length} detail="聚合最近 50 条" tone={messages.length > 0 ? 'success' : 'muted'} />
+          <Metric label="未读" value={totalUnread} detail="mentions + room unread" tone={totalUnread > 0 ? 'warning' : 'muted'} />
+        </MetricStrip>
+
+        <div className="h-[calc(100%-124px)] grid grid-cols-[300px_minmax(0,1fr)] gap-5 max-[980px]:grid-cols-1">
+          <Panel title="Rooms" meta={`${rooms.length}`}>
             <div className="flex-1 overflow-y-auto p-2">
               {rooms.length > 0 ? rooms.map(room => (
                 <button
@@ -177,25 +171,31 @@ export function FeedPage() {
                   </div>
                 </button>
               )) : (
-                <div className="text-center text-text-dim text-[12px] py-10">暂无 Room</div>
+                <EmptyState
+                  className="py-10"
+                  title="还没有 Room"
+                  description="创建 Room 后，Agent 和人类可以在里面协作。"
+                />
               )}
             </div>
-          </aside>
+          </Panel>
 
-          <section className="overflow-y-auto">
+          <Panel title="最近消息" meta={`${messages.length}`} className="min-h-0">
+            <section className="h-full overflow-y-auto">
             {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-[400px] text-center">
-                <div className="relative w-20 h-20 mb-6">
-                  <div className="absolute inset-0 rounded-full border border-border" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-dim">
-                      <path d="M14 10a2 2 0 0 1-2 2H5l-3 2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6z"/>
-                    </svg>
-                  </div>
-                </div>
-                <p className="text-[14px] text-text-muted font-medium">{rooms.length > 0 ? '暂无消息' : '暂无 Room'}</p>
-                <p className="text-[12px] text-text-dim mt-2">{rooms.length > 0 ? '从左侧选择一个 Room' : '新建一个 Room 开始协作'}</p>
-              </div>
+              <EmptyState
+                className="h-[400px]"
+                title={rooms.length > 0 ? '还没有最近消息' : '还没有 Room'}
+                description={rooms.length > 0 ? '进入左侧 Room 发送第一条消息，消息会回到这里汇总。' : '新建一个 Room 后，最近消息会在这里汇总。'}
+                action={
+                  <button
+                    onClick={() => setShowCreateRoom(true)}
+                    className="px-4 py-2 rounded-full bg-accent text-white text-[12px] font-semibold hover:bg-accent-hover transition-colors"
+                  >
+                    新建 Room
+                  </button>
+                }
+              />
             ) : (
               <div className="space-y-1">
                 {messages.map(msg => (
@@ -225,8 +225,9 @@ export function FeedPage() {
               </div>
             )}
           </section>
+          </Panel>
         </div>
-      </div>
+      </PageShell>
       {showCreateRoom && token && (
         <CreateRoomModal
           token={token}

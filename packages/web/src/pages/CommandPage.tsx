@@ -6,6 +6,7 @@ import { useSSE } from '../context/SSEContext';
 import { get, post } from '../api/client';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
+import { EmptyState, PageHeader } from '../components/ui/PageState';
 
 interface Agent {
   id: string;
@@ -122,15 +123,28 @@ export function CommandPage() {
   });
 
   return (
-    <div className="h-full flex">
-      <aside className="w-72 border-r border-border bg-surface flex flex-col">
+    <div className="h-full flex flex-col overflow-hidden">
+      <PageHeader
+        title="私信"
+        eyebrow="Workspace"
+        subtitle={`${agents.length} 个 Agent · ${chats.length} 条会话`}
+        compact
+      />
+
+      <div className="flex-1 min-h-0 flex">
+      <aside className="w-80 border-r border-border bg-surface flex flex-col">
         <header className="px-4 py-3 border-b border-border shrink-0">
-          <h2 className="text-base font-semibold">私信</h2>
-          <p className="text-xs text-text-muted mt-0.5">与 Agent 的 1:1 对话</p>
+          <h2 className="text-[12px] font-semibold text-text uppercase tracking-[0.12em]">Agent</h2>
         </header>
 
         <div className="flex-1 overflow-y-auto p-2">
-          {sortedAgents.map(a => {
+          {sortedAgents.length === 0 ? (
+            <EmptyState
+              className="py-16"
+              title="没有 Agent"
+              description="创建 Agent 后，可以在这里打开 1:1 私信。"
+            />
+          ) : sortedAgents.map(a => {
             const chat = chats.find(c => c.peer_id === a.id);
             const name = a.display_name || a.name;
             return (
@@ -184,13 +198,11 @@ export function CommandPage() {
 
         <div className="flex-1 overflow-y-auto">
           {!selectedAgentId ? (
-            <div className="h-full flex items-center justify-center text-sm text-text-muted">
-              选择一个 Agent 开始对话
-            </div>
+            <EmptyState className="h-full" title="选择一个 Agent" description="左侧列表按最近会话排序。选择 Agent 后即可发送私信。" />
           ) : loadingMessages ? (
-            <div className="h-full flex items-center justify-center text-sm text-text-muted">加载中...</div>
+            <div className="h-full flex items-center justify-center text-sm text-text-muted">加载中…</div>
           ) : messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-sm text-text-muted">暂无私信</div>
+            <EmptyState className="h-full" title="暂无私信" description="发送第一条消息后，对话会保留在这里。" />
           ) : (
             <div className="divide-y divide-border">
               {messages.map(msg => {
@@ -247,6 +259,7 @@ export function CommandPage() {
           {error && <p className="mt-2 text-xs text-error">{error}</p>}
         </div>
       </section>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { SpawnModal } from '../components/modals/SpawnModal';
 import { DMModal } from '../components/modals/DMModal';
 import { WakeSingleModal } from '../components/modals/WakeSingleModal';
 import { getAgentGradient, getAgentInitials } from '../utils/agent-style';
+import { EmptyState, ErrorState, Metric, MetricStrip, PageHeader, PageLoader, PageShell, Panel } from '../components/ui/PageState';
 
 interface Agent {
   id: string;
@@ -40,6 +41,7 @@ export function AgentListPage() {
   const [spawnAgent, setSpawnAgent] = useState<Agent | null>(null);
   const [dmAgent, setDmAgent] = useState<Agent | null>(null);
   const [wakeAgent, setWakeAgent] = useState<Agent | null>(null);
+  const [loadError, setLoadError] = useState('');
   const { toast } = useToast();
 
   const loadAgents = useCallback(async () => {
@@ -53,7 +55,10 @@ export function AgentListPage() {
       setAgents(agentsRes.agents);
       setRooms(roomsRes.rooms);
       setRuntimes(runtimesRes.runtimes);
-    } catch {} finally { setLoading(false); }
+      setLoadError('');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Agent 列表加载失败');
+    } finally { setLoading(false); }
   }, [token]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
@@ -91,31 +96,20 @@ export function AgentListPage() {
 
   const activeCount = agents.filter(a => a.status === 'active').length;
   const dormantCount = agents.filter(a => a.status === 'dormant').length;
+  const errorCount = agents.filter(a => a.status === 'error').length;
+  const assignedCount = agents.filter(a => a.runtime_id).length;
 
   if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
-          <p className="text-sm text-text-dim font-medium">加载 Agent</p>
-        </div>
-      </div>
-    );
+    return <PageLoader label="加载 Agent" />;
   }
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      {/* Header */}
-      <div className="px-12 pt-16 pb-8" style={{ animation: 'fadeUp .4s ease-out' }}>
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="text-[36px] font-black tracking-tight leading-none" style={{ fontFamily: 'var(--font-display)' }}>
-              Agent
-            </h1>
-            <p className="text-[14px] text-text-dim mt-3 font-medium">
-              <span className="text-success">{activeCount}</span> 运行中 · <span>{dormantCount}</span> 休眠
-            </p>
-          </div>
+      <PageHeader
+        title="Agent"
+        eyebrow="Workspace"
+        subtitle={<><span className="text-success">{activeCount}</span> 运行中 · <span>{dormantCount}</span> 休眠</>}
+        action={
           <button
             onClick={() => setShowCreate(true)}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors duration-150"
@@ -123,42 +117,58 @@ export function AgentListPage() {
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
             创建 Agent
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Grid */}
-      <div className="px-12 pb-12 flex-1">
+      <PageShell>
+        {loadError && <div className="mb-4"><ErrorState message={loadError} onRetry={loadAgents} /></div>}
+        <MetricStrip className="mb-5">
+          <Metric label="总数" value={agents.length} detail={`${assignedCount} 已分配 Runtime`} tone="accent" />
+          <Metric label="运行中" value={activeCount} detail={`${dormantCount} dormant`} tone={activeCount > 0 ? 'success' : 'muted'} />
+          <Metric label="异常" value={errorCount} detail="需要唤醒或重新启动" tone={errorCount > 0 ? 'error' : 'muted'} />
+          <Metric label="Runtime" value={runtimes.length} detail={`${runtimes.reduce((sum, runtime) => sum + runtime.max_agents, 0)} 总槽位`} tone="muted" />
+        </MetricStrip>
+
         {agents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-[400px] text-center">
-            <div className="relative w-24 h-24 mb-6">
-              <div className="absolute inset-0 rounded-full border border-border" />
-              <div className="absolute inset-3 rounded-full border border-border/50" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-dim">
-                  <circle cx="12" cy="8" r="5"/><path d="M3 21c0-4.97 4.03-9 9-9s9 4.03 9 9"/>
-                </svg>
-              </div>
-            </div>
-            <p className="text-[14px] text-text-muted font-medium mb-1">暂无 Agent</p>
-            <p className="text-[12px] text-text-dim">创建你的第一个 AI agent 开始协作</p>
-          </div>
+          <EmptyState
+            className="h-[420px]"
+            title="还没有 Agent"
+            description="创建一个 Agent 后，就可以把它分配到 Runtime、Room 和任务里。"
+            action={
+              <button
+                onClick={() => setShowCreate(true)}
+                className="px-4 py-2 rounded-full bg-accent text-white text-[12px] font-semibold hover:bg-accent-hover transition-colors"
+              >
+                创建 Agent
+              </button>
+            }
+          />
         ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-            {agents.map((agent, i) => (
-              <AgentCard
-                key={agent.id}
-                agent={agent}
-                index={i}
-                onStop={handleStop}
-                onNavigate={() => navigate(`/agents/${agent.id}`)}
-                onDM={() => setDmAgent(agent)}
-                onWakeModal={() => setWakeAgent(agent)}
-                onSpawnModal={() => setSpawnAgent(agent)}
-              />
-            ))}
-          </div>
+          <Panel title="Agent 队列" meta={`${agents.length}`}>
+            <div className="grid grid-cols-[minmax(220px,1.2fr)_120px_160px_minmax(180px,1fr)_220px] gap-3 px-4 py-2.5 border-b border-border bg-surface-elevated/60 text-[10px] text-text-dim uppercase tracking-[0.12em] font-semibold max-[1100px]:hidden">
+              <span>Agent</span>
+              <span>状态</span>
+              <span>Runtime</span>
+              <span>能力</span>
+              <span>操作</span>
+            </div>
+            <div className="divide-y divide-border/70">
+              {agents.map((agent, i) => (
+                <AgentRow
+                  key={agent.id}
+                  agent={agent}
+                  index={i}
+                  onStop={handleStop}
+                  onNavigate={() => navigate(`/agents/${agent.id}`)}
+                  onDM={() => setDmAgent(agent)}
+                  onWakeModal={() => setWakeAgent(agent)}
+                  onSpawnModal={() => setSpawnAgent(agent)}
+                />
+              ))}
+            </div>
+          </Panel>
         )}
-      </div>
+      </PageShell>
 
       {/* Create Modal */}
       {showCreate && (
@@ -189,9 +199,7 @@ export function AgentListPage() {
   );
 }
 
-// PLACEHOLDER_AGENT_CARD
-
-function AgentCard({ agent, index, onStop, onNavigate, onDM, onWakeModal, onSpawnModal }: {
+function AgentRow({ agent, index, onStop, onNavigate, onDM, onWakeModal, onSpawnModal }: {
   agent: Agent; index: number;
   onStop: (id: string) => void; onNavigate: () => void;
   onDM: () => void; onWakeModal: () => void; onSpawnModal: () => void;
@@ -204,42 +212,49 @@ function AgentCard({ agent, index, onStop, onNavigate, onDM, onWakeModal, onSpaw
   return (
     <div
       onClick={onNavigate}
-      className="bg-surface border border-border rounded-[10px] p-5 cursor-pointer group hover:border-accent/40 transition-colors duration-150"
+      className="grid grid-cols-[minmax(220px,1.2fr)_120px_160px_minmax(180px,1fr)_220px] gap-3 px-4 py-3 cursor-pointer hover:bg-surface-elevated/45 transition-colors max-[1100px]:grid-cols-1 max-[1100px]:gap-3"
       style={{ animation: `fadeUp .35s ease-out ${index * 50}ms both` }}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-center gap-3 min-w-0">
         <div
-          className="w-12 h-12 rounded-[12px] flex items-center justify-center text-[14px] font-bold text-white shrink-0 transition-transform duration-300 group-hover:scale-105"
+          className="w-10 h-10 rounded-[8px] flex items-center justify-center text-[12px] font-bold text-white shrink-0"
           style={{ background: `linear-gradient(135deg,${gradient})` }}
         >
           {initials}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="text-[15px] font-semibold truncate">{agent.display_name || agent.name}</span>
-            <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
-          </div>
-          <p className="text-[12px] text-text-muted mt-1 line-clamp-1">{agent.bio || '无描述'}</p>
+        <div className="min-w-0">
+          <div className="text-[14px] font-semibold truncate">{agent.display_name || agent.name}</div>
+          <p className="text-[11px] text-text-muted mt-0.5 truncate">{agent.bio || agent.id.slice(0, 8)}</p>
         </div>
       </div>
 
-      {agent.capabilities.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-4">
-          {agent.capabilities.slice(0, 3).map(cap => (
-            <span key={cap} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-surface-elevated/80 text-text-muted border border-border">
-              {cap}
-            </span>
-          ))}
-          {agent.capabilities.length > 3 && (
-            <span className="px-2 py-0.5 text-[10px] text-text-dim">+{agent.capabilities.length - 3}</span>
-          )}
-        </div>
-      )}
+      <div className="flex items-center">
+        <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error'} />
+        <span className="ml-2 text-[12px] text-text-muted">{agent.status}</span>
+      </div>
 
-      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border/50 text-[11px] text-text-dim">
-        <span className="font-mono">{agent.runtime_id ? '⚡ Runtime' : '— 未分配'}</span>
-        <span>{agent.last_active_at ? formatRelativeTime(agent.last_active_at) : '从未活跃'}</span>
-        <div className="ml-auto flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div className="flex items-center text-[12px] text-text-muted font-mono">
+        {agent.runtime_id ? agent.runtime_id.slice(0, 8) : '未分配'}
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+        {agent.capabilities.length > 0 ? (
+          <>
+            {agent.capabilities.slice(0, 3).map(cap => (
+              <span key={cap} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-surface-elevated/80 text-text-muted border border-border">
+                {cap}
+              </span>
+            ))}
+            {agent.capabilities.length > 3 && (
+              <span className="px-2 py-0.5 text-[10px] text-text-dim">+{agent.capabilities.length - 3}</span>
+            )}
+          </>
+        ) : (
+          <span className="text-[11px] text-text-dim">无能力标签</span>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-1.5 max-[1100px]:justify-start">
           <ActionPill onClick={e => { e.stopPropagation(); onDM(); }} color="accent">对话</ActionPill>
           {isActive && <ActionPill onClick={e => { e.stopPropagation(); onStop(agent.id); }} color="error">停止</ActionPill>}
           {(isDormant || agent.status === 'error') && (
@@ -248,7 +263,6 @@ function AgentCard({ agent, index, onStop, onNavigate, onDM, onWakeModal, onSpaw
               <ActionPill onClick={e => { e.stopPropagation(); onSpawnModal(); }} color="accent">启动</ActionPill>
             </>
           )}
-        </div>
       </div>
     </div>
   );

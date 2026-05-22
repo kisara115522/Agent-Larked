@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { get, patch, post } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
+import { EmptyState, Metric, MetricStrip, PageHeader, PageLoader, PageShell, Panel } from '../components/ui/PageState';
 
 interface Agent {
   id: string;
@@ -48,7 +49,6 @@ export function AgentPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
   const { subscribe } = useSSE();
-  const navigate = useNavigate();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
@@ -182,7 +182,7 @@ export function AgentPage() {
   };
 
   if (loading) {
-    return <div className="h-full flex items-center justify-center"><p className="text-sm text-text-muted">加载中...</p></div>;
+    return <PageLoader label="加载 Agent" />;
   }
 
   if (!agent) {
@@ -198,14 +198,13 @@ export function AgentPage() {
     : 'bg-surface-elevated text-text-muted border border-border';
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-6 py-3 border-b border-border flex items-center gap-3 shrink-0 bg-surface min-h-[56px]">
-        <button onClick={() => navigate('/agents')} className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-elevated text-text-muted border border-border hover:border-text-dim transition-colors text-sm">
-          ←
-        </button>
-        <h3 className="text-base font-semibold">{agent.display_name || agent.name}</h3>
-        <div className="ml-auto flex items-center gap-2">
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageHeader
+        eyebrow="Agent"
+        title={agent.display_name || agent.name}
+        subtitle={agent.bio || '无描述'}
+        action={
+          <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusBadgeClass}`}>
             <StatusIndicator status={agent.status as 'active' | 'dormant' | 'recovering' | 'error' | 'spawning'} />
             {agent.status}
@@ -215,92 +214,62 @@ export function AgentPage() {
           )}
           {(agent.status === 'dormant' || agent.status === 'error') && (
             <>
-              <button onClick={handleWake} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#064E3B] text-[#34D399] hover:bg-[#34D399] hover:text-white transition-colors">唤醒</button>
+              <button onClick={handleWake} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-success-muted text-success hover:bg-success hover:text-white transition-colors">唤醒</button>
               <button onClick={handleSpawn} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">启动</button>
             </>
           )}
-        </div>
-      </div>
+          </div>
+        }
+      />
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 max-w-[800px]">
-          {/* Detail Grid */}
-          <div className="grid grid-cols-2 gap-2.5 mb-5">
-            <DetailField label="Runtime" value={agent.runtime_id ? `已分配 (${agent.runtime_id.slice(0, 8)})` : '未分配'} />
-            <DetailField label="Session ID" value={agent.session_id || '—'} mono />
-            <DetailField label="最后活跃" value={agent.last_active_at ? formatRelativeTime(agent.last_active_at) : '从未'} />
-            <DetailField label="Token 预算" value="—" />
+      <PageShell>
+        <MetricStrip className="mb-5">
+          <Metric label="状态" value={agent.status} detail={agent.last_active_at ? formatRelativeTime(agent.last_active_at) : '从未活跃'} tone={agent.status === 'active' ? 'success' : agent.status === 'error' ? 'error' : 'muted'} />
+          <Metric label="当前任务" value={currentTasks.length} detail={`${historyTasks.length} 历史任务`} tone={currentTasks.length > 0 ? 'warning' : 'muted'} />
+          <Metric label="Runtime" value={agent.runtime_id ? agent.runtime_id.slice(0, 8) : '—'} detail={agent.session_id || '无 Session'} tone={agent.runtime_id ? 'accent' : 'muted'} />
+          <Metric label="配置" value={configs.length} detail="agent scoped config" tone="muted" />
+        </MetricStrip>
+
+        <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-5 max-[1100px]:grid-cols-1">
+          <div className="space-y-5">
+            <Panel title="当前任务" meta={`${currentTasks.length}`}>
+              <TaskList tasks={currentTasks} emptyTitle="没有进行中的任务" emptyDesc="任务进入进行中或审查中后，会出现在这里。" />
+            </Panel>
+
+            <Panel title="最近活动" meta={`${events.length}`}>
+              {events.length > 0 ? (
+                <div className="divide-y divide-border/70 text-xs text-text-muted">
+                  {events.map(ev => (
+                    <div key={ev.id} className="grid grid-cols-[58px_100px_minmax(0,1fr)] gap-3 px-4 py-2.5 hover:bg-surface-elevated/45">
+                      <span className="font-mono text-text-dim">{ev.time}</span>
+                      <span className="text-text-muted">{ev.action}</span>
+                      <span className="truncate">{ev.detail || ev.action}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState className="py-10" title="没有最近活动" description="Agent 发送消息、调用工具或状态变化后，会在这里显示。" />
+              )}
+            </Panel>
+
+            <Panel title="历史任务" meta={`${historyTasks.length}`}>
+              <TaskList tasks={historyTasks} emptyTitle="没有历史任务" emptyDesc="完成、退回或错误状态的任务会记录在这里。" muted />
+            </Panel>
           </div>
 
-          {/* Capabilities */}
-          <div className="mb-5">
-            <h4 className="text-sm font-semibold mb-2">能力标签</h4>
-            <div className="flex gap-1.5 flex-wrap">
+          <aside className="space-y-5">
+            <Panel title="能力标签" meta={`${agent.capabilities.length}`}>
+              <div className="p-4 flex gap-1.5 flex-wrap">
               {agent.capabilities.length > 0 ? agent.capabilities.map(cap => (
                 <span key={cap} className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-surface-elevated text-text-muted border border-border">{cap}</span>
               )) : (
                 <span className="text-xs text-text-dim">无能力标签</span>
               )}
-            </div>
-          </div>
-
-          {/* Current Tasks */}
-          <div className="mb-5">
-            <h4 className="text-sm font-semibold mb-2">当前任务</h4>
-            {currentTasks.length > 0 ? currentTasks.map(task => (
-              <div key={task.id} className="bg-surface border border-border rounded-[10px] p-3 mb-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
-                  <span className="text-[13px] font-medium flex-1">{task.title}</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${task.status === 'in_progress' ? 'bg-[#78350F] text-[#FBBF24]' : 'bg-accent-muted text-accent'}`}>
-                    {task.status === 'in_progress' ? '进行中' : '审查中'}
-                  </span>
-                </div>
               </div>
-            )) : (
-              <div className="text-xs text-text-dim py-3">暂无进行中的任务</div>
-            )}
-          </div>
+            </Panel>
 
-          {/* History Tasks */}
-          <div className="mb-5">
-            <h4 className="text-sm font-semibold mb-2">历史任务</h4>
-            {historyTasks.length > 0 ? historyTasks.map(task => (
-              <div key={task.id} className="bg-surface border border-border rounded-[10px] p-3 mb-2 opacity-70">
-                <div className="flex items-center gap-2">
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${task.status === 'done' ? 'bg-[#064E3B] text-[#34D399]' : 'bg-error-muted text-error'}`}>
-                    {task.status === 'done' ? '✓' : '✗'}
-                  </span>
-                  <span className="text-[13px] flex-1">{task.title}</span>
-                </div>
-              </div>
-            )) : (
-              <div className="text-xs text-text-dim py-3">暂无历史任务</div>
-            )}
-          </div>
-
-          {/* Recent Activity */}
-          <div className="mb-5">
-            <h4 className="text-sm font-semibold mb-2">最近活动</h4>
-            {events.length > 0 ? (
-              <div className="text-xs text-text-muted">
-                {events.map(ev => (
-                  <div key={ev.id} className="py-1.5 border-b border-border flex gap-2.5">
-                    <span className="font-mono text-text-dim w-[50px] shrink-0">{ev.time}</span>
-                    <span>{ev.detail || ev.action}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-xs text-text-dim py-3">暂无最近活动</div>
-            )}
-          </div>
-
-          {/* Config Cards */}
-          <div className="mb-5">
-            <h4 className="text-sm font-semibold mb-2">运行配置</h4>
-            <div className="bg-surface border border-border rounded-[10px] p-4">
+            <Panel title="运行配置">
+              <div className="p-4">
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-[11px] text-text-dim uppercase tracking-wider">Model</span>
@@ -340,37 +309,53 @@ export function AgentPage() {
                   {savingConfig ? '保存中...' : '保存运行配置'}
                 </button>
               </div>
-            </div>
-          </div>
+              </div>
+            </Panel>
 
-          <div>
-            <h4 className="text-sm font-semibold mb-2">配置</h4>
-            <div className="grid grid-cols-2 gap-2.5">
-              <ConfigCard icon="🧠" title="Soul" desc="人格描述、行为准则" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
-              <ConfigCard icon="📄" title="Agent.md" desc="能力定义、工作方式" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
-              <ConfigCard icon="🔧" title="Skills" desc="继承全局配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
-              <ConfigCard icon="🔌" title="MCP Tools" desc="工具接入配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
+            <Panel title="配置文件">
+              <div className="p-3 grid grid-cols-2 gap-2.5">
+              <ConfigCard marker="S" title="Soul" desc="人格描述、行为准则" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
+              <ConfigCard marker="A" title="Agent.md" desc="能力定义、工作方式" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
+              <ConfigCard marker="K" title="Skills" desc="继承全局配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
+              <ConfigCard marker="M" title="MCP Tools" desc="工具接入配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
             </div>
-          </div>
+            </Panel>
+          </aside>
         </div>
-      </div>
+      </PageShell>
     </div>
   );
 }
 
-function DetailField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function TaskList({ tasks, emptyTitle, emptyDesc, muted = false }: {
+  tasks: Task[];
+  emptyTitle: string;
+  emptyDesc: string;
+  muted?: boolean;
+}) {
   return (
-    <div className="bg-bg border border-border rounded-md p-2.5">
-      <div className="text-[10px] text-text-dim uppercase tracking-wider">{label}</div>
-      <div className={`text-[13px] font-medium mt-0.5 ${mono ? 'font-mono text-[11px]' : ''}`}>{value}</div>
+    <div className="divide-y divide-border/70">
+      {tasks.length > 0 ? tasks.map(task => (
+        <div key={task.id} className={`px-4 py-3 flex items-center gap-3 hover:bg-surface-elevated/45 ${muted ? 'opacity-75' : ''}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${task.status === 'error' || task.status === 'rejected' ? 'bg-error' : task.status === 'done' ? 'bg-success' : 'bg-warning'}`} />
+          <span className="text-[13px] font-medium flex-1 truncate">{task.title}</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${task.status === 'in_progress' ? 'bg-warning-muted text-warning' : task.status === 'review' ? 'bg-accent-muted text-accent' : task.status === 'done' ? 'bg-success-muted text-success' : 'bg-error-muted text-error'}`}>
+            {task.status}
+          </span>
+        </div>
+      )) : (
+        <EmptyState className="py-10" title={emptyTitle} description={emptyDesc} />
+      )}
     </div>
   );
 }
 
-function ConfigCard({ icon, title, desc, badge, badgeClass }: { icon: string; title: string; desc: string; badge: string; badgeClass: string }) {
+function ConfigCard({ marker, title, desc, badge, badgeClass }: { marker: string; title: string; desc: string; badge: string; badgeClass: string }) {
   return (
     <div className="bg-surface border border-border rounded-[10px] p-3 cursor-pointer hover:border-text-dim transition-colors">
-      <div className="text-xl mb-1.5">{icon}</div>
+      <div className="w-7 h-7 rounded-[8px] bg-surface-elevated border border-border flex items-center justify-center text-[11px] font-bold text-text-dim mb-2">
+        {marker}
+      </div>
       <div className="text-[13px] font-semibold">{title}</div>
       <div className="text-xs text-text-muted">{desc}</div>
       <div className="mt-1.5">
