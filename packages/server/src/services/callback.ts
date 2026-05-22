@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { regenerateToken } from './identity.js';
+import { cleanupStaleRuntimes, selectAvailableRuntime } from './runtime.js';
 
 export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
@@ -74,10 +75,11 @@ function createWakeSession(
 
   const agent = db.prepare('SELECT name, model, status FROM profiles WHERE id = ?').get(agentId) as { name: string; model: string | null; status: string } | undefined;
   if (!agent) return null;
-  if (agent.status === 'active' || agent.status === 'spawning') return null;
+  if (agent.status === 'active') return null;
 
   const { token } = regenerateToken(db, agentId);
   const now = new Date().toISOString();
+  db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status = 'spawning'").run(now, agentId);
   db.prepare(`
     INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
     VALUES (?, ?, ?, 'spawning', ?, ?, ?)
@@ -85,6 +87,28 @@ function createWakeSession(
   db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
 
   return { runtime, agent, token };
+}
+
+function selectRuntimeForWake(db: Database.Database, agentId: string): RuntimeRow | null {
+  cleanupStaleRuntimes(db);
+
+  const spawn = db.prepare(
+    "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? ORDER BY spawned_at DESC LIMIT 1",
+  ).get(agentId) as { runtime_id: string | null } | undefined;
+
+  if (spawn?.runtime_id) {
+    const runtime = db.prepare(
+      'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
+    ).get(spawn.runtime_id) as RuntimeRow | undefined;
+    if (runtime?.status === 'online') return runtime;
+  }
+
+  const fallbackRuntimeId = selectAvailableRuntime(db);
+  if (!fallbackRuntimeId) return null;
+
+  return db.prepare(
+    'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
+  ).get(fallbackRuntimeId) as RuntimeRow | undefined ?? null;
 }
 
 function agentCallbackFields(
@@ -205,19 +229,8 @@ export function wakeMentionedAgents(
   const roomName = room?.name ?? roomId;
 
   for (const agentId of mentionedAgentIds) {
-    // Find the last spawn for this agent (any status — stopped/dormant agents still have a last runtime)
-    const spawn = db.prepare(
-      "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? ORDER BY spawned_at DESC LIMIT 1",
-    ).get(agentId) as { runtime_id: string } | undefined;
-
-    if (!spawn?.runtime_id) continue;
-
-    // Get runtime info
-    const runtime = db.prepare(
-      'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
-    ).get(spawn.runtime_id) as RuntimeRow | undefined;
-
-    if (!runtime || runtime.status !== 'online') continue;
+    const runtime = selectRuntimeForWake(db, agentId);
+    if (!runtime) continue;
 
     const prompt = roomWakePrompt(db, roomId, roomName, `${senderName} mentioned you`, excerpt);
     const session = createWakeSession(db, agentId, runtime.id, prompt);
@@ -248,7 +261,7 @@ export function wakeMentionedAgents(
 /**
  * Wake all dormant agents in a room (broadcast wake).
  * Used when a human sends a message — all dormant agents in the room get notified.
- * Finds each agent's last spawn (any status) to determine the runtime.
+ * Reuses the agent's last online runtime, or falls back to any available runtime.
  */
 export function wakeRoomAgents(
   db: Database.Database,
@@ -260,23 +273,17 @@ export function wakeRoomAgents(
   const room = db.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string } | undefined;
   const roomName = room?.name ?? roomId;
 
-  // Find dormant room members with at least one past spawn (to know their runtime)
+  // Find dormant room members that should be woken.
   const dormantAgents = db.prepare(`
-    SELECT rm.agent_id,
-           (SELECT sp.runtime_id FROM agent_spawns sp WHERE sp.agent_id = rm.agent_id ORDER BY sp.spawned_at DESC LIMIT 1) AS runtime_id
+    SELECT rm.agent_id
     FROM room_members rm
     JOIN profiles p ON p.id = rm.agent_id
     WHERE rm.room_id = ? AND p.status = 'dormant' AND rm.agent_id != ?
-  `).all(roomId, senderId) as { agent_id: string; runtime_id: string | null }[];
+  `).all(roomId, senderId) as { agent_id: string }[];
 
-  for (const { agent_id, runtime_id } of dormantAgents) {
-    if (!runtime_id) continue;
-
-    const runtime = db.prepare(
-      'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
-    ).get(runtime_id) as RuntimeRow | undefined;
-
-    if (!runtime || runtime.status !== 'online') continue;
+  for (const { agent_id } of dormantAgents) {
+    const runtime = selectRuntimeForWake(db, agent_id);
+    if (!runtime) continue;
 
     const prompt = roomWakePrompt(db, roomId, roomName, `${senderName} sent a broadcast wake`, excerpt);
     const session = createWakeSession(db, agent_id, runtime.id, prompt);
@@ -292,7 +299,7 @@ export function wakeRoomAgents(
     };
 
     sendCallbackWithRetry(runtime, agent_id, event).catch((err) => {
-      console.error(`[callback] Failed to wake agent ${agent_id} via runtime ${runtime_id}:`, err);
+      console.error(`[callback] Failed to wake agent ${agent_id} via runtime ${runtime.id}:`, err);
     });
 
     // Log wake event
