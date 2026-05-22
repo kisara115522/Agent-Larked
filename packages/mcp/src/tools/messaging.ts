@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { wakeMentionedAgents } from '@flock/server/services/callback';
 import { sendMessage, getMessages } from '@flock/server/services/messaging';
 import { emitNewMessage } from './subscribe.js';
 import { getAgentId } from '../db.js';
@@ -34,13 +35,27 @@ export function registerMessagingTools(
           };
         }
 
+        const mentions = resolveMentions(db, args.content, args.mentions ?? [], agentId);
         const result = sendMessage(db, agentId, {
           room_id: args.room_id,
           content: args.content,
-          mentions: args.mentions,
+          mentions: mentions.length > 0 ? mentions : undefined,
           reply_to: args.reply_to,
           idempotency_key: args.idempotency_key ?? randomUUID(),
         });
+
+        if (mentions.length > 0) {
+          const senderProfile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(agentId) as { name: string } | undefined;
+          wakeMentionedAgents(
+            db,
+            mentions,
+            args.room_id,
+            result.id,
+            senderProfile?.name ?? '',
+            args.content.slice(0, 200),
+            agentId,
+          );
+        }
 
         // Emit event for flock_wait listeners
         emitNewMessage(args.room_id, {
@@ -48,7 +63,7 @@ export function registerMessagingTools(
           from: agentId,
           content: args.content,
           sequence: result.sequence,
-          mentions: args.mentions ?? [],
+          mentions,
           reply_to: args.reply_to ?? null,
           created_at: result.created_at,
         });
@@ -170,4 +185,25 @@ export function registerMessagingTools(
       }
     },
   );
+}
+
+function resolveMentions(
+  db: Database.Database,
+  content: string,
+  explicitMentions: string[],
+  senderId: string,
+): string[] {
+  const mentionIds = new Set(explicitMentions.filter((id) => id && id !== senderId));
+  const names = Array.from(content.matchAll(/@([A-Za-z0-9_.-]+)/g)).map((match) => match[1]);
+  if (names.length === 0) return Array.from(mentionIds);
+
+  const findProfile = db.prepare('SELECT id FROM profiles WHERE name = ? OR display_name = ? LIMIT 1');
+  for (const name of names) {
+    const profile = findProfile.get(name, name) as { id: string } | undefined;
+    if (profile && profile.id !== senderId) {
+      mentionIds.add(profile.id);
+    }
+  }
+
+  return Array.from(mentionIds);
 }

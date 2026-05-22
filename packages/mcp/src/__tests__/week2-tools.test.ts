@@ -10,6 +10,7 @@ import { registerReactionTools } from '../tools/reactions.js';
 import { registerWaitTool, emitNewMessage, resetSequenceBaselines } from '../tools/subscribe.js';
 import { resetAgentCache, resolveAgentId } from '../db.js';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type Database from 'better-sqlite3';
@@ -112,6 +113,68 @@ describe('flock_post tool', () => {
     const parsed = JSON.parse(text);
     expect(parsed.id).toBeDefined();
     expect(parsed.sequence).toBe(2);
+  });
+
+  it('resolves textual @mentions and wakes the mentioned agent', async () => {
+    const callbackCalls: Array<{ url: string | undefined; body: Record<string, unknown> }> = [];
+    const callbackServer = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => { body += String(chunk); });
+      req.on('end', () => {
+        callbackCalls.push({ url: req.url, body: JSON.parse(body) as Record<string, unknown> });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+    });
+
+    await new Promise<void>((resolve) => callbackServer.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = callbackServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('callback server did not bind to a TCP port');
+      }
+
+      const regResult = await client.callTool({
+        name: 'flock_agent_create',
+        arguments: { name: 'TextMentionBot' },
+      });
+      const mentionedId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id as string;
+
+      resetAgentCache();
+      resolveAgentId(db, 'TextMentionBot');
+      await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
+
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO agent_runtimes (id, host, port, callback_url, callback_secret_hash, callback_secret, capabilities, max_agents, status, last_heartbeat_at, created_at)
+        VALUES ('mcp-text-mention-runtime', '127.0.0.1', ?, ?, 'hash', 'secret', '[]', 10, 'online', ?, ?)
+      `).run(address.port, `http://127.0.0.1:${address.port}`, now, now);
+      db.prepare("UPDATE profiles SET status = 'dormant' WHERE id = ?").run(mentionedId);
+      db.prepare(`
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
+        VALUES ('mcp-text-mention-spawn', ?, 'mcp-text-mention-runtime', 'stopped', ?, ?, 'previous')
+      `).run(mentionedId, now, now);
+
+      resetAgentCache();
+      resolveAgentId(db, 'Week2Bot');
+      const result = await client.callTool({
+        name: 'flock_post',
+        arguments: { room_id: roomId, content: '@TextMentionBot please wake from another agent' },
+      });
+
+      expect(result.isError).not.toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callbackCalls).toHaveLength(1);
+      expect(callbackCalls[0].body).toMatchObject({
+        type: 'wake',
+        trigger_type: 'mention',
+        agent_name: 'TextMentionBot',
+        room_id: roomId,
+      });
+    } finally {
+      await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
+    }
   });
 
   it('fails when agent cache is empty', async () => {
