@@ -57,8 +57,8 @@ describe('automatic wake callbacks', () => {
 
       db.prepare("UPDATE profiles SET status = 'dormant' WHERE id = ?").run(mentioned.body.id);
       db.prepare(`
-        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
-        VALUES ('mention-wake-previous-spawn', ?, ?, 'stopped', ?, ?, 'previous spawn')
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, session_id, session_source, status, spawned_at, last_active_at, prompt)
+        VALUES ('mention-wake-previous-spawn', ?, ?, 'previous-claude-session', 'claude-cli', 'stopped', ?, ?, 'previous spawn')
       `).run(mentioned.body.id, runtime.body.id, new Date().toISOString(), new Date().toISOString());
 
       await request(app)
@@ -85,21 +85,24 @@ describe('automatic wake callbacks', () => {
       });
       expect(callbackCalls[0].body.agent_token).toEqual(expect.any(String));
       expect(callbackCalls[0].body.agent_provider).toMatchObject({ name: 'custom' });
+      expect(callbackCalls[0].body.session_id).toBe('previous-claude-session');
       expect(String(callbackCalls[0].body.prompt)).toContain('@MentionWakeBot please use the room context');
 
       const activeSpawn = db.prepare(`
-        SELECT status, prompt FROM agent_spawns
+        SELECT status, session_id, session_source, prompt FROM agent_spawns
         WHERE agent_id = ? AND runtime_id = ?
         ORDER BY spawned_at DESC
         LIMIT 1
-      `).get(mentioned.body.id, runtime.body.id) as { status: string; prompt: string };
+      `).get(mentioned.body.id, runtime.body.id) as { status: string; session_id: string; session_source: string; prompt: string };
       expect(activeSpawn.status).toBe('spawning');
+      expect(activeSpawn.session_id).toBe('previous-claude-session');
+      expect(activeSpawn.session_source).toBe('claude-cli');
       expect(activeSpawn.prompt).toContain('mention-wake-room');
 
       await request(app)
         .post(`/agents/${mentioned.body.id}/activity`)
         .set('Authorization', `Bearer ${callbackCalls[0].body.agent_token}`)
-        .send({ activity_type: 'status_change', detail: 'Agent active', metadata: { session_id: 'mention-session' } })
+        .send({ activity_type: 'status_change', detail: 'Agent active', metadata: { session_id: 'mention-session', session_source: 'claude-cli' } })
         .expect(201);
     } finally {
       await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
@@ -282,6 +285,70 @@ describe('automatic wake callbacks', () => {
       `).get(mentioned.body.id) as { runtime_id: string; status: string };
       expect(latestSpawn.runtime_id).toBe(onlineRuntime.body.id);
       expect(latestSpawn.status).toBe('spawning');
+    } finally {
+      await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
+    }
+  });
+
+  it('does not resume legacy internal session ids without a Claude session source marker', async () => {
+    const { app, db } = createApp();
+    const adminToken = bootstrapDefaultAgent(db, hashToken)!;
+    const callbackCalls: Array<{ path: string; body: Record<string, unknown> }> = [];
+    const callbackApp = express();
+    callbackApp.use(express.json());
+    callbackApp.post('/agents/:id/callback', (req, res) => {
+      callbackCalls.push({ path: req.path, body: req.body });
+      res.json({ ok: true });
+    });
+
+    const callbackServer = callbackApp.listen(0);
+    try {
+      const address = callbackServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('callback server did not bind to a TCP port');
+      }
+
+      const mentioned = await request(app).post('/agents').send({ name: 'LegacySessionBot' }).expect(201);
+      const sender = await request(app).post('/agents').send({ name: 'LegacySessionSender' }).expect(201);
+      const runtime = await request(app)
+        .post('/runtimes')
+        .send({
+          host: '127.0.0.1',
+          port: address.port,
+          callback_url: `http://127.0.0.1:${address.port}`,
+          max_agents: 10,
+        })
+        .expect(201);
+
+      const room = await request(app)
+        .post('/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'legacy-session-room' })
+        .expect(201);
+      await request(app).post(`/rooms/${room.body.id}/join`).set('Authorization', `Bearer ${sender.body.token}`).expect(200);
+      await request(app).post(`/rooms/${room.body.id}/join`).set('Authorization', `Bearer ${mentioned.body.token}`).expect(200);
+
+      db.prepare("UPDATE profiles SET status = 'dormant' WHERE id = ?").run(mentioned.body.id);
+      db.prepare(`
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, session_id, status, spawned_at, last_active_at, prompt)
+        VALUES ('legacy-session-spawn', ?, ?, 'legacy-internal-session-id', 'stopped', ?, ?, 'old internal session')
+      `).run(mentioned.body.id, runtime.body.id, new Date().toISOString(), new Date().toISOString());
+
+      await request(app)
+        .post('/messages')
+        .set('Authorization', `Bearer ${sender.body.token}`)
+        .send({
+          room_id: room.body.id,
+          content: '@LegacySessionBot do not resume a legacy internal id',
+          mentions: [mentioned.body.id],
+          idempotency_key: 'legacy-session-wake',
+        })
+        .expect(201);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callbackCalls).toHaveLength(1);
+      expect(callbackCalls[0].body.session_id).toBeUndefined();
     } finally {
       await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
     }

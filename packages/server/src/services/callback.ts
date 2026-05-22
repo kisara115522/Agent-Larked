@@ -7,6 +7,7 @@ export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
   agent_token?: string;
   agent_name?: string;
+  session_id?: string;
   agent_model?: string;
   agent_provider?: unknown;
   prompt?: string;
@@ -44,6 +45,7 @@ interface WakeSession {
   runtime: RuntimeRow;
   agent: { name: string; model: string | null; status: string };
   token: string;
+  sessionId?: string;
 }
 
 /** Log a wake event to the wake_events table */
@@ -79,14 +81,26 @@ function createWakeSession(
 
   const { token } = regenerateToken(db, agentId);
   const now = new Date().toISOString();
+  const sessionId = latestClaudeSessionId(db, agentId);
   db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status = 'spawning'").run(now, agentId);
   db.prepare(`
-    INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
-    VALUES (?, ?, ?, 'spawning', ?, ?, ?)
-  `).run(randomUUID(), agentId, runtimeId, now, now, prompt ?? null);
+    INSERT INTO agent_spawns (id, agent_id, runtime_id, session_id, session_source, status, spawned_at, last_active_at, prompt)
+    VALUES (?, ?, ?, ?, ?, 'spawning', ?, ?, ?)
+  `).run(randomUUID(), agentId, runtimeId, sessionId ?? null, sessionId ? 'claude-cli' : null, now, now, prompt ?? null);
   db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
 
-  return { runtime, agent, token };
+  return { runtime, agent, token, sessionId };
+}
+
+function latestClaudeSessionId(db: Database.Database, agentId: string): string | undefined {
+  const row = db.prepare(`
+    SELECT session_id
+    FROM agent_spawns
+    WHERE agent_id = ? AND session_id IS NOT NULL AND session_source = 'claude-cli'
+    ORDER BY spawned_at DESC
+    LIMIT 1
+  `).get(agentId) as { session_id: string } | undefined;
+  return row?.session_id;
 }
 
 function selectRuntimeForWake(db: Database.Database, agentId: string): RuntimeRow | null {
@@ -240,6 +254,7 @@ export function wakeMentionedAgents(
       type: 'wake',
       trigger_type: 'mention',
       ...agentCallbackFields(db, agentId, session.agent, session.token),
+      session_id: session.sessionId,
       prompt,
       room_id: roomId,
       room_name: roomName,
@@ -293,6 +308,7 @@ export function wakeRoomAgents(
       type: 'wake',
       trigger_type: 'broadcast',
       ...agentCallbackFields(db, agent_id, session.agent, session.token),
+      session_id: session.sessionId,
       prompt,
       room_id: roomId,
       room_name: roomName,
@@ -338,6 +354,7 @@ export function wakeDirectMessageAgent(
     type: 'wake',
     trigger_type: 'direct_message',
     ...agentCallbackFields(db, agentId, session.agent, session.token),
+    session_id: session.sessionId,
     prompt,
     sender_name: senderName,
     excerpt,
@@ -375,6 +392,7 @@ export function notifyRuntimeSpawn(
   const event: RuntimeCallbackEvent = {
     type: 'spawn',
     ...agentCallbackFields(db, agentId, undefined, token),
+    session_id: latestClaudeSessionId(db, agentId),
     prompt: prompt ?? undefined,
     room_id: roomId,
     room_name: roomName,
@@ -452,6 +470,7 @@ export function notifyTaskAssignment(
     type: 'wake',
     trigger_type: 'task_assignment',
     ...agentCallbackFields(db, agentId, session.agent, session.token),
+    session_id: session.sessionId,
     prompt,
     room_id: roomId,
     room_name: roomName,

@@ -399,8 +399,13 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
           db.prepare("UPDATE profiles SET status = 'dormant', updated_at = ? WHERE id = ?").run(now, agentId);
           if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'dormant' });
         } else if (detail === 'Agent active') {
-          db.prepare("UPDATE agent_spawns SET status = 'active', session_id = COALESCE(?, session_id), last_active_at = ? WHERE agent_id = ? AND status = 'spawning'")
-            .run(typeof meta.session_id === 'string' ? meta.session_id : null, now, agentId);
+          db.prepare("UPDATE agent_spawns SET status = 'active', session_id = COALESCE(?, session_id), session_source = COALESCE(?, session_source), last_active_at = ? WHERE agent_id = ? AND status = 'spawning'")
+            .run(
+              typeof meta.session_id === 'string' ? meta.session_id : null,
+              typeof meta.session_source === 'string' ? meta.session_source : null,
+              now,
+              agentId,
+            );
           db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
           if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
         }
