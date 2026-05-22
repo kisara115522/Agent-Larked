@@ -48,6 +48,23 @@ interface WakeSession {
   sessionId?: string;
 }
 
+type RoomWakeTriggerType = 'mention' | 'broadcast';
+
+interface PendingRoomWake {
+  db: Database.Database;
+  agentId: string;
+  roomId: string;
+  roomName: string;
+  messageId?: string;
+  senderName: string;
+  excerpt: string;
+  triggeredById: string;
+  triggerType: RoomWakeTriggerType;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const pendingRoomWakes = new Map<string, PendingRoomWake>();
+
 /** Log a wake event to the wake_events table */
 function logWakeEvent(
   db: Database.Database,
@@ -68,6 +85,7 @@ function createWakeSession(
   db: Database.Database,
   agentId: string,
   runtimeId: string,
+  roomId: string | undefined,
   prompt: string | undefined,
 ): WakeSession | null {
   const runtime = db.prepare(
@@ -78,6 +96,7 @@ function createWakeSession(
   const agent = db.prepare('SELECT name, model, status FROM profiles WHERE id = ?').get(agentId) as { name: string; model: string | null; status: string } | undefined;
   if (!agent) return null;
   if (agent.status === 'active') return null;
+  if (agent.status === 'spawning' && hasPendingRoomWake(db, agentId, roomId)) return null;
 
   const { token } = regenerateToken(db, agentId);
   const now = new Date().toISOString();
@@ -90,6 +109,104 @@ function createWakeSession(
   db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
 
   return { runtime, agent, token, sessionId };
+}
+
+function hasPendingRoomWake(db: Database.Database, agentId: string, roomId: string | undefined): boolean {
+  if (!roomId) return false;
+  const row = db.prepare(`
+    SELECT id
+    FROM agent_spawns
+    WHERE agent_id = ? AND status = 'spawning' AND prompt LIKE ?
+    ORDER BY spawned_at DESC
+    LIMIT 1
+  `).get(agentId, `You were woken in room "%(${roomId})%`) as { id: string } | undefined;
+  return Boolean(row);
+}
+
+function roomWakeDebounceMs(): number {
+  const raw = Number(process.env.FLOCK_ROOM_WAKE_DEBOUNCE_MS);
+  if (Number.isFinite(raw) && raw >= 0) return raw;
+  return process.env.NODE_ENV === 'test' ? 5 : 1200;
+}
+
+function pendingRoomWakeKey(agentId: string, roomId: string): string {
+  return `${agentId}:${roomId}`;
+}
+
+function scheduleRoomWake(
+  db: Database.Database,
+  agentId: string,
+  roomId: string,
+  roomName: string,
+  triggerType: RoomWakeTriggerType,
+  senderName: string,
+  excerpt: string,
+  triggeredById: string,
+  messageId?: string,
+): void {
+  const profile = db.prepare('SELECT status FROM profiles WHERE id = ?').get(agentId) as { status: string } | undefined;
+  if (!profile || profile.status === 'active') return;
+  if (profile.status === 'spawning' && hasPendingRoomWake(db, agentId, roomId)) return;
+
+  const key = pendingRoomWakeKey(agentId, roomId);
+  const existing = pendingRoomWakes.get(key);
+  if (existing) {
+    clearTimeout(existing.timer);
+  }
+
+  const pending: PendingRoomWake = {
+    db,
+    agentId,
+    roomId,
+    roomName,
+    messageId,
+    senderName,
+    excerpt,
+    triggeredById,
+    triggerType,
+    timer: setTimeout(() => {
+      pendingRoomWakes.delete(key);
+      dispatchPendingRoomWake(pending).catch((err) => {
+        console.error(`[callback] Failed to dispatch coalesced wake for agent ${agentId}:`, err);
+      });
+    }, roomWakeDebounceMs()),
+  };
+  pendingRoomWakes.set(key, pending);
+}
+
+async function dispatchPendingRoomWake(pending: PendingRoomWake): Promise<void> {
+  const runtime = selectRuntimeForWake(pending.db, pending.agentId);
+  if (!runtime) return;
+
+  const reason = pending.triggerType === 'mention'
+    ? `${pending.senderName} mentioned you`
+    : `${pending.senderName} sent a broadcast wake`;
+  const prompt = roomWakePrompt(pending.db, pending.roomId, pending.roomName, reason, pending.excerpt);
+  const session = createWakeSession(pending.db, pending.agentId, runtime.id, pending.roomId, prompt);
+  if (!session) return;
+
+  const event: CallbackEvent = {
+    type: 'wake',
+    trigger_type: pending.triggerType,
+    ...agentCallbackFields(pending.db, pending.agentId, session.agent, session.token),
+    session_id: session.sessionId,
+    prompt,
+    room_id: pending.roomId,
+    room_name: pending.roomName,
+    message_id: pending.messageId,
+    sender_name: pending.senderName,
+    excerpt: pending.excerpt,
+  };
+
+  await sendCallbackWithRetry(runtime, pending.agentId, event);
+  logWakeEvent(pending.db, pending.agentId, pending.triggeredById, pending.triggerType, 'sent', pending.roomId, prompt);
+}
+
+export function clearPendingRoomWakesForTests(): void {
+  for (const pending of pendingRoomWakes.values()) {
+    clearTimeout(pending.timer);
+  }
+  pendingRoomWakes.clear();
 }
 
 function latestClaudeSessionId(db: Database.Database, agentId: string): string | undefined {
@@ -243,33 +360,7 @@ export function wakeMentionedAgents(
   const roomName = room?.name ?? roomId;
 
   for (const agentId of mentionedAgentIds) {
-    const runtime = selectRuntimeForWake(db, agentId);
-    if (!runtime) continue;
-
-    const prompt = roomWakePrompt(db, roomId, roomName, `${senderName} mentioned you`, excerpt);
-    const session = createWakeSession(db, agentId, runtime.id, prompt);
-    if (!session) continue;
-
-    const event: CallbackEvent = {
-      type: 'wake',
-      trigger_type: 'mention',
-      ...agentCallbackFields(db, agentId, session.agent, session.token),
-      session_id: session.sessionId,
-      prompt,
-      room_id: roomId,
-      room_name: roomName,
-      message_id: messageId,
-      sender_name: senderName,
-      excerpt,
-    };
-
-    // Fire and forget — don't block the message response
-    sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
-      console.error(`[callback] Failed to wake agent ${agentId} via runtime ${runtime.id}:`, err);
-    });
-
-    // Log wake event
-    logWakeEvent(db, agentId, triggeredById, 'mention', 'sent', roomId, prompt);
+    scheduleRoomWake(db, agentId, roomId, roomName, 'mention', senderName, excerpt, triggeredById, messageId);
   }
 }
 
@@ -297,29 +388,7 @@ export function wakeRoomAgents(
   `).all(roomId, senderId) as { agent_id: string }[];
 
   for (const { agent_id } of dormantAgents) {
-    const runtime = selectRuntimeForWake(db, agent_id);
-    if (!runtime) continue;
-
-    const prompt = roomWakePrompt(db, roomId, roomName, `${senderName} sent a broadcast wake`, excerpt);
-    const session = createWakeSession(db, agent_id, runtime.id, prompt);
-    if (!session) continue;
-
-    const event: CallbackEvent = {
-      type: 'wake',
-      trigger_type: 'broadcast',
-      ...agentCallbackFields(db, agent_id, session.agent, session.token),
-      session_id: session.sessionId,
-      prompt,
-      room_id: roomId,
-      room_name: roomName,
-    };
-
-    sendCallbackWithRetry(runtime, agent_id, event).catch((err) => {
-      console.error(`[callback] Failed to wake agent ${agent_id} via runtime ${runtime.id}:`, err);
-    });
-
-    // Log wake event
-    logWakeEvent(db, agent_id, senderName, 'broadcast', 'sent', roomId, prompt);
+    scheduleRoomWake(db, agent_id, roomId, roomName, 'broadcast', senderName, excerpt, senderId);
   }
 }
 
@@ -347,7 +416,7 @@ export function wakeDirectMessageAgent(
   if (!runtime || runtime.status !== 'online') return;
 
   const prompt = `${senderName} sent you a direct message:\n\n"${excerpt}"\n\nUse the Flock direct-message tools to read the conversation and reply directly if useful.`;
-  const session = createWakeSession(db, agentId, runtime.id, prompt);
+  const session = createWakeSession(db, agentId, runtime.id, undefined, prompt);
   if (!session) return;
 
   const event: CallbackEvent = {
@@ -463,7 +532,7 @@ export function notifyTaskAssignment(
     recentRoomContext(db, roomId) || 'No recent messages are available.',
     'Use the Flock task tools to inspect the task, update its status, and post progress in the room if appropriate.',
   ].join('\n\n');
-  const session = createWakeSession(db, agentId, runtime.id, prompt);
+  const session = createWakeSession(db, agentId, runtime.id, roomId, prompt);
   if (!session) return;
 
   const event: RuntimeCallbackEvent = {

@@ -353,4 +353,87 @@ describe('automatic wake callbacks', () => {
       await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
     }
   });
+
+  it('does not send another wake callback while the same room agent is already spawning', async () => {
+    const { app, db } = createApp();
+    const adminToken = bootstrapDefaultAgent(db, hashToken)!;
+    const callbackCalls: Array<{ path: string; body: Record<string, unknown> }> = [];
+    const callbackApp = express();
+    callbackApp.use(express.json());
+    callbackApp.post('/agents/:id/callback', (req, res) => {
+      callbackCalls.push({ path: req.path, body: req.body });
+      res.json({ ok: true });
+    });
+
+    const callbackServer = callbackApp.listen(0);
+    try {
+      const address = callbackServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('callback server did not bind to a TCP port');
+      }
+
+      const mentioned = await request(app).post('/agents').send({ name: 'CoalescedWakeBot' }).expect(201);
+      const sender = await request(app).post('/agents').send({ name: 'CoalescedWakeSender' }).expect(201);
+      const runtime = await request(app)
+        .post('/runtimes')
+        .send({
+          host: '127.0.0.1',
+          port: address.port,
+          callback_url: `http://127.0.0.1:${address.port}`,
+          max_agents: 10,
+        })
+        .expect(201);
+
+      const room = await request(app)
+        .post('/rooms')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ name: 'coalesced-wake-room' })
+        .expect(201);
+      await request(app).post(`/rooms/${room.body.id}/join`).set('Authorization', `Bearer ${sender.body.token}`).expect(200);
+      await request(app).post(`/rooms/${room.body.id}/join`).set('Authorization', `Bearer ${mentioned.body.token}`).expect(200);
+
+      db.prepare("UPDATE profiles SET status = 'dormant' WHERE id = ?").run(mentioned.body.id);
+      db.prepare(`
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
+        VALUES ('coalesced-wake-previous-spawn', ?, ?, 'stopped', ?, ?, 'previous spawn')
+      `).run(mentioned.body.id, runtime.body.id, new Date().toISOString(), new Date().toISOString());
+
+      await request(app)
+        .post('/messages')
+        .set('Authorization', `Bearer ${sender.body.token}`)
+        .send({
+          room_id: room.body.id,
+          content: '@CoalescedWakeBot first fragment',
+          mentions: [mentioned.body.id],
+          idempotency_key: 'coalesced-wake-first',
+        })
+        .expect(201);
+
+      await request(app)
+        .post('/messages')
+        .set('Authorization', `Bearer ${sender.body.token}`)
+        .send({
+          room_id: room.body.id,
+          content: '@CoalescedWakeBot second fragment',
+          mentions: [mentioned.body.id],
+          idempotency_key: 'coalesced-wake-second',
+        })
+        .expect(201);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callbackCalls).toHaveLength(1);
+      expect(String(callbackCalls[0].body.prompt)).toContain('first fragment');
+      expect(String(callbackCalls[0].body.prompt)).toContain('second fragment');
+
+      const spawningRows = db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM agent_spawns
+        WHERE agent_id = ? AND status = 'spawning'
+      `).get(mentioned.body.id) as { count: number };
+      expect(spawningRows.count).toBe(1);
+    } finally {
+      await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
+    }
+  });
 });
