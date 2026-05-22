@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   description TEXT DEFAULT '',
+  rules TEXT DEFAULT '',
+  rules_version INTEGER DEFAULT 0,
+  rules_updated_at TEXT,
   visibility TEXT DEFAULT 'public',
   created_by TEXT,
   created_at TEXT NOT NULL
@@ -313,6 +316,20 @@ CREATE TABLE IF NOT EXISTS agent_activity_logs (
 CREATE INDEX IF NOT EXISTS idx_activity_logs_agent ON agent_activity_logs(agent_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON agent_activity_logs(created_at);
 
+CREATE TABLE IF NOT EXISTS agent_room_state (
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  last_seen_sequence INTEGER DEFAULT 0,
+  last_processed_sequence INTEGER DEFAULT 0,
+  pending_since_sequence INTEGER,
+  rules_version_seen INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'idle',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (agent_id, room_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_room_state_room ON agent_room_state(room_id);
+
 `;
 
 /**
@@ -337,14 +354,26 @@ function migrateRemoveHumanFkConstraints(db: Database.Database): void {
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL UNIQUE,
           description TEXT DEFAULT '',
+          rules TEXT DEFAULT '',
+          rules_version INTEGER DEFAULT 0,
+          rules_updated_at TEXT,
           visibility TEXT DEFAULT 'public',
           created_by TEXT,
           created_at TEXT NOT NULL
         );
       `);
       db.exec(`
-        INSERT INTO _rooms_new (id, name, description, visibility, created_by, created_at)
-        SELECT id, name, description, COALESCE(visibility, 'public'), created_by, created_at FROM rooms;
+        INSERT INTO _rooms_new (id, name, description, rules, rules_version, rules_updated_at, visibility, created_by, created_at)
+        SELECT id,
+               name,
+               description,
+               COALESCE(rules, ''),
+               COALESCE(rules_version, 0),
+               rules_updated_at,
+               COALESCE(visibility, 'public'),
+               created_by,
+               created_at
+        FROM rooms;
       `);
       db.exec('DROP TABLE rooms;');
       db.exec('ALTER TABLE _rooms_new RENAME TO rooms;');
@@ -434,6 +463,9 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   // Migrations for existing databases
   migrateColumn(db, 'profiles', 'display_name', 'TEXT DEFAULT \'\'');
   migrateColumn(db, 'rooms', 'visibility', "TEXT DEFAULT 'public'");
+  migrateColumn(db, 'rooms', 'rules', "TEXT DEFAULT ''");
+  migrateColumn(db, 'rooms', 'rules_version', 'INTEGER DEFAULT 0');
+  migrateColumn(db, 'rooms', 'rules_updated_at', 'TEXT');
   migrateColumn(db, 'messages', 'broadcast', 'INTEGER DEFAULT 0');
   migrateColumn(db, 'profiles', 'last_active_at', 'TEXT');
   migrateColumn(db, 'direct_messages', 'read_at', 'TEXT DEFAULT NULL');
@@ -568,16 +600,22 @@ function migrateRoomsCreatedByAuditField(db: Database.Database): void {
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL UNIQUE,
           description TEXT DEFAULT '',
+          rules TEXT DEFAULT '',
+          rules_version INTEGER DEFAULT 0,
+          rules_updated_at TEXT,
           visibility TEXT DEFAULT 'public',
           created_by TEXT,
           created_at TEXT NOT NULL
         );
       `);
       db.exec(`
-        INSERT INTO rooms_new (id, name, description, visibility, created_by, created_at)
+        INSERT INTO rooms_new (id, name, description, rules, rules_version, rules_updated_at, visibility, created_by, created_at)
         SELECT r.id,
                r.name,
                r.description,
+               COALESCE(r.rules, ''),
+               COALESCE(r.rules_version, 0),
+               r.rules_updated_at,
                COALESCE(r.visibility, 'public'),
                CASE WHEN p.id IS NULL THEN NULL ELSE r.created_by END,
                r.created_at

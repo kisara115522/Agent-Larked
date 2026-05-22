@@ -12,6 +12,7 @@
     "./services/room": "./dist/services/room.js",
     "./services/messaging": "./dist/services/messaging.js",
     "./services/direct-chat": "./dist/services/direct-chat.js",
+    "./services/room-context": "./dist/services/room-context.js",
     "./services/profile-utils": "./dist/services/profile-utils.js",
     "./services/task": "./dist/services/task.js",
     "./services/callback": "./dist/services/callback.js",

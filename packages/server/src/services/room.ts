@@ -9,12 +9,15 @@ export function createRoom(db: Database.Database, agentId: string, req: CreateRo
   const id = uuidv4();
   const now = new Date().toISOString();
   const visibility: RoomVisibility = req.visibility ?? 'public';
+  const rules = req.rules ?? '';
+  const rulesVersion = rules.trim() ? 1 : 0;
+  const rulesUpdatedAt = rulesVersion > 0 ? now : null;
 
   try {
     db.prepare(`
-      INSERT INTO rooms (id, name, description, visibility, created_by, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, req.name, req.description ?? '', visibility, agentId, now);
+      INSERT INTO rooms (id, name, description, rules, rules_version, rules_updated_at, visibility, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, req.name, req.description ?? '', rules, rulesVersion, rulesUpdatedAt, visibility, agentId, now);
   } catch (err: unknown) {
     if (err instanceof Error && err.message.includes('UNIQUE constraint failed: rooms.name')) {
       throw new ServerError(ErrorCode.ROOM_ALREADY_EXISTS, `Room '${req.name}' already exists`, false, 409);
@@ -29,6 +32,9 @@ export function createRoom(db: Database.Database, agentId: string, req: CreateRo
     id,
     name: req.name,
     description: req.description ?? '',
+    rules,
+    rules_version: rulesVersion,
+    rules_updated_at: rulesUpdatedAt,
     visibility,
     created_by: agentId,
     created_at: now,
@@ -78,6 +84,30 @@ export function leaveRoom(db: Database.Database, roomId: string, agentId: string
 
   db.prepare('DELETE FROM room_members WHERE room_id = ? AND agent_id = ?').run(roomId, agentId);
   return { ok: true };
+}
+
+export function updateRoomRules(db: Database.Database, roomId: string, agentId: string, rules: string): Room {
+  const room = db.prepare('SELECT rules FROM rooms WHERE id = ?').get(roomId) as { rules: string | null } | undefined;
+  if (!room) {
+    throw new ServerError(ErrorCode.ROOM_NOT_FOUND, 'Room not found', false, 404);
+  }
+  if (!isRoomMember(db, roomId, agentId)) {
+    throw new ServerError(ErrorCode.NOT_ROOM_MEMBER, 'Not a member of this room', false, 403);
+  }
+  if ((room.rules ?? '') === rules) {
+    return getRoom(db, roomId, agentId);
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE rooms
+    SET rules = ?,
+        rules_version = COALESCE(rules_version, 0) + 1,
+        rules_updated_at = ?
+    WHERE id = ?
+  `).run(rules, now, roomId);
+
+  return getRoom(db, roomId, agentId);
 }
 
 export function isRoomMember(db: Database.Database, roomId: string, agentId: string): boolean {
@@ -146,6 +176,9 @@ export function listRooms(
     id: r.id,
     name: r.name,
     description: r.description,
+    rules: (r as unknown as Record<string, unknown>).rules as string ?? '',
+    rules_version: Number((r as unknown as Record<string, unknown>).rules_version ?? 0),
+    rules_updated_at: (r as unknown as Record<string, unknown>).rules_updated_at as string | null ?? null,
     visibility: (r as unknown as Record<string, unknown>).visibility as RoomVisibility ?? 'public',
     created_by: r.created_by,
     created_at: r.created_at,
@@ -179,6 +212,9 @@ export function getRoom(db: Database.Database, roomId: string, agentId?: string)
     id: row.id,
     name: row.name,
     description: row.description,
+    rules: (row as unknown as Record<string, unknown>).rules as string ?? '',
+    rules_version: Number((row as unknown as Record<string, unknown>).rules_version ?? 0),
+    rules_updated_at: (row as unknown as Record<string, unknown>).rules_updated_at as string | null ?? null,
     visibility: (row as unknown as Record<string, unknown>).visibility as RoomVisibility ?? 'public',
     created_by: row.created_by,
     created_at: row.created_at,

@@ -148,6 +148,9 @@ export interface Room {
   id: string;
   name: string;
   description: string;
+  rules: string;
+  rules_version: number;
+  rules_updated_at: string | null;
   visibility: RoomVisibility;
   created_by: string | null;
   created_at: string;
@@ -161,7 +164,12 @@ export interface RoomWithMemberCount extends Room {
 export interface CreateRoomRequest {
   name: string;
   description?: string;
+  rules?: string;
   visibility?: RoomVisibility;
+}
+
+export interface UpdateRoomRulesRequest {
+  rules: string;
 }
 
 export interface ListRoomsResponse {

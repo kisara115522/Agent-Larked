@@ -129,6 +129,52 @@ describe('Room Operations', () => {
 
     expect(members.body.members.some((member: { id: string }) => member.id === reg.body.id)).toBe(true);
   });
+
+  it('PUT /rooms/:id/rules updates room execution rules and bumps version', async () => {
+    const room = await request(app)
+      .post('/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'rules-http-room', rules: 'Rule v1' })
+      .expect(201);
+
+    expect(room.body.rules_version).toBe(1);
+
+    const first = await request(app)
+      .put(`/rooms/${room.body.id}/rules`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ rules: 'Rule v2' })
+      .expect(200);
+
+    expect(first.body.rules).toBe('Rule v2');
+    expect(first.body.rules_version).toBe(2);
+
+    const unchanged = await request(app)
+      .put(`/rooms/${room.body.id}/rules`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ rules: 'Rule v2' })
+      .expect(200);
+
+    expect(unchanged.body.rules_version).toBe(2);
+  });
+
+  it('PUT /rooms/:id/rules rejects non-members', async () => {
+    const room = await request(app)
+      .post('/rooms')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'rules-non-member-room' })
+      .expect(201);
+
+    const outsider = await request(app)
+      .post('/agents')
+      .send({ name: 'RulesOutsider' })
+      .expect(201);
+
+    await request(app)
+      .put(`/rooms/${room.body.id}/rules`)
+      .set('Authorization', `Bearer ${outsider.body.token}`)
+      .send({ rules: 'I should not be allowed to set this' })
+      .expect(403);
+  });
 });
 
 describe('Messaging', () => {

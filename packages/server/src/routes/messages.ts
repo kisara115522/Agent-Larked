@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { sendMessage, getThread } from '../services/messaging.js';
 import { wakeMentionedAgents } from '../services/callback.js';
+import { markRoomPendingForAgents } from '../services/room-context.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
@@ -15,6 +16,7 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
   router.post('/', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
     try {
       const result = sendMessage(db, req.agentId!, req.body);
+      markRoomPendingForAgents(db, req.body.room_id, result.sequence, req.agentId!);
 
       // Emit mention events via SSE
       if (req.body.mentions && req.body.mentions.length > 0) {

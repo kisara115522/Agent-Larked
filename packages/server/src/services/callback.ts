@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { regenerateToken } from './identity.js';
 import { cleanupStaleRuntimes, selectAvailableRuntime } from './runtime.js';
+import { ensureAgentRoomState } from './room-context.js';
 
 export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
@@ -181,7 +182,7 @@ async function dispatchPendingRoomWake(pending: PendingRoomWake): Promise<void> 
   const reason = pending.triggerType === 'mention'
     ? `${pending.senderName} mentioned you`
     : `${pending.senderName} sent a broadcast wake`;
-  const prompt = roomWakePrompt(pending.db, pending.roomId, pending.roomName, reason, pending.excerpt);
+  const prompt = roomWakePrompt(pending.db, pending.roomId, pending.roomName, pending.agentId, reason, pending.excerpt);
   const session = createWakeSession(pending.db, pending.agentId, runtime.id, pending.roomId, prompt);
   if (!session) return;
 
@@ -258,40 +259,34 @@ function agentCallbackFields(
   };
 }
 
-function recentRoomContext(db: Database.Database, roomId: string, limit = 10): string {
-  const rows = db.prepare(`
-    SELECT m.content, m.sequence, p.name, p.display_name
-    FROM messages m
-    LEFT JOIN profiles p ON p.id = m.from_agent
-    WHERE m.room_id = ?
-    ORDER BY m.sequence DESC
-    LIMIT ?
-  `).all(roomId, limit) as Array<{ content: string; sequence: number; name: string | null; display_name: string | null }>;
-
-  return rows
-    .reverse()
-    .map((row) => {
-      const sender = row.display_name || row.name || 'unknown';
-      return `#${row.sequence} ${sender}: ${row.content}`;
-    })
-    .join('\n');
-}
-
 function roomWakePrompt(
   db: Database.Database,
   roomId: string,
   roomName: string,
+  agentId: string,
   reason: string,
   fallbackExcerpt?: string,
 ): string {
-  const context = recentRoomContext(db, roomId);
-  const recent = context || (fallbackExcerpt ? `Recent message: ${fallbackExcerpt}` : 'No recent messages are available.');
+  const state = ensureAgentRoomState(db, agentId, roomId);
+  const latest = latestRoomSequence(db, roomId);
+  const rulesVersion = roomRulesVersion(db, roomId);
+  const excerpt = fallbackExcerpt ? ` Wake excerpt: ${fallbackExcerpt}` : '';
   return [
     `You were woken in room "${roomName}" (${roomId}) because ${reason}.`,
-    'Recent room messages:',
-    recent,
-    'Use the Flock MCP tools to inspect the room or task if needed, then respond in this room only when a response is useful. Do not post in other rooms.',
+    `Room context protocol: before replying or doing work, call flock_room_sync for this room and inspect all unread messages. Your last synced sequence is ${state.last_seen_sequence}; latest known sequence is ${latest}.${excerpt}`,
+    `Room rules version: ${rulesVersion}; you last synced rules version ${state.rules_version_seen}. flock_room_sync returns the full rules only when this version changed.`,
+    'After syncing, respond in this room only when a response is useful. Do not post in other rooms. If flock_post says the room has unread messages, call flock_room_sync again before posting.',
   ].join('\n\n');
+}
+
+function latestRoomSequence(db: Database.Database, roomId: string): number {
+  const row = db.prepare('SELECT COALESCE(MAX(sequence), 0) AS latest FROM messages WHERE room_id = ?').get(roomId) as { latest: number };
+  return row.latest;
+}
+
+function roomRulesVersion(db: Database.Database, roomId: string): number {
+  const row = db.prepare('SELECT COALESCE(rules_version, 0) AS version FROM rooms WHERE id = ?').get(roomId) as { version: number } | undefined;
+  return Number(row?.version ?? 0);
 }
 
 /** Compute HMAC-SHA256 signature for a callback payload */
@@ -528,9 +523,8 @@ export function notifyTaskAssignment(
   const roomName = room?.name ?? roomId;
   const prompt = [
     `You were assigned task "${taskTitle}" (${taskId}) in room "${roomName}" (${roomId}).`,
-    'Recent room messages:',
-    recentRoomContext(db, roomId) || 'No recent messages are available.',
-    'Use the Flock task tools to inspect the task, update its status, and post progress in the room if appropriate.',
+    `Before replying or doing work, call flock_room_sync for this room and inspect unread messages. Last synced sequence: ${ensureAgentRoomState(db, agentId, roomId).last_seen_sequence}. Latest sequence: ${latestRoomSequence(db, roomId)}. Room rules version: ${roomRulesVersion(db, roomId)}.`,
+    'Use the Flock task tools to inspect the task, update its status, and post progress in the room if appropriate. If flock_post says the room has unread messages, call flock_room_sync again before posting.',
   ].join('\n\n');
   const session = createWakeSession(db, agentId, runtime.id, roomId, prompt);
   if (!session) return;

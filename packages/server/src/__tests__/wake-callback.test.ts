@@ -5,6 +5,13 @@ import { createApp } from '../index.js';
 import { hashToken } from '../middleware/auth.js';
 import { bootstrapDefaultAgent } from '../db.js';
 
+async function waitForCallback(callbackCalls: unknown[], expected = 1, timeoutMs = 1000): Promise<void> {
+  const start = Date.now();
+  while (callbackCalls.length < expected && Date.now() - start < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 describe('automatic wake callbacks', () => {
   it('wakes a mentioned dormant agent with identity, token, provider config, and room context', async () => {
     const { app, db } = createApp();
@@ -72,7 +79,7 @@ describe('automatic wake callbacks', () => {
         })
         .expect(201);
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await waitForCallback(callbackCalls);
 
       expect(callbackCalls).toHaveLength(1);
       expect(callbackCalls[0].body).toMatchObject({
@@ -86,6 +93,7 @@ describe('automatic wake callbacks', () => {
       expect(callbackCalls[0].body.agent_token).toEqual(expect.any(String));
       expect(callbackCalls[0].body.agent_provider).toMatchObject({ name: 'custom' });
       expect(callbackCalls[0].body.session_id).toBe('previous-claude-session');
+      expect(String(callbackCalls[0].body.prompt)).toContain('flock_room_sync');
       expect(String(callbackCalls[0].body.prompt)).toContain('@MentionWakeBot please use the room context');
 
       const activeSpawn = db.prepare(`
@@ -175,7 +183,7 @@ describe('automatic wake callbacks', () => {
         })
         .expect(201);
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await waitForCallback(callbackCalls);
 
       expect(callbackCalls).toHaveLength(1);
       expect(callbackCalls[0].body).toMatchObject({
@@ -266,7 +274,7 @@ describe('automatic wake callbacks', () => {
         })
         .expect(201);
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await waitForCallback(callbackCalls);
 
       expect(callbackCalls).toHaveLength(1);
       expect(callbackCalls[0].body).toMatchObject({
@@ -345,7 +353,7 @@ describe('automatic wake callbacks', () => {
         })
         .expect(201);
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await waitForCallback(callbackCalls);
 
       expect(callbackCalls).toHaveLength(1);
       expect(callbackCalls[0].body.session_id).toBeUndefined();
@@ -420,10 +428,12 @@ describe('automatic wake callbacks', () => {
         })
         .expect(201);
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await waitForCallback(callbackCalls);
 
       expect(callbackCalls).toHaveLength(1);
-      expect(String(callbackCalls[0].body.prompt)).toContain('first fragment');
+      expect(String(callbackCalls[0].body.prompt)).toContain('flock_room_sync');
+      expect(String(callbackCalls[0].body.prompt)).toContain('latest known sequence is 2');
+      expect(String(callbackCalls[0].body.prompt)).not.toContain('first fragment');
       expect(String(callbackCalls[0].body.prompt)).toContain('second fragment');
 
       const spawningRows = db.prepare(`

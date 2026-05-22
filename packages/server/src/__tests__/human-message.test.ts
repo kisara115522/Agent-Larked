@@ -7,6 +7,13 @@ import { createApp } from '../index.js';
 import { bootstrapDefaultAgent } from '../db.js';
 import { hashToken } from '../middleware/auth.js';
 
+async function waitForCallback(callbackCalls: unknown[], expected = 1, timeoutMs = 1000): Promise<void> {
+  const start = Date.now();
+  while (callbackCalls.length < expected && Date.now() - start < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 let app: Express;
 let db: Database.Database;
 
@@ -137,7 +144,7 @@ describe('Human Messages', () => {
         })
         .expect(201);
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await waitForCallback(callbackCalls);
 
       expect(callbackCalls).toHaveLength(1);
       expect(callbackCalls[0].body).toMatchObject({

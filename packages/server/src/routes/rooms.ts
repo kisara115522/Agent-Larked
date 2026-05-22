@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { addRoomMember, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, requireRoomAccess } from '../services/room.js';
+import { addRoomMember, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, requireRoomAccess, updateRoomRules } from '../services/room.js';
 import { getMessages, sendMessage } from '../services/messaging.js';
+import { markRoomPendingForAgents } from '../services/room-context.js';
 import { wakeMentionedAgents, wakeRoomAgents } from '../services/callback.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
@@ -38,9 +39,12 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
       }
 
       const agentId = req.agentId!;
+      const rules = String(req.body.rules ?? '');
+      const rulesVersion = rules.trim() ? 1 : 0;
+      const rulesUpdatedAt = rulesVersion > 0 ? now : null;
       db.prepare(
-        'INSERT INTO rooms (id, name, description, visibility, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(id, name, req.body.description ?? '', visibility, agentId, now);
+        'INSERT INTO rooms (id, name, description, rules, rules_version, rules_updated_at, visibility, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run(id, name, req.body.description ?? '', rules, rulesVersion, rulesUpdatedAt, visibility, agentId, now);
 
       // Auto-join creator
       db.prepare('INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at) VALUES (?, ?, ?)').run(id, agentId, now);
@@ -49,10 +53,24 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
         id,
         name,
         description: req.body.description ?? '',
+        rules,
+        rules_version: rulesVersion,
+        rules_updated_at: rulesUpdatedAt,
         visibility,
         created_by: agentId,
         created_at: now,
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PUT /rooms/:id/rules — update the room execution rules and bump rules_version
+  router.put('/:id/rules', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
+    try {
+      const rules = String(req.body.rules ?? '');
+      const room = updateRoomRules(db, req.params.id as string, req.agentId!, rules);
+      res.json({ room_id: room.id, rules: room.rules, rules_version: room.rules_version, rules_updated_at: room.rules_updated_at });
     } catch (err) {
       next(err);
     }
@@ -160,6 +178,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
         mentions: req.body.mentions,
         reply_to: req.body.reply_to,
       }, 'human');
+      markRoomPendingForAgents(db, roomId, result.sequence, req.humanId!);
 
       // Broadcast wake: notify all dormant agents in the room
       const human = db.prepare('SELECT username, display_name FROM humans WHERE id = ?').get(req.humanId!) as { username: string; display_name: string | null } | undefined;
