@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createDatabase } from '@flock/server/db';
+import { clearPendingRoomWakesForTests } from '@flock/server/services/callback';
 import { registerIdentityTools } from '../tools/identity.js';
 import { registerRoomTools } from '../tools/room.js';
 import { registerMessagingTools } from '../tools/messaging.js';
@@ -71,6 +72,10 @@ afterAll(async () => {
     delete process.env.FLOCK_HOME;
   }
   rmSync(tempDir, { recursive: true, force: true });
+});
+
+afterEach(() => {
+  clearPendingRoomWakesForTests();
 });
 
 describe('flock_post tool', () => {
@@ -208,6 +213,176 @@ describe('flock_read tool', () => {
   });
 });
 
+describe('flock_room_sync tool', () => {
+  it('returns unread messages and advances the room cursor', async () => {
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
+
+    const senderResult = await client.callTool({
+      name: 'flock_agent_create',
+      arguments: { name: 'SyncSender' },
+    });
+    const senderId = JSON.parse((senderResult.content as Array<{ type: string; text: string }>)[0].text).id;
+
+    resetAgentCache();
+    resolveAgentId(db, 'SyncSender');
+    await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
+    await client.callTool({ name: 'flock_room_sync', arguments: { room_id: roomId } });
+    const postResult = await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'sync unread message' },
+    });
+    expect(JSON.parse((postResult.content as Array<{ type: string; text: string }>)[0].text).id).toBeDefined();
+
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
+    const result = await client.callTool({
+      name: 'flock_room_sync',
+      arguments: { room_id: roomId },
+    });
+
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0].text);
+    expect(parsed.room_id).toBe(roomId);
+    expect(parsed.rules.version).toBe(0);
+    expect(parsed.unread_messages.some((m: { from: string; content: string }) => m.from === senderId && m.content === 'sync unread message')).toBe(true);
+    expect(parsed.state.last_seen_sequence).toBe(parsed.latest_sequence);
+
+    const second = await client.callTool({
+      name: 'flock_room_sync',
+      arguments: { room_id: roomId },
+    });
+    const secondParsed = JSON.parse((second.content as Array<{ type: string; text: string }>)[0].text);
+    expect(secondParsed.unread_messages).toEqual([]);
+  });
+
+  it('returns room rules only when the rules version changes', async () => {
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
+    const roomResult = await client.callTool({
+      name: 'flock_room_create',
+      arguments: {
+        name: 'rules-sync-room',
+        rules: 'Rule v1: answer only when mentioned.',
+      },
+    });
+    const rulesRoomId = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0].text).id;
+
+    const firstSync = await client.callTool({
+      name: 'flock_room_sync',
+      arguments: { room_id: rulesRoomId },
+    });
+    const firstParsed = JSON.parse((firstSync.content as Array<{ type: string; text: string }>)[0].text);
+    expect(firstParsed.rules).toMatchObject({
+      version: 1,
+      unchanged: false,
+      content: 'Rule v1: answer only when mentioned.',
+    });
+
+    const secondSync = await client.callTool({
+      name: 'flock_room_sync',
+      arguments: { room_id: rulesRoomId },
+    });
+    const secondParsed = JSON.parse((secondSync.content as Array<{ type: string; text: string }>)[0].text);
+    expect(secondParsed.rules).toMatchObject({
+      version: 1,
+      unchanged: true,
+      content: null,
+    });
+
+    const updateResult = await client.callTool({
+      name: 'flock_room_rules_set',
+      arguments: {
+        room_id: rulesRoomId,
+        rules: 'Rule v2: wait for the moderator before acting.',
+      },
+    });
+    const updateParsed = JSON.parse((updateResult.content as Array<{ type: string; text: string }>)[0].text);
+    expect(updateParsed.rules_version).toBe(2);
+
+    const thirdSync = await client.callTool({
+      name: 'flock_room_sync',
+      arguments: { room_id: rulesRoomId },
+    });
+    const thirdParsed = JSON.parse((thirdSync.content as Array<{ type: string; text: string }>)[0].text);
+    expect(thirdParsed.rules).toMatchObject({
+      version: 2,
+      unchanged: false,
+      content: 'Rule v2: wait for the moderator before acting.',
+    });
+  });
+
+  it('blocks flock_post when room rules changed since the last sync', async () => {
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
+    const roomResult = await client.callTool({
+      name: 'flock_room_create',
+      arguments: {
+        name: 'rules-guard-room',
+        rules: 'Initial room rules',
+      },
+    });
+    const guardedRoomId = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0].text).id;
+    await client.callTool({ name: 'flock_room_sync', arguments: { room_id: guardedRoomId } });
+
+    await client.callTool({
+      name: 'flock_room_rules_set',
+      arguments: {
+        room_id: guardedRoomId,
+        rules: 'Updated room rules',
+      },
+    });
+
+    const blocked = await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: guardedRoomId, content: 'reply without seeing new rules' },
+    });
+
+    expect(blocked.isError).toBe(true);
+    const text = (blocked.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain('room rules version');
+    expect(text).toContain('flock_room_sync');
+  });
+
+  it('blocks flock_post when another agent has posted unread messages since the last sync', async () => {
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
+    await client.callTool({ name: 'flock_room_sync', arguments: { room_id: roomId } });
+
+    const blockerResult = await client.callTool({
+      name: 'flock_agent_create',
+      arguments: { name: 'PostGuardSender' },
+    });
+    expect(JSON.parse((blockerResult.content as Array<{ type: string; text: string }>)[0].text).id).toBeDefined();
+
+    resetAgentCache();
+    resolveAgentId(db, 'PostGuardSender');
+    await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
+    await client.callTool({ name: 'flock_room_sync', arguments: { room_id: roomId } });
+    await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'new message before guarded post' },
+    });
+
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
+    const blocked = await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'stale reply should be blocked' },
+    });
+
+    expect(blocked.isError).toBe(true);
+    const text = (blocked.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain('flock_room_sync');
+
+    await client.callTool({ name: 'flock_room_sync', arguments: { room_id: roomId } });
+    const allowed = await client.callTool({
+      name: 'flock_post',
+      arguments: { room_id: roomId, content: 'fresh reply after sync' },
+    });
+    expect(allowed.isError).not.toBe(true);
+  });
+});
+
 describe('flock_react tool', () => {
   it('reacts to a message', async () => {
     // Get a message to react to
@@ -277,6 +452,7 @@ describe('flock_wait', () => {
 
     // WaitBot joins room
     await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
+    await client.callTool({ name: 'flock_room_sync', arguments: { room_id: roomId } });
 
     // Verify WaitBot is in room_members
     const members = db.prepare('SELECT agent_id FROM room_members WHERE room_id = ?').all(roomId) as { agent_id: string }[];
@@ -316,6 +492,15 @@ describe('flock_wait', () => {
   });
 
   it('blocks and returns when new message arrives via event', async () => {
+    resetAgentCache();
+    resolveAgentId(db, 'Week2Bot');
+    resetSequenceBaselines();
+
+    await client.callTool({
+      name: 'flock_wait',
+      arguments: { timeout_seconds: 1 },
+    });
+
     // Start flock_wait in background (will block since no new messages yet)
     const waitPromise = client.callTool({
       name: 'flock_wait',

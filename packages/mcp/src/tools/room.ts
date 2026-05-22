@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
-import { createRoom, joinRoom, listRooms } from '@flock/server/services/room';
+import { createRoom, joinRoom, listRooms, updateRoomRules } from '@flock/server/services/room';
 import { getAgentId } from '../db.js';
 
 export function registerRoomTools(
@@ -17,6 +17,7 @@ export function registerRoomTools(
       inputSchema: z.object({
         name: z.string().describe('Room name (must be unique)'),
         description: z.string().optional().describe('Optional room description'),
+        rules: z.string().optional().describe('Optional room execution rules. These are returned by flock_room_sync only when changed.'),
         visibility: z.enum(['public', 'private']).optional().describe('Room visibility: public (default) or private (invite-only)'),
       }),
     },
@@ -29,7 +30,7 @@ export function registerRoomTools(
             isError: true,
           };
         }
-        const room = createRoom(db, agentId, { name: args.name, description: args.description, visibility: args.visibility });
+        const room = createRoom(db, agentId, { name: args.name, description: args.description, rules: args.rules, visibility: args.visibility });
         return { content: [{ type: 'text' as const, text: JSON.stringify(room) }] };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -79,6 +80,43 @@ export function registerRoomTools(
       try {
         const result = listRooms(db, { limit: args.limit, cursor: args.cursor });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true };
+      }
+    },
+  );
+
+  server.registerTool(
+    'flock_room_rules_set',
+    {
+      description: 'Set or replace room execution rules. This bumps the room rules_version; agents receive the full rules on their next flock_room_sync only if they have not seen this version.',
+      inputSchema: z.object({
+        room_id: z.string().describe('ID of the room'),
+        rules: z.string().describe('Full room rules text'),
+      }),
+    },
+    async (args) => {
+      try {
+        const agentId = agentIdProvider();
+        if (!agentId) {
+          return {
+            content: [{ type: 'text' as const, text: 'Error: Agent not registered. Auto-registration failed.' }],
+            isError: true,
+          };
+        }
+        const room = updateRoomRules(db, args.room_id, agentId, args.rules);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              room_id: room.id,
+              rules: room.rules,
+              rules_version: room.rules_version,
+              rules_updated_at: room.rules_updated_at,
+            }),
+          }],
+        };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true };

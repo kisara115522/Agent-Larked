@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { wakeMentionedAgents } from '@flock/server/services/callback';
 import { sendMessage, getMessages } from '@flock/server/services/messaging';
+import { hasUnreadRoomMessages, markRoomPendingForAgents, roomSync } from '@flock/server/services/room-context';
 import { emitNewMessage } from './subscribe.js';
 import { getAgentId } from '../db.js';
 
@@ -35,6 +36,21 @@ export function registerMessagingTools(
           };
         }
 
+        const unread = hasUnreadRoomMessages(db, agentId, args.room_id);
+        if (unread.hasUnread) {
+          const reasons = [
+            unread.hasUnreadMessages ? `unread messages through sequence ${unread.latestSequence}; your last synced sequence is ${unread.lastSeenSequence}` : null,
+            unread.hasRulesUpdate ? `room rules version ${unread.rulesVersion}; your last synced rules version is ${unread.rulesVersionSeen}` : null,
+          ].filter(Boolean).join('; ');
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Error: room context is stale (${reasons}). Call flock_room_sync before posting.`,
+            }],
+            isError: true,
+          };
+        }
+
         const mentions = resolveMentions(db, args.content, args.mentions ?? [], agentId);
         const result = sendMessage(db, agentId, {
           room_id: args.room_id,
@@ -43,6 +59,7 @@ export function registerMessagingTools(
           reply_to: args.reply_to,
           idempotency_key: args.idempotency_key ?? randomUUID(),
         });
+        markRoomPendingForAgents(db, args.room_id, result.sequence, agentId);
 
         if (mentions.length > 0) {
           const senderProfile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(agentId) as { name: string } | undefined;
@@ -178,6 +195,33 @@ export function registerMessagingTools(
           cursor: args.cursor,
         });
 
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true };
+      }
+    },
+  );
+
+  server.registerTool(
+    'flock_room_sync',
+    {
+      description: 'Synchronize room context before acting. Returns unread messages since your last sync, latest sequence, and room rules version; call this before replying or doing work in a room.',
+      inputSchema: z.object({
+        room_id: z.string().describe('ID of the room to synchronize'),
+      }),
+    },
+    async (args) => {
+      try {
+        const agentId = agentIdProvider();
+        if (!agentId) {
+          return {
+            content: [{ type: 'text' as const, text: 'Error: Agent not registered.' }],
+            isError: true,
+          };
+        }
+
+        const result = roomSync(db, agentId, args.room_id);
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
