@@ -72,39 +72,53 @@ export class FlockAgentRuntime {
 
   private async register(): Promise<void> {
     const callbackUrl = `http://${this.config.callbackHost}:${this.config.callbackPort}`;
+    const maxAttempts = 10;
+    let lastError: unknown;
 
-    const res = await fetch(`${this.config.flockServerUrl}/runtimes`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        host: this.config.callbackHost,
-        port: this.config.callbackPort,
-        callback_url: callbackUrl,
-        callback_secret: this.config.callbackSecret ?? undefined,
-        max_agents: this.config.maxAgents,
-      }),
-    });
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(`${this.config.flockServerUrl}/runtimes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            host: this.config.callbackHost,
+            port: this.config.callbackPort,
+            callback_url: callbackUrl,
+            callback_secret: this.config.callbackSecret ?? undefined,
+            max_agents: this.config.maxAgents,
+          }),
+        });
 
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Failed to register runtime: ${res.status} ${body}`);
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(`Failed to register runtime: ${res.status} ${body}`);
+        }
+
+        const data = (await res.json()) as {
+          id: string;
+          callback_secret?: string;
+        };
+
+        this.runtimeId = data.id;
+
+        // Store the callback secret returned by the server for signature verification
+        if (data.callback_secret) {
+          this.config.callbackSecret = data.callback_secret;
+        }
+
+        console.log(`[runtime] Registered as runtime ${this.runtimeId}`);
+        return;
+      } catch (err) {
+        lastError = err;
+        if (attempt === maxAttempts) break;
+        console.warn(`[runtime] Registration attempt ${attempt}/${maxAttempts} failed; retrying...`);
+        await delay(Math.min(500 * attempt, 3000));
+      }
     }
 
-    const data = (await res.json()) as {
-      id: string;
-      callback_secret?: string;
-    };
-
-    this.runtimeId = data.id;
-
-    // Store the callback secret returned by the server for signature verification
-    if (data.callback_secret) {
-      this.config.callbackSecret = data.callback_secret;
-    }
-
-    console.log(`[runtime] Registered as runtime ${this.runtimeId}`);
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   private startHeartbeat(): void {
@@ -244,4 +258,8 @@ function normalizeProvider(provider: unknown): AgentSpawnOptions['provider'] {
     ...(typeof candidate.name === 'string' && candidate.name.trim() ? { name: candidate.name.trim() } : {}),
     ...(env && Object.keys(env).length > 0 ? { env } : {}),
   };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

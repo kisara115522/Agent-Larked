@@ -67,7 +67,7 @@ export class AgentRunner {
 
   isRunning(agentId: string): boolean {
     const agent = this.agents.get(agentId);
-    return agent !== undefined && agent.status === 'active';
+    return agent !== undefined && (agent.status === 'spawning' || agent.status === 'active');
   }
 
   async spawn(

@@ -50,4 +50,16 @@ describe('AgentRunner', () => {
     expect(session1).toBe(session2);
     expect(runner.getAllAgents()).toHaveLength(1);
   });
+
+  it('should not spawn a duplicate process while an agent is still spawning', async () => {
+    const runAgent = vi.fn();
+    (runner as any).runAgent = runAgent;
+
+    const session1 = await runner.spawn('agent-1', 'Hello');
+    const session2 = await runner.spawn('agent-1', 'Hello again');
+
+    expect(session1).toBe(session2);
+    expect(runAgent).toHaveBeenCalledTimes(1);
+    expect(runner.getAllAgents()).toHaveLength(1);
+  });
 });
