@@ -22,6 +22,7 @@ export interface AgentProviderOptions {
 export interface AgentSpawnOptions {
   model?: string;
   provider?: string | AgentProviderOptions;
+  sessionId?: string;
 }
 
 export type ActivityReporter = (
@@ -87,7 +88,7 @@ export class AgentRunner {
     }
     console.log(`[runner] Agent ${agentId} resolved to name: ${agentName}`);
 
-    const sessionId = randomUUID();
+    const sessionId = options?.sessionId ?? randomUUID();
     const instance: AgentInstance = {
       agentId,
       agentName,
@@ -150,6 +151,9 @@ export class AgentRunner {
         '--output-format', 'text',
       ];
       const provider = normalizeProvider(instance.options?.provider);
+      const resumeSession = Boolean(instance.options?.sessionId);
+
+      args.push(resumeSession ? '--resume' : '--session-id', instance.sessionId);
 
       if (instance.options?.model) {
         args.push('--model', instance.options.model);
@@ -158,7 +162,7 @@ export class AgentRunner {
         args.push('--settings', JSON.stringify({ env: provider.env }));
       }
 
-      console.log(`[runner] Starting: claude ${args.slice(0, 2).join(' ')}...`);
+      console.log(`[runner] Starting Claude session ${instance.sessionId} (${resumeSession ? 'resume' : 'new'})`);
 
       const child = spawn('claude', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -209,6 +213,7 @@ export class AgentRunner {
 
         void this.reportActivity(instance.agentId, 'status_change', 'Agent active', {
           session_id: instance.sessionId,
+          session_source: 'claude-cli',
           pid: child.pid,
         }, instance.agentToken).catch((err) => {
           console.error(`[runner] Failed to report active for ${instance.agentId}:`, err);

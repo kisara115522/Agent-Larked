@@ -92,6 +92,33 @@ describe('callback-server', () => {
     });
   });
 
+  it('should preserve a Claude session id from wake callbacks', async () => {
+    const handler: CallbackHandler = vi.fn().mockResolvedValue(undefined);
+    const app = createCallbackServer(baseConfig, handler);
+
+    const body = {
+      type: 'wake',
+      prompt: 'Resume this room',
+      session_id: 'existing-claude-session',
+    };
+    const crypto = await import('node:crypto');
+    const bodyStr = JSON.stringify(body);
+    const signature = `sha256=${crypto.createHmac('sha256', 'test-secret-123').update(bodyStr).digest('hex')}`;
+
+    const res = await request(app)
+      .post('/agents/test-agent-id/callback')
+      .set('X-Flock-Signature', signature)
+      .send(body);
+
+    expect(res.status).toBe(200);
+    expect(handler).toHaveBeenCalledWith({
+      type: 'wake',
+      agent_id: 'test-agent-id',
+      prompt: 'Resume this room',
+      session_id: 'existing-claude-session',
+    });
+  });
+
   it('should reject invalid signature', async () => {
     const handler: CallbackHandler = vi.fn();
     const app = createCallbackServer(baseConfig, handler);

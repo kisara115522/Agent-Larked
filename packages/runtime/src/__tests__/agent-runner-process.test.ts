@@ -81,6 +81,41 @@ describe('AgentRunner process reporting', () => {
     expect(spawnOptions?.env?.AGENT_PROVIDER).toBe('custom');
   });
 
+  it('starts a new Claude session with the generated session id', async () => {
+    const child = new MockChildProcess();
+    spawnMock.mockReturnValue(child);
+    const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
+    const runner = new AgentRunner(reporter, 'http://localhost:3001');
+
+    const sessionId = await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const args = spawnMock.mock.calls[0]?.[1] as string[];
+    const sessionIndex = args.indexOf('--session-id');
+    expect(sessionIndex).toBeGreaterThan(-1);
+    expect(args[sessionIndex + 1]).toBe(sessionId);
+    expect(args).not.toContain('--resume');
+  });
+
+  it('resumes an existing Claude session when a session id is provided', async () => {
+    const child = new MockChildProcess();
+    spawnMock.mockReturnValue(child);
+    const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
+    const runner = new AgentRunner(reporter, 'http://localhost:3001');
+
+    const sessionId = await runner.spawn('agent-1', 'Hello again', 'agent-token', 'agent-name', {
+      sessionId: 'existing-claude-session',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const args = spawnMock.mock.calls[0]?.[1] as string[];
+    const resumeIndex = args.indexOf('--resume');
+    expect(sessionId).toBe('existing-claude-session');
+    expect(resumeIndex).toBeGreaterThan(-1);
+    expect(args[resumeIndex + 1]).toBe('existing-claude-session');
+    expect(args).not.toContain('--session-id');
+  });
+
   it('reports spawn errors even if the child process errors before active reporting completes', async () => {
     const child = new MockChildProcess();
     spawnMock.mockReturnValue(child);

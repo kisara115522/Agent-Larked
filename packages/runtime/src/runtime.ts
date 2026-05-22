@@ -158,6 +158,7 @@ export class FlockAgentRuntime {
     }
 
     await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name, {
+      sessionId: event.session_id,
       model: event.agent_model,
       provider: normalizeProvider(event.agent_provider),
     });
@@ -179,6 +180,7 @@ export class FlockAgentRuntime {
     }
 
     await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name, {
+      sessionId: event.session_id,
       model: event.agent_model,
       provider: normalizeProvider(event.agent_provider),
     });
