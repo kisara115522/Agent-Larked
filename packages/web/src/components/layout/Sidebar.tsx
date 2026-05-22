@@ -1,16 +1,14 @@
-import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSSE } from '../../context/SSEContext';
 import { useMentions } from '../../context/MentionContext';
 import { useTheme } from '../../context/ThemeContext';
 
-function hashGradient(str: string): string {
+function hashAvatarColor(str: string): string {
+  const colors = ['#2563eb', '#059669', '#d97706', '#dc2626', '#0f766e', '#4f46e5'];
   let h = 0;
   for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
-  const hue1 = Math.abs(h) % 360;
-  const hue2 = (hue1 + 47) % 360;
-  return `linear-gradient(135deg, hsl(${hue1},55%,55%), hsl(${hue2},55%,40%))`;
+  return colors[Math.abs(h) % colors.length];
 }
 
 export function Sidebar() {
@@ -18,22 +16,14 @@ export function Sidebar() {
   const { connected } = useSSE();
   const { unreadByRoom } = useMentions();
   const { mode, cycle } = useTheme();
-  const [expanded, setExpanded] = useState(false);
 
   const totalUnread = Object.values(unreadByRoom).reduce((s, n) => s + n, 0);
   const displayName = human?.display_name || human?.username || '?';
 
   return (
-    <aside
-      className={`h-screen flex flex-col items-center py-4 shrink-0 transition-all duration-300 ease-out ${
-        expanded ? 'w-[200px]' : 'w-[72px]'
-      }`}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-    >
-      {/* Logo */}
-      <div className="mb-6 flex items-center gap-2.5 px-3 w-full justify-center">
-        <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 bg-accent">
+    <aside className="h-screen w-[220px] shrink-0 border-r border-border bg-surface flex flex-col">
+      <div className="px-4 py-5 border-b border-border flex items-center gap-3">
+        <div className="w-9 h-9 rounded-[8px] flex items-center justify-center shrink-0 bg-accent">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="4" cy="8" r="2.5" fill="white" opacity="0.9"/>
             <circle cx="12" cy="4" r="2" fill="white" opacity="0.7"/>
@@ -42,83 +32,78 @@ export function Sidebar() {
             <line x1="6.2" y1="8.9" x2="10.2" y2="11.2" stroke="white" strokeWidth="1.2" opacity="0.5"/>
           </svg>
         </div>
-        {expanded && (
-          <span className="text-[16px] font-bold tracking-tight whitespace-nowrap" style={{ animation: 'fadeIn .15s ease-out' }}>
+        <div className="min-w-0">
+          <div className="text-[16px] font-bold tracking-tight leading-none">
             Flock
-          </span>
-        )}
+          </div>
+          <div className="mt-1 text-[10px] text-text-dim font-semibold uppercase tracking-[0.14em]">
+            Agent OS
+          </div>
+        </div>
       </div>
 
-      {/* Nav items */}
-      <nav className="flex-1 flex flex-col gap-1 w-full px-2 overflow-y-auto">
-        <NavIcon to="/" icon={<IcBolt />} label="工作流" expanded={expanded} />
-        <NavIcon to="/feed" icon={<IcChat />} label="Room" expanded={expanded} badge={totalUnread > 0 ? totalUnread : undefined} />
-        <NavIcon to="/agents" icon={<IcAgent />} label="Agent" expanded={expanded} />
-        <NavIcon to="/tasks" icon={<IcTask />} label="任务" expanded={expanded} />
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <NavSection label="工作区" />
+        <NavIcon to="/" icon={<IcBolt />} label="工作流" desc="实时事件与运行概览" />
+        <NavIcon to="/feed" icon={<IcChat />} label="Room" desc="协作消息流" badge={totalUnread > 0 ? totalUnread : undefined} />
+        <NavIcon to="/agents" icon={<IcAgent />} label="Agent" desc="成员与能力" />
+        <NavIcon to="/tasks" icon={<IcTask />} label="任务" desc="看板与分配" />
 
-        <div className="my-3 mx-3 h-px bg-border" />
+        <NavSection label="运行" />
+        <NavIcon to="/command" icon={<IcChat />} label="私信" desc="1:1 指令通道" />
+        <NavIcon to="/orchestrator" icon={<IcFlow />} label="编排" desc="任务链路" />
+        <NavIcon to="/runtimes" icon={<IcServer />} label="Runtime" desc="daemon 与槽位" />
+        <NavIcon to="/wake" icon={<IcBell />} label="唤醒" desc="恢复 dormant agent" />
 
-        <NavIcon to="/orchestrator" icon={<IcFlow />} label="编排" expanded={expanded} />
-        <NavIcon to="/runtimes" icon={<IcServer />} label="Runtime" expanded={expanded} />
-        <NavIcon to="/wake" icon={<IcBell />} label="唤醒" expanded={expanded} />
-        <NavIcon to="/tokens" icon={<IcToken />} label="Token" expanded={expanded} />
-        <NavIcon to="/settings" icon={<IcGear />} label="设置" expanded={expanded} />
+        <NavSection label="管理" />
+        <NavIcon to="/tokens" icon={<IcToken />} label="Token" desc="预算与消耗" />
+        <NavIcon to="/settings" icon={<IcGear />} label="设置" desc="全局配置" />
       </nav>
 
-      {/* Footer */}
-      <div className="w-full px-2 pt-3 space-y-2">
-        {/* Theme toggle */}
+      <div className="border-t border-border p-3 space-y-2">
         <button
           onClick={cycle}
-          className={`flex items-center gap-2 px-3 py-2 rounded-[10px] w-full hover:bg-surface-elevated transition-colors ${expanded ? 'justify-start' : 'justify-center'}`}
+          className="flex items-center gap-3 px-3 py-2 rounded-[8px] w-full text-left hover:bg-surface-elevated transition-colors"
           title={`主题: ${mode === 'system' ? '跟随系统' : mode === 'light' ? '浅色' : '深色'}`}
         >
           <span className="w-5 h-5 flex items-center justify-center shrink-0 text-text-dim">
             {mode === 'light' ? <IcSun /> : mode === 'dark' ? <IcMoon /> : <IcMonitor />}
           </span>
-          {expanded && (
-            <span className="text-[11px] text-text-dim font-medium whitespace-nowrap" style={{ animation: 'fadeIn .1s ease-out' }}>
+          <span className="text-[12px] text-text-muted font-medium">
               {mode === 'system' ? '跟随系统' : mode === 'light' ? '浅色' : '深色'}
-            </span>
-          )}
+          </span>
         </button>
 
-        {/* Connection indicator */}
-        <div className={`flex items-center gap-2 px-3 py-1.5 justify-center ${expanded ? 'justify-start' : ''}`}>
+        <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-text-dim">
           <span
             className={`w-2 h-2 rounded-full shrink-0 ${connected ? 'bg-success status-dot-online' : 'bg-text-dim'}`}
           />
-          {expanded && <span className="text-[11px] text-text-dim">{connected ? '已连接' : '断开'}</span>}
+          <span>{connected ? 'SSE 已连接' : 'SSE 断开'}</span>
         </div>
 
-        {/* User avatar */}
         {human && (
-          <div className={`flex items-center gap-2.5 px-2 py-2 rounded-[10px] hover:bg-surface-elevated transition-colors cursor-default group ${expanded ? '' : 'justify-center'}`}>
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-[8px] hover:bg-surface-elevated transition-colors cursor-default group">
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-              style={{ background: hashGradient(displayName) }}
+              style={{ background: hashAvatarColor(displayName) }}
             >
               {displayName.slice(0, 2).toUpperCase()}
             </div>
-            {expanded && (
-              <div className="flex-1 min-w-0" style={{ animation: 'fadeIn .15s ease-out' }}>
+            <div className="flex-1 min-w-0">
                 <div className="text-[12px] font-semibold truncate">{displayName}</div>
                 <div className="text-[10px] text-text-dim">管理员</div>
-              </div>
-            )}
-            {expanded && (
-              <button
-                onClick={logout}
-                className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-error transition-all p-1 rounded"
-                title="退出登录"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                  <polyline points="16 17 21 12 16 7"/>
-                  <line x1="21" y1="12" x2="9" y2="12"/>
-                </svg>
-              </button>
-            )}
+            </div>
+            <button
+              onClick={logout}
+              className="text-text-dim hover:text-error transition-colors p-1 rounded"
+              title="退出登录"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>
           </div>
         )}
       </div>
@@ -126,20 +111,26 @@ export function Sidebar() {
   );
 }
 
-function NavIcon({ to, icon, label, expanded, badge }: {
-  to: string; icon: React.ReactNode; label: string; expanded: boolean; badge?: number;
+function NavSection({ label }: { label: string }) {
+  return (
+    <div className="px-3 pt-4 first:pt-0 pb-2 text-[10px] text-text-dim font-semibold uppercase tracking-[0.16em]">
+      {label}
+    </div>
+  );
+}
+
+function NavIcon({ to, icon, label, desc, badge }: {
+  to: string; icon: React.ReactNode; label: string; desc: string; badge?: number;
 }) {
   return (
     <NavLink
       to={to}
       end={to === '/'}
       className={({ isActive }) =>
-        `relative flex items-center gap-3 rounded-[10px] transition-all duration-200 ${
-          expanded ? 'px-3 py-2.5' : 'px-0 py-2.5 justify-center'
-        } ${
+        `relative flex items-center gap-3 rounded-[8px] px-3 py-2.5 mb-1 border transition-colors duration-150 ${
           isActive
-            ? 'bg-accent-muted text-accent'
-            : 'text-text-muted hover:text-text hover:bg-surface-elevated'
+            ? 'bg-accent-soft text-accent border-accent/20'
+            : 'text-text-muted border-transparent hover:text-text hover:bg-surface-elevated'
         }`
       }
     >
@@ -148,13 +139,12 @@ function NavIcon({ to, icon, label, expanded, badge }: {
           <span className={`w-5 h-5 flex items-center justify-center shrink-0 transition-colors ${isActive ? 'text-accent' : ''}`}>
             {icon}
           </span>
-          {expanded && (
-            <span className="text-[13px] font-medium whitespace-nowrap" style={{ animation: 'fadeIn .1s ease-out' }}>
-              {label}
-            </span>
-          )}
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold leading-tight">{label}</span>
+            <span className={`block text-[10px] truncate mt-0.5 ${isActive ? 'text-accent/80' : 'text-text-dim'}`}>{desc}</span>
+          </span>
           {badge !== undefined && badge > 0 && (
-            <span className={`absolute ${expanded ? 'right-2' : '-top-0.5 -right-0.5'} bg-accent text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center`}>
+            <span className="shrink-0 bg-accent text-white text-[9px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
               {badge > 9 ? '9+' : badge}
             </span>
           )}
