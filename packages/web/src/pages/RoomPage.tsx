@@ -9,6 +9,14 @@ import { ComposeBar } from '../components/feed/ComposeBar';
 import { ThreadView } from '../components/feed/ThreadView';
 import type { Message, GetMessagesResponse } from '@flock/shared';
 
+export function sendHumanRoomMessage(token: string, roomId: string, content: string, mentions: string[]) {
+  return post(`/rooms/${roomId}/messages`, token, {
+    content,
+    mentions: mentions.length > 0 ? mentions : undefined,
+    idempotency_key: crypto.randomUUID(),
+  });
+}
+
 export function RoomPage() {
   const { id: roomId } = useParams<{ id: string }>();
   const { token, human } = useAuth();
@@ -145,12 +153,7 @@ export function RoomPage() {
   const handleSend = async (content: string, mentions: string[]) => {
     if (!token || !roomId) return;
     try {
-      await post('/messages', token, {
-        room_id: roomId,
-        content,
-        mentions: mentions.length > 0 ? mentions : undefined,
-        idempotency_key: crypto.randomUUID(),
-      });
+      await sendHumanRoomMessage(token, roomId, content, mentions);
       await loadMessages(true);
     } catch (err) {
       console.error('Failed to send message:', err);

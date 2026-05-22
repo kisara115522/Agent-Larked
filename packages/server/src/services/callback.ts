@@ -196,6 +196,7 @@ export function wakeMentionedAgents(
   messageId: string,
   senderName: string,
   excerpt: string,
+  triggeredById = senderName,
 ): void {
   if (mentionedAgentIds.length === 0) return;
 
@@ -230,6 +231,8 @@ export function wakeMentionedAgents(
       room_id: roomId,
       room_name: roomName,
       message_id: messageId,
+      sender_name: senderName,
+      excerpt,
     };
 
     // Fire and forget — don't block the message response
@@ -238,7 +241,7 @@ export function wakeMentionedAgents(
     });
 
     // Log wake event
-    logWakeEvent(db, agentId, senderName, 'mention', 'sent', roomId, prompt);
+    logWakeEvent(db, agentId, triggeredById, 'mention', 'sent', roomId, prompt);
   }
 }
 

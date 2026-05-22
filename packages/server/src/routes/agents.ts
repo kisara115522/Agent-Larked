@@ -315,9 +315,10 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       const agentId = req.params.id as string;
       const limit = req.query.limit ? Math.min(Number(req.query.limit), 100) : 50;
       const rows = db.prepare(`
-        SELECT w.*, p.display_name AS triggered_by_name
+        SELECT w.*, COALESCE(h.display_name, p.display_name, h.username) AS triggered_by_name
         FROM wake_events w
         LEFT JOIN profiles p ON p.id = w.triggered_by
+        LEFT JOIN humans h ON h.id = w.triggered_by
         WHERE w.agent_id = ?
         ORDER BY w.created_at DESC
         LIMIT ?

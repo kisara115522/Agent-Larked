@@ -9,6 +9,40 @@ interface SSEMessage {
   data: unknown;
 }
 
+const SSE_EVENT_TYPES = new Set<string>([
+  'mention',
+  'reaction',
+  'room_message',
+  'direct_message',
+  'agent_status',
+  'task_created',
+  'task_status',
+  'task_artifact',
+  'workflow_event',
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isSSEEventType(value: unknown): value is SSEEventType {
+  return typeof value === 'string' && SSE_EVENT_TYPES.has(value);
+}
+
+export function parseSSEMessage(event: MessageEvent<string>): SSEMessage {
+  const payload = JSON.parse(event.data) as unknown;
+  const eventType = isRecord(payload) && isSSEEventType(payload.event)
+    ? payload.event
+    : isSSEEventType(event.type)
+      ? event.type
+      : 'room_message';
+
+  return {
+    event: eventType,
+    data: isRecord(payload) && 'data' in payload ? payload.data : payload,
+  };
+}
+
 type SSEHandler = (event: SSEMessage) => void;
 
 interface SSEContextValue {
@@ -45,11 +79,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
 
       const handleMessage = (event: MessageEvent) => {
         try {
-          const data = JSON.parse(event.data);
-          const sseMessage: SSEMessage = {
-            event: (data.event ?? 'room_message') as SSEEventType,
-            data: data.data ?? data,
-          };
+          const sseMessage = parseSSEMessage(event);
           for (const handler of handlersRef.current) {
             handler(sseMessage);
           }

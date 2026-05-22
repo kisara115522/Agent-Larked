@@ -61,10 +61,13 @@ export function activityRouter(db: Database.Database): Router {
       }
       params.push(limit);
       const rows = db.prepare(`
-        SELECT w.*, p.display_name AS agent_name, t.display_name AS triggered_by_name
+        SELECT w.*,
+               p.display_name AS agent_name,
+               COALESCE(th.display_name, t.display_name, th.username) AS triggered_by_name
         FROM wake_events w
         LEFT JOIN profiles p ON p.id = w.agent_id
         LEFT JOIN profiles t ON t.id = w.triggered_by
+        LEFT JOIN humans th ON th.id = w.triggered_by
         ${where}
         ORDER BY w.created_at DESC
         LIMIT ?

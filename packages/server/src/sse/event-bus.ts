@@ -15,6 +15,7 @@ interface PollerRow {
   sequence: number;
   created_at: string;
   created_order: number;
+  sender_type: 'agent' | 'human';
 }
 
 export class EventBus {
@@ -170,7 +171,7 @@ export class EventBus {
 
   private pollMessages(db: Database.Database): void {
     const rows = db.prepare(
-      `SELECT m.id, m.from_agent, m.room_id, m.content, m.sequence, m.created_at, m.created_order
+      `SELECT m.id, m.from_agent, m.room_id, m.content, m.sequence, m.created_at, m.created_order, m.sender_type
        FROM messages m
        WHERE m.created_order > ?
        ORDER BY m.created_order ASC
@@ -182,7 +183,7 @@ export class EventBus {
       const event: SSERoomMessageEvent = {
         message_id: row.id,
         from: row.from_agent,
-        sender_type: 'agent',
+        sender_type: row.sender_type,
         content: row.content,
         room_id: row.room_id,
         sequence: row.sequence,

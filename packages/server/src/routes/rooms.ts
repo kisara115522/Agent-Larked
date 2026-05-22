@@ -3,7 +3,7 @@ import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { addRoomMember, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, requireRoomAccess } from '../services/room.js';
 import { getMessages, sendMessage } from '../services/messaging.js';
-import { wakeRoomAgents } from '../services/callback.js';
+import { wakeMentionedAgents, wakeRoomAgents } from '../services/callback.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
 import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
@@ -162,8 +162,25 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
       }, 'human');
 
       // Broadcast wake: notify all dormant agents in the room
-      const human = db.prepare('SELECT display_name FROM humans WHERE id = ?').get(req.humanId!) as { display_name: string } | undefined;
-      wakeRoomAgents(db, roomId, req.humanId!, human?.display_name ?? 'Human', req.body.content?.slice(0, 200) ?? '');
+      const human = db.prepare('SELECT username, display_name FROM humans WHERE id = ?').get(req.humanId!) as { username: string; display_name: string | null } | undefined;
+      const senderName = human?.display_name || human?.username || 'Human';
+      const excerpt = req.body.content?.slice(0, 200) ?? '';
+      if (Array.isArray(req.body.mentions) && req.body.mentions.length > 0) {
+        eventBus.emitMention(
+          {
+            message_id: result.id,
+            from: req.humanId!,
+            content: req.body.content,
+            room_id: roomId,
+            sequence: result.sequence,
+          },
+          req.body.mentions,
+          req.humanId!,
+        );
+        wakeMentionedAgents(db, req.body.mentions, roomId, result.id, senderName, excerpt, req.humanId!);
+      } else {
+        wakeRoomAgents(db, roomId, req.humanId!, senderName, excerpt);
+      }
 
       res.status(201).json(result);
     } catch (err) {

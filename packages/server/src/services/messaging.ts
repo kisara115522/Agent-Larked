@@ -237,11 +237,16 @@ function hasCycle(db: Database.Database, replyToId: string): boolean {
 function rowToMessage(db: Database.Database, row: Record<string, unknown>): Message {
   const messageId = row.id as string;
   const fromAgent = row.from_agent as string;
+  const senderType = (row.sender_type as 'agent' | 'human') ?? 'agent';
 
   // Get sender profile
-  const profile = db.prepare(
-    'SELECT name, display_name FROM profiles WHERE id = ?',
-  ).get(fromAgent) as { name: string; display_name: string | null } | undefined;
+  const sender = senderType === 'human'
+    ? db.prepare(
+      'SELECT username AS name, display_name FROM humans WHERE id = ?',
+    ).get(fromAgent) as { name: string; display_name: string | null } | undefined
+    : db.prepare(
+      'SELECT name, display_name FROM profiles WHERE id = ?',
+    ).get(fromAgent) as { name: string; display_name: string | null } | undefined;
 
   // Get mentions
   const mentions = db.prepare(
@@ -256,9 +261,9 @@ function rowToMessage(db: Database.Database, row: Record<string, unknown>): Mess
   return {
     id: messageId,
     from: fromAgent,
-    from_name: profile?.name ?? '',
-    from_display_name: profile?.display_name ?? '',
-    sender_type: (row.sender_type as 'agent' | 'human') ?? 'agent',
+    from_name: sender?.name ?? '',
+    from_display_name: sender?.display_name ?? '',
+    sender_type: senderType,
     room_id: row.room_id as string,
     content: row.content as string,
     reply_to: row.reply_to as string | null,
