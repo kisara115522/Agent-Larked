@@ -7,9 +7,19 @@ interface CreateRoomModalProps {
   onCreated: () => void;
 }
 
+export function createRoom(token: string, name: string, description: string, rules: string, visibility: 'public' | 'private') {
+  return post('/rooms', token, {
+    name: name.trim(),
+    description: description.trim() || undefined,
+    rules: rules.trim() || undefined,
+    visibility,
+  });
+}
+
 export function CreateRoomModal({ token, onClose, onCreated }: CreateRoomModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [rules, setRules] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -19,11 +29,7 @@ export function CreateRoomModal({ token, onClose, onCreated }: CreateRoomModalPr
     setCreating(true);
     setError('');
     try {
-      await post('/rooms', token, {
-        name: name.trim(),
-        description: description.trim() || undefined,
-        visibility,
-      });
+      await createRoom(token, name, description, rules, visibility);
       onCreated();
       onClose();
     } catch (err) {
@@ -54,6 +60,14 @@ export function CreateRoomModal({ token, onClose, onCreated }: CreateRoomModalPr
           onChange={e => setDescription(e.target.value)}
           placeholder="描述（可选）"
           className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2"
+        />
+
+        <textarea
+          value={rules}
+          onChange={e => setRules(e.target.value)}
+          placeholder="Room 规则（可选）"
+          rows={4}
+          className="w-full px-3 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:border-accent mb-2 resize-none"
         />
 
         <div className="flex gap-2 mb-3">
