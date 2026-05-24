@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSSE } from '../context/SSEContext';
 import { useMentions } from '../context/MentionContext';
-import { get, post } from '../api/client';
+import { get, post, put } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
 import { ComposeBar } from '../components/feed/ComposeBar';
 import { ThreadView } from '../components/feed/ThreadView';
@@ -16,12 +16,31 @@ interface AgentOption {
   status?: string;
 }
 
+interface RoomDetails {
+  name: string;
+  rules: string;
+  rules_version: number;
+  rules_updated_at: string | null;
+  is_member?: boolean;
+}
+
+interface RoomRulesResponse {
+  room_id: string;
+  rules: string;
+  rules_version: number;
+  rules_updated_at: string | null;
+}
+
 export function sendHumanRoomMessage(token: string, roomId: string, content: string, mentions: string[]) {
   return post(`/rooms/${roomId}/messages`, token, {
     content,
     mentions: mentions.length > 0 ? mentions : undefined,
     idempotency_key: crypto.randomUUID(),
   });
+}
+
+export function saveRoomRules(token: string, roomId: string, rules: string): Promise<RoomRulesResponse> {
+  return put<RoomRulesResponse>(`/rooms/${roomId}/rules`, token, { rules });
 }
 
 export function RoomPage() {
@@ -41,6 +60,9 @@ export function RoomPage() {
   }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [roomName, setRoomName] = useState<string>('');
+  const [roomRules, setRoomRules] = useState('');
+  const [roomRulesVersion, setRoomRulesVersion] = useState(0);
+  const [roomRulesUpdatedAt, setRoomRulesUpdatedAt] = useState<string | null>(null);
   const [isMember, setIsMember] = useState(true);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -52,6 +74,7 @@ export function RoomPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showAddAgent, setShowAddAgent] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [memberRefreshKey, setMemberRefreshKey] = useState(0);
 
   // Cleanup error timeout on unmount
@@ -95,9 +118,12 @@ export function RoomPage() {
   // Fetch room name
   useEffect(() => {
     if (!token || !roomId) return;
-    get<{ name: string; is_member?: boolean }>(`/rooms/${roomId}`, token)
+    get<RoomDetails>(`/rooms/${roomId}`, token)
       .then(r => {
         setRoomName(r.name);
+        setRoomRules(r.rules ?? '');
+        setRoomRulesVersion(r.rules_version ?? 0);
+        setRoomRulesUpdatedAt(r.rules_updated_at ?? null);
         setIsMember(r.is_member !== false);
       })
       .catch(() => {});
@@ -246,6 +272,12 @@ export function RoomPage() {
                   添加 Agent
                 </button>
                 <button
+                  onClick={() => setShowRules(true)}
+                  className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-text-dim border border-border hover:border-accent hover:text-accent transition-all duration-200"
+                >
+                  规则
+                </button>
+                <button
                   onClick={handleLeave}
                   className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-text-dim border border-border hover:border-error hover:text-error transition-all duration-200"
                 >
@@ -362,6 +394,116 @@ export function RoomPage() {
           }}
         />
       )}
+      {showRules && token && roomId && (
+        <RoomRulesModal
+          token={token}
+          roomId={roomId}
+          initialRules={roomRules}
+          version={roomRulesVersion}
+          updatedAt={roomRulesUpdatedAt}
+          onClose={() => setShowRules(false)}
+          onSaved={(result) => {
+            setRoomRules(result.rules);
+            setRoomRulesVersion(result.rules_version);
+            setRoomRulesUpdatedAt(result.rules_updated_at);
+            setShowRules(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function RoomRulesModal({
+  token,
+  roomId,
+  initialRules,
+  version,
+  updatedAt,
+  onClose,
+  onSaved,
+}: {
+  token: string;
+  roomId: string;
+  initialRules: string;
+  version: number;
+  updatedAt: string | null;
+  onClose: () => void;
+  onSaved: (result: RoomRulesResponse) => void;
+}) {
+  const [rules, setRules] = useState(initialRules);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const changed = rules !== initialRules;
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setError('');
+      const result = await saveRoomRules(token, roomId, rules);
+      onSaved(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '规则保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" onMouseDown={onClose}>
+      <div
+        className="w-full max-w-2xl max-h-[84vh] bg-surface border border-border rounded-[10px] shadow-xl flex flex-col"
+        onMouseDown={event => event.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-border flex items-start gap-3">
+          <div>
+            <h3 className="text-[15px] font-semibold">Room 规则</h3>
+            <div className="text-[11px] text-text-dim mt-1">
+              v{version}{updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ''}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-auto w-8 h-8 rounded-full border border-border text-text-muted hover:text-text hover:bg-surface-elevated transition-colors"
+            aria-label="关闭"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="p-5 flex-1 min-h-0">
+          <textarea
+            value={rules}
+            onChange={event => setRules(event.target.value)}
+            placeholder="写下这个 Room 内 agent 必须遵守的协作规则..."
+            className="w-full h-[320px] resize-none px-3 py-3 rounded-[10px] border border-border bg-surface-elevated text-[13px] leading-6 text-text placeholder:text-text-dim outline-none focus:border-accent"
+          />
+          <div className="mt-2 text-[11px] text-text-dim">
+            保存后版本会递增；agent 下次 `flock_room_sync` 只会在版本变化时收到完整规则。
+          </div>
+          {error && (
+            <div className="mt-3 px-3 py-2 rounded-[8px] bg-error-muted text-error text-[12px]">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-full text-[12px] font-semibold text-text-muted hover:text-text hover:bg-surface-elevated transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !changed}
+            className="px-4 py-2 rounded-full text-[12px] font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors"
+          >
+            {saving ? '保存中' : '保存规则'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

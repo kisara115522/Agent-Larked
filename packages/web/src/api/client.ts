@@ -56,6 +56,10 @@ export function post<T>(path: string, token: string, body?: unknown): Promise<T>
   return request<T>('POST', path, token, body);
 }
 
+export function put<T>(path: string, token: string, body?: unknown): Promise<T> {
+  return request<T>('PUT', path, token, body);
+}
+
 export function patch<T>(path: string, token: string, body?: unknown): Promise<T> {
   return request<T>('PATCH', path, token, body);
 }
