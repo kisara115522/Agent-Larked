@@ -120,7 +120,7 @@ describe('flock_post tool', () => {
     expect(parsed.sequence).toBe(2);
   });
 
-  it('resolves textual @mentions and wakes the mentioned agent', async () => {
+  it('does not resolve textual @mentions without explicit mention ids', async () => {
     const callbackCalls: Array<{ url: string | undefined; body: Record<string, unknown> }> = [];
     const callbackServer = createServer((req, res) => {
       let body = '';
@@ -170,11 +170,70 @@ describe('flock_post tool', () => {
       expect(result.isError).not.toBe(true);
       await new Promise((resolve) => setTimeout(resolve, 50));
 
+      const postId = JSON.parse((result.content as Array<{ type: string; text: string }>)[0].text).id as string;
+      const mentions = db.prepare('SELECT agent_id FROM message_mentions WHERE message_id = ?').all(postId) as { agent_id: string }[];
+      expect(mentions).toEqual([]);
+      expect(callbackCalls).toHaveLength(0);
+    } finally {
+      await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
+    }
+  });
+
+  it('wakes explicitly mentioned agents by id', async () => {
+    const callbackCalls: Array<{ url: string | undefined; body: Record<string, unknown> }> = [];
+    const callbackServer = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => { body += String(chunk); });
+      req.on('end', () => {
+        callbackCalls.push({ url: req.url, body: JSON.parse(body) as Record<string, unknown> });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+    });
+
+    await new Promise<void>((resolve) => callbackServer.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = callbackServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('callback server did not bind to a TCP port');
+      }
+
+      const regResult = await client.callTool({
+        name: 'flock_agent_create',
+        arguments: { name: 'ExplicitMentionBot' },
+      });
+      const mentionedId = JSON.parse((regResult.content as Array<{ type: string; text: string }>)[0].text).id as string;
+
+      resetAgentCache();
+      resolveAgentId(db, 'ExplicitMentionBot');
+      await client.callTool({ name: 'flock_room_join', arguments: { room_id: roomId } });
+
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO agent_runtimes (id, host, port, callback_url, callback_secret_hash, callback_secret, capabilities, max_agents, status, last_heartbeat_at, created_at)
+        VALUES ('mcp-explicit-mention-runtime', '127.0.0.1', ?, ?, 'hash', 'secret', '[]', 10, 'online', ?, ?)
+      `).run(address.port, `http://127.0.0.1:${address.port}`, now, now);
+      db.prepare("UPDATE profiles SET status = 'dormant' WHERE id = ?").run(mentionedId);
+      db.prepare(`
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
+        VALUES ('mcp-explicit-mention-spawn', ?, 'mcp-explicit-mention-runtime', 'stopped', ?, ?, 'previous')
+      `).run(mentionedId, now, now);
+
+      resetAgentCache();
+      resolveAgentId(db, 'Week2Bot');
+      const result = await client.callTool({
+        name: 'flock_post',
+        arguments: { room_id: roomId, content: '@ExplicitMentionBot please wake from another agent', mentions: [mentionedId] },
+      });
+
+      expect(result.isError).not.toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
       expect(callbackCalls).toHaveLength(1);
       expect(callbackCalls[0].body).toMatchObject({
         type: 'wake',
         trigger_type: 'mention',
-        agent_name: 'TextMentionBot',
+        agent_name: 'ExplicitMentionBot',
         room_id: roomId,
       });
     } finally {

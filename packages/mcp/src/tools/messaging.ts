@@ -232,22 +232,11 @@ export function registerMessagingTools(
 }
 
 function resolveMentions(
-  db: Database.Database,
-  content: string,
+  _db: Database.Database,
+  _content: string,
   explicitMentions: string[],
   senderId: string,
 ): string[] {
   const mentionIds = new Set(explicitMentions.filter((id) => id && id !== senderId));
-  const names = Array.from(content.matchAll(/@([A-Za-z0-9_.-]+)/g)).map((match) => match[1]);
-  if (names.length === 0) return Array.from(mentionIds);
-
-  const findProfile = db.prepare('SELECT id FROM profiles WHERE name = ? OR display_name = ? LIMIT 1');
-  for (const name of names) {
-    const profile = findProfile.get(name, name) as { id: string } | undefined;
-    if (profile && profile.id !== senderId) {
-      mentionIds.add(profile.id);
-    }
-  }
-
   return Array.from(mentionIds);
 }
