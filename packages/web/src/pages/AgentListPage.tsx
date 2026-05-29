@@ -23,7 +23,7 @@ interface Agent {
 }
 
 interface Room { id: string; name: string; visibility: string; member_count: number; }
-interface Runtime { id: string; host: string; port: number; agent_count: number; max_agents: number; }
+interface Runtime { id: string; host: string; port: number; agent_count: number; max_agents: number; status?: string; }
 
 export function AgentListPage() {
   const { token } = useAuth();
@@ -194,7 +194,7 @@ export function AgentListPage() {
 
       {spawnAgent && <SpawnModal agents={agents} runtimes={runtimes} rooms={rooms} onClose={() => setSpawnAgent(null)} onSpawned={loadAgents} />}
       {dmAgent && <DMModal agentId={dmAgent.id} agentName={dmAgent.name} agentBio={dmAgent.bio} onClose={() => setDmAgent(null)} />}
-      {wakeAgent && <WakeSingleModal agentId={wakeAgent.id} agentName={wakeAgent.name} agentStatus={wakeAgent.status} lastActive={wakeAgent.last_active_at ? formatRelativeTime(wakeAgent.last_active_at) : undefined} rooms={rooms} onClose={() => setWakeAgent(null)} onWoken={loadAgents} />}
+      {wakeAgent && <WakeSingleModal agentId={wakeAgent.id} agentName={wakeAgent.name} agentStatus={wakeAgent.status} lastActive={wakeAgent.last_active_at ? formatRelativeTime(wakeAgent.last_active_at) : undefined} rooms={rooms} runtimes={runtimes} onClose={() => setWakeAgent(null)} onWoken={loadAgents} />}
     </div>
   );
 }

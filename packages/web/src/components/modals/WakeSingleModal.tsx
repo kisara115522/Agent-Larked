@@ -9,20 +9,33 @@ interface Room {
   name: string;
 }
 
-export function WakeSingleModal({ agentId, agentName, agentStatus, lastActive, rooms, onClose, onWoken }: {
+interface Runtime {
+  id: string;
+  host: string;
+  port: number;
+  agent_count: number;
+  max_agents: number;
+  status?: string;
+}
+
+export function WakeSingleModal({ agentId, agentName, agentStatus, lastActive, rooms, runtimes, onClose, onWoken }: {
   agentId: string;
   agentName: string;
   agentStatus: string;
   lastActive?: string;
   rooms: Room[];
+  runtimes?: Runtime[];
   onClose: () => void;
   onWoken: () => void;
 }) {
   const { token } = useAuth();
   const [prompt, setPrompt] = useState('');
   const [selectedRoom, setSelectedRoom] = useState(rooms[0]?.id || '');
+  const [selectedRuntime, setSelectedRuntime] = useState('auto');
   const [waking, setWaking] = useState(false);
   const { toast } = useToast();
+
+  const onlineRuntimes = (runtimes || []).filter(r => !r.status || r.status === 'online');
 
   const handleWake = async () => {
     if (!token) return;
@@ -31,6 +44,7 @@ export function WakeSingleModal({ agentId, agentName, agentStatus, lastActive, r
       await post(`/agents/${agentId}/wake`, token, {
         prompt: prompt.trim() || undefined,
         room_id: selectedRoom || undefined,
+        runtime_id: selectedRuntime === 'auto' ? undefined : selectedRuntime,
       });
       toast('唤醒成功', 'success');
       onWoken();
@@ -80,10 +94,22 @@ export function WakeSingleModal({ agentId, agentName, agentStatus, lastActive, r
           </select>
         </div>
 
+        {onlineRuntimes.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-xs text-text-muted mb-1">Runtime</label>
+            <select value={selectedRuntime} onChange={e => setSelectedRuntime(e.target.value)} className="w-full px-3 py-2.5 bg-surface border border-border rounded-[14px] text-sm text-text focus:border-accent">
+              <option value="auto">自动选择</option>
+              {onlineRuntimes.map(r => (
+                <option key={r.id} value={r.id}>{r.host}:{r.port} — {r.agent_count}/{r.max_agents} agents</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 text-sm text-text-muted hover:text-text">取消</button>
           <button onClick={handleWake} disabled={waking} className="px-4 py-2 text-sm font-semibold bg-[#064E3B] text-[#34D399] rounded-full hover:bg-[#34D399] hover:text-white disabled:opacity-50">
-            {waking ? '唤醒中...' : '🔔 唤醒'}
+            {waking ? '唤醒中...' : '唤醒'}
           </button>
         </div>
       </div>

@@ -58,10 +58,13 @@ export class FlockAgentRuntime {
     return new Promise((resolve, reject) => {
       this.serverInstance = this.server!.listen(
         this.config.callbackPort,
-        this.config.callbackHost,
+        '0.0.0.0',
         () => {
           console.log(
-            `[runtime] Callback server listening on ${this.config.callbackHost}:${this.config.callbackPort}`,
+            `[runtime] Callback server listening on 0.0.0.0:${this.config.callbackPort}`,
+          );
+          console.log(
+            `[runtime] Advertised callback URL: http://${this.config.callbackHost}:${this.config.callbackPort}`,
           );
           resolve();
         },

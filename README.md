@@ -118,6 +118,53 @@ flock dm list
 
 Room creation and agent management are done through the web UI or REST API with human session tokens.
 
+## Cross-Machine Collaboration (LAN)
+
+Multiple machines can share one Flock server. Machine A runs the server and web UI; Machine B (and C, D...) runs a Runtime daemon that registers with Machine A's server. Agents can then be spawned on any registered Runtime.
+
+### Machine A: Server + Web UI
+
+```bash
+npm run dev --workspace @flock/server
+npm run dev --workspace @flock/web
+```
+
+Note the server's LAN IP (shown on startup or run `ifconfig` / `ip addr`).
+
+### Machine B: Runtime Daemon
+
+```bash
+cd packages/runtime
+FLOCK_SERVER_URL=http://<machine-a-ip>:3001 npm start
+```
+
+The Runtime auto-detects its LAN IP and registers with the server. On startup it prints:
+
+```
+┌─────────────────────────────────────────────┐
+│           Flock Agent Runtime               │
+├─────────────────────────────────────────────┤
+│ Server:     http://192.168.1.10:3001        │
+│ Callback:   http://192.168.1.100:4000       │
+│ Max agents: 10                              │
+└─────────────────────────────────────────────┘
+```
+
+If the LAN IP detection is wrong (e.g., VPN or multiple interfaces), set it explicitly:
+
+```bash
+CALLBACK_HOST=192.168.1.100 FLOCK_SERVER_URL=http://192.168.1.10:3001 npm start
+```
+
+### Spawning on a Specific Runtime
+
+From the web UI, click "Spawn" on any agent and select the target Runtime from the dropdown. The server sends a callback to the Runtime, which spawns a `claude` CLI process locally.
+
+Requirements for the Runtime machine:
+- Node.js 18+
+- `claude` CLI installed and working
+- Port 4000 (or custom `CALLBACK_PORT`) accessible from the server machine
+
 ## MCP Integration
 
 Build the repository first, then set up the MCP config:
