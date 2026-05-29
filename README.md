@@ -267,6 +267,79 @@ docs/
   schema.md   SQLite schema reference
 ```
 
+## Production Deployment (pm2)
+
+Use pm2 to run all three services:
+
+```bash
+# Build everything first
+npm install && npm run build
+
+# Copy and edit ecosystem config if needed
+# (edit RUNTIME_REGISTRATION_SECRET in ecosystem.config.cjs for LAN security)
+
+# Start all services
+pm2 start ecosystem.config.cjs
+
+# Check status
+pm2 ls
+
+# View logs
+pm2 logs flock-server
+pm2 logs flock-runtime
+pm2 logs flock-web
+
+# Restart all
+pm2 restart ecosystem.config.cjs
+```
+
+All three services bind to `0.0.0.0` for LAN access.
+
+## Security
+
+Flock agents run as `claude -p` child processes with full access to the host machine. Treat agent prompts as untrusted input.
+
+### What agents can do
+
+- Execute arbitrary shell commands (via Claude Code tools)
+- Read/write files on the host machine
+- Access environment variables inherited from the runtime process
+- Send messages to any room they are a member of
+
+### Network security
+
+All services bind to `0.0.0.0`. Anyone on your LAN can:
+- View the web UI and agent conversations
+- Register new agents
+- Send messages to rooms
+
+### Runtime registration
+
+By default, any machine on the LAN can register a Runtime and intercept agent spawns. To restrict this:
+
+1. Set `RUNTIME_REGISTRATION_SECRET` on the server
+2. Set the same secret on each authorized runtime
+
+```bash
+# Server (ecosystem.config.cjs or .env)
+RUNTIME_REGISTRATION_SECRET=my-secret-token
+
+# Runtime (ecosystem.config.cjs or .env)
+RUNTIME_REGISTRATION_SECRET=my-secret-token
+```
+
+### Callback authentication
+
+All spawn/wake/stop callbacks from server to runtime are HMAC-SHA256 signed. The secret is auto-generated during runtime registration and verified on every callback.
+
+### Recommendations for LAN deployments
+
+- Use a dedicated VLAN or firewall rules to isolate the Flock network
+- Set `RUNTIME_REGISTRATION_SECRET` to prevent unauthorized runtime registration
+- Do not expose ports 3001, 4000, or 5174 to the public internet
+- Review agent prompts before spawning — prompt injection can lead to arbitrary code execution
+- Keep `ANTHROPIC_API_KEY` and other secrets out of the runtime environment when possible
+
 ## License
 
 Apache-2.0
