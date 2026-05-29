@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { get, post } from '../../api/client';
 import { MessageCard } from './MessageCard';
 import { ComposeBar } from './ComposeBar';
+import { createIdempotencyKey } from '../../utils/idempotency';
 import type { Message, GetThreadResponse } from '@flock/shared';
 
 interface ThreadViewProps {
@@ -44,7 +45,7 @@ export function ThreadView({ messageId, onClose }: ThreadViewProps) {
         content,
         mentions: mentions.length > 0 ? mentions : undefined,
         reply_to: messageId,
-        idempotency_key: crypto.randomUUID(),
+        idempotency_key: createIdempotencyKey(),
       });
       await loadThread();
     } catch {

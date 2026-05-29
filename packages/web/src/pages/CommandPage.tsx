@@ -7,6 +7,7 @@ import { get, post } from '../api/client';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { StatusIndicator } from '../components/agent/StatusIndicator';
 import { EmptyState, PageHeader } from '../components/ui/PageState';
+import { createIdempotencyKey } from '../utils/idempotency';
 
 interface Agent {
   id: string;
@@ -102,7 +103,7 @@ export function CommandPage() {
     try {
       await post(`/direct-chats/${selectedAgentId}/messages`, token, {
         content: content.trim(),
-        idempotency_key: crypto.randomUUID(),
+        idempotency_key: createIdempotencyKey(),
       });
       setContent('');
       await loadMessages(selectedAgentId);

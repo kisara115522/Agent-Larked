@@ -7,6 +7,7 @@ import { get, post, put } from '../api/client';
 import { MessageCard } from '../components/feed/MessageCard';
 import { ComposeBar } from '../components/feed/ComposeBar';
 import { ThreadView } from '../components/feed/ThreadView';
+import { createIdempotencyKey } from '../utils/idempotency';
 import type { Message, GetMessagesResponse } from '@flock/shared';
 
 interface AgentOption {
@@ -35,7 +36,7 @@ export function sendHumanRoomMessage(token: string, roomId: string, content: str
   return post(`/rooms/${roomId}/messages`, token, {
     content,
     mentions: mentions.length > 0 ? mentions : undefined,
-    idempotency_key: crypto.randomUUID(),
+    idempotency_key: createIdempotencyKey(),
   });
 }
 
