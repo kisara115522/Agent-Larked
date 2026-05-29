@@ -432,8 +432,9 @@ describe('automatic wake callbacks', () => {
 
       expect(callbackCalls).toHaveLength(1);
       expect(String(callbackCalls[0].body.prompt)).toContain('flock_room_sync');
-      expect(String(callbackCalls[0].body.prompt)).toContain('latest known sequence is 2');
-      expect(String(callbackCalls[0].body.prompt)).not.toContain('first fragment');
+      expect(String(callbackCalls[0].body.prompt)).toContain('beyond sequence 2');
+      // Both messages appear in the inlined recent messages section
+      expect(String(callbackCalls[0].body.prompt)).toContain('first fragment');
       expect(String(callbackCalls[0].body.prompt)).toContain('second fragment');
 
       const spawningRows = db.prepare(`

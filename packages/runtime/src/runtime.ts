@@ -174,6 +174,8 @@ export class FlockAgentRuntime {
       }
     }
 
+    prompt += '\n\nIMPORTANT: After responding, call flock_wait to wait for the next message. Do NOT exit. Stay available.';
+
     await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name, {
       sessionId: event.session_id,
       model: event.agent_model,
@@ -195,6 +197,8 @@ export class FlockAgentRuntime {
     if (event.sender_name && event.excerpt) {
       prompt = `${event.sender_name} said: "${event.excerpt}"\n\n${prompt}`;
     }
+
+    prompt += '\n\nIMPORTANT: After responding, call flock_wait to wait for the next message. Do NOT exit. Stay available.';
 
     await this.runner.spawn(event.agent_id, prompt, event.agent_token, event.agent_name, {
       sessionId: event.session_id,

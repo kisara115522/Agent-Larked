@@ -192,7 +192,6 @@ export class AgentRunner {
       const completeOnce = (): boolean => {
         if (finished) return false;
         finished = true;
-        this.agents.delete(instance.agentId);
         return true;
       };
 
@@ -225,8 +224,12 @@ export class AgentRunner {
         console.log(`[runner] Agent ${instance.agentId} exited with code ${code}`);
 
         if (code === 0) {
+          // Agent exited despite keep-alive instruction — mark dormant instead of
+          // deleting so the runtime knows it was recently active.
           instance.status = 'dormant';
-          void this.reportActivity(instance.agentId, 'status_change', 'Agent completed', {
+          instance.process = null;
+          console.log(`[runner] Agent ${instance.agentId} exited despite keep-alive instruction, marked dormant`);
+          void this.reportActivity(instance.agentId, 'status_change', 'Agent completed (exited despite keep-alive)', {
             session_id: instance.sessionId,
             exit_code: code,
             output_length: stdout.length,
@@ -235,6 +238,7 @@ export class AgentRunner {
           });
         } else {
           instance.status = 'error';
+          this.agents.delete(instance.agentId);
           const stdoutTail = tail(stdout);
           const stderrTail = tail(stderr);
           const summary = summarizeFailure(stdoutTail, stderrTail);
@@ -252,6 +256,7 @@ export class AgentRunner {
       child.once('error', (err) => {
         if (!completeOnce()) return;
         instance.status = 'error';
+        this.agents.delete(instance.agentId);
         void reportError('Process error', err).catch((reportErr) => {
           console.error(`[runner] Failed to report process error for ${instance.agentId}:`, reportErr);
         });

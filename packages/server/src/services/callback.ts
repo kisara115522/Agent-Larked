@@ -127,7 +127,7 @@ function hasPendingRoomWake(db: Database.Database, agentId: string, roomId: stri
 function roomWakeDebounceMs(): number {
   const raw = Number(process.env.FLOCK_ROOM_WAKE_DEBOUNCE_MS);
   if (Number.isFinite(raw) && raw >= 0) return raw;
-  return process.env.NODE_ENV === 'test' ? 5 : 1200;
+  return process.env.NODE_ENV === 'test' ? 5 : 200;
 }
 
 function pendingRoomWakeKey(agentId: string, roomId: string): string {
@@ -259,6 +259,24 @@ function agentCallbackFields(
   };
 }
 
+function recentRoomMessages(db: Database.Database, roomId: string, limit = 10): string {
+  const rows = db.prepare(`
+    SELECT m.content, p.name AS sender_name, m.created_at
+    FROM messages m
+    LEFT JOIN profiles p ON p.id = m.from_agent
+    WHERE m.room_id = ?
+    ORDER BY m.created_order DESC
+    LIMIT ?
+  `).all(roomId, limit) as Array<{ content: string; sender_name: string; created_at: string }>;
+
+  if (rows.length === 0) return '';
+
+  const lines = rows.reverse().map(r =>
+    `[${r.created_at}] ${r.sender_name}: ${r.content.slice(0, 200)}${r.content.length > 200 ? '...' : ''}`
+  );
+  return lines.join('\n');
+}
+
 function roomWakePrompt(
   db: Database.Database,
   roomId: string,
@@ -271,12 +289,23 @@ function roomWakePrompt(
   const latest = latestRoomSequence(db, roomId);
   const rulesVersion = roomRulesVersion(db, roomId);
   const excerpt = fallbackExcerpt ? ` Wake excerpt: ${fallbackExcerpt}` : '';
-  return [
+  const recentMessages = recentRoomMessages(db, roomId);
+
+  const parts = [
     `You were woken in room "${roomName}" (${roomId}) because ${reason}.`,
-    `Room context protocol: before replying or doing work, call flock_room_sync for this room and inspect all unread messages. Your last synced sequence is ${state.last_seen_sequence}; latest known sequence is ${latest}.${excerpt}`,
+  ];
+
+  if (recentMessages) {
+    parts.push(`Recent messages in this room:\n${recentMessages}`);
+  }
+
+  parts.push(
+    `Room context protocol: before replying, call flock_room_sync ONLY if there are messages beyond sequence ${latest} that are not shown above. Your last synced sequence is ${state.last_seen_sequence}.${excerpt}`,
     `Room rules version: ${rulesVersion}; you last synced rules version ${state.rules_version_seen}. flock_room_sync returns the full rules only when this version changed.`,
-    'After syncing, respond in this room only when a response is useful. Do not post in other rooms. If flock_post says the room has unread messages, call flock_room_sync again before posting.',
-  ].join('\n\n');
+    'After checking, respond in this room only when a response is useful. Do not post in other rooms.',
+  );
+
+  return parts.join('\n\n');
 }
 
 function latestRoomSequence(db: Database.Database, roomId: string): number {
