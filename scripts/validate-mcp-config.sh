@@ -1,19 +1,17 @@
 #!/bin/bash
-# Validate that v2 .mcp.json does not point to v1 paths
+# Validate .mcp.json configuration
 set -e
 
 CONFIG=".mcp.json"
 if [ ! -f "$CONFIG" ]; then
-  echo "ERROR: $CONFIG not found"
-  exit 1
+  echo "INFO: $CONFIG not found — copy .mcp.json.example to .mcp.json"
+  exit 0
 fi
 
-# Check for old v1 paths
-if grep -q '/Agent-Larked/' "$CONFIG" && ! grep -q '/Agent-Larked-v2/' "$CONFIG"; then
-  echo "ERROR: $CONFIG points to v1 paths (/Agent-Larked/ instead of /Agent-Larked-v2/)"
-  echo "Contents:"
-  cat "$CONFIG"
-  exit 1
+# Check for hardcoded absolute paths
+if grep -qE '"/[a-zA-Z]' "$CONFIG"; then
+  echo "WARNING: $CONFIG contains absolute paths — consider using relative paths"
+  echo "Example: \"./packages/mcp/dist/index.js\" instead of \"/home/user/.../dist/index.js\""
 fi
 
 # Check for hardcoded AGENT_NAME
@@ -24,10 +22,17 @@ fi
 
 # Verify MCP entry point exists
 MCP_PATH=$(node -e "const c=require('./$CONFIG'); console.log(c.mcpServers.flock.args[0])" 2>/dev/null || echo "")
-if [ -n "$MCP_PATH" ] && [ ! -f "$MCP_PATH" ]; then
-  echo "ERROR: MCP entry point not found: $MCP_PATH"
-  echo "Run 'npm run build -w @flock/mcp' first"
-  exit 1
+if [ -n "$MCP_PATH" ]; then
+  # Resolve relative path against project root
+  RESOLVED="$MCP_PATH"
+  if [[ "$MCP_PATH" != /* ]]; then
+    RESOLVED="$(pwd)/$MCP_PATH"
+  fi
+  if [ ! -f "$RESOLVED" ]; then
+    echo "ERROR: MCP entry point not found: $MCP_PATH"
+    echo "Run 'npm run build -w @flock/mcp' first"
+    exit 1
+  fi
 fi
 
-echo "OK: $CONFIG paths are valid"
+echo "OK: $CONFIG configuration is valid"

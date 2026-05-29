@@ -35,7 +35,7 @@ export function loadServer(): string {
   try {
     return readFileSync(SERVER_FILE, 'utf-8').trim();
   } catch {
-    return 'http://localhost:3000';
+    return 'http://localhost:3001';
   }
 }
 

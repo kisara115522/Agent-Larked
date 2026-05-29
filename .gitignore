@@ -8,6 +8,7 @@ data/
 
 # Local settings (machine-specific)
 .claude/settings.local.json
+.mcp.json
 
 # Session artifacts
 .claude/worktrees/

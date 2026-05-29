@@ -159,15 +159,15 @@ test("selectCandidates skips file edit observations when graph already has that 
 
 test("selectCandidates normalizes absolute file paths when checking covered file nodes", () => {
   const exportData = {
-    sessions: [{ id: "sess_a", project: "/Users/xxx/Code/workSpace/Agent-Larked" }],
+    sessions: [{ id: "sess_a", project: "/home/user/project" }],
     observations: {
       sess_a: [
         {
           id: "same_absolute_file",
           type: "file_edit",
           title: "Edit",
-          narrative: "Changed /Users/xxx/Code/workSpace/Agent-Larked/packages/server/src/index.ts.",
-          files: ["/Users/xxx/Code/workSpace/Agent-Larked/packages/server/src/index.ts"],
+          narrative: "Changed /home/user/project/packages/server/src/index.ts.",
+          files: ["/home/user/project/packages/server/src/index.ts"],
           concepts: [],
         },
       ],

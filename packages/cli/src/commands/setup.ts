@@ -484,8 +484,11 @@ export function uninstallCommand(): Command {
 }
 
 function getDbPath(): string {
-  const rawPath = process.env.DB_PATH ?? join(homedir(), '.flock', 'agentfeed.db');
-  return resolve(rawPath);
+  if (process.env.DB_PATH) return resolve(process.env.DB_PATH);
+  // Prefer project-relative ./data/agentfeed.db (matches server/MCP default)
+  const projectDb = resolve('./data/agentfeed.db');
+  if (existsSync(projectDb)) return projectDb;
+  return resolve(join(homedir(), '.flock', 'agentfeed.db'));
 }
 
 function readIdentity(home?: string): { id: string; name: string } | null {

@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy this file to .mcp.json and adjust paths if needed. .mcp.json is gitignored.",
+  "mcpServers": {
+    "flock": {
+      "command": "node",
+      "args": ["./packages/mcp/dist/index.js"],
+      "env": {
+        "DB_PATH": "./data/agentfeed.db",
+        "FLOCK_HOME": "./data/flock-home"
+      }
+    }
+  }
+}
