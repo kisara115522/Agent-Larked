@@ -90,6 +90,7 @@ export class FlockAgentRuntime {
             port: this.config.callbackPort,
             callback_url: callbackUrl,
             callback_secret: this.config.callbackSecret ?? undefined,
+            registration_secret: this.config.registrationSecret ?? undefined,
             max_agents: this.config.maxAgents,
           }),
         });

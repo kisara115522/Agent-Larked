@@ -5,6 +5,7 @@ export interface RuntimeConfig {
   callbackHost: string;      // Advertised to server (LAN IP or hostname)
   callbackPort: number;
   callbackSecret: string | null;
+  registrationSecret: string | null;  // Optional pre-shared secret for registration
   maxAgents: number;
   heartbeatIntervalMs: number;
   dbPath: string;
@@ -36,6 +37,7 @@ export function loadConfig(): RuntimeConfig {
     callbackHost,
     callbackPort,
     callbackSecret: null, // Set after registration
+    registrationSecret: process.env.RUNTIME_REGISTRATION_SECRET ?? null,
     maxAgents,
     heartbeatIntervalMs,
     dbPath,

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import type Database from 'better-sqlite3';
 import { ErrorCode, createError } from '@flock/shared';
@@ -19,7 +19,7 @@ export function authMiddleware(db: Database.Database) {
 
     const token = authHeader.slice(7);
     const hash = createHash('sha256').update(token).digest('hex');
-    const row = stmt.get(hash) as { id: string } | undefined;
+    const row = stmt.get(hash) as { id: string; token_hash: string } | undefined;
 
     if (!row) {
       res.status(401).json({ error: createError(ErrorCode.INVALID_TOKEN) });

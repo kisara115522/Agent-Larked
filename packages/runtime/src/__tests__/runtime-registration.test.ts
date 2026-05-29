@@ -8,6 +8,7 @@ describe('FlockAgentRuntime registration', () => {
     callbackHost: '127.0.0.1',
     callbackPort: 0,
     callbackSecret: null,
+    registrationSecret: null,
     maxAgents: 10,
     heartbeatIntervalMs: 30_000,
     dbPath: '',

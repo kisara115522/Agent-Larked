@@ -8,6 +8,7 @@ const baseConfig: RuntimeConfig = {
   callbackHost: 'localhost',
   callbackPort: 4000,
   callbackSecret: 'test-secret-123',
+  registrationSecret: null,
   maxAgents: 10,
   heartbeatIntervalMs: 30000,
   dbPath: '',

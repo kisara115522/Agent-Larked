@@ -1,5 +1,5 @@
 import express from 'express';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { RuntimeConfig } from './config.js';
 
 export interface CallbackEvent {
@@ -23,7 +23,10 @@ export type CallbackHandler = (event: CallbackEvent) => Promise<void>;
 
 function verifySignature(secret: string, body: string, signature: string): boolean {
   const expected = `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
-  return expected === signature;
+  const expectedBuf = Buffer.from(expected, 'utf8');
+  const sigBuf = Buffer.from(signature, 'utf8');
+  if (expectedBuf.length !== sigBuf.length) return false;
+  return timingSafeEqual(expectedBuf, sigBuf);
 }
 
 export function createCallbackServer(
@@ -38,14 +41,21 @@ export function createCallbackServer(
     const agentId = req.params.agentId;
     const signature = req.headers['x-flock-signature'] as string | undefined;
 
-    // Verify HMAC if secret is set
-    if (config.callbackSecret && signature) {
+    // Verify HMAC — reject if secret is set but signature is missing or invalid
+    if (config.callbackSecret) {
+      if (!signature) {
+        console.error(`[callback] Missing signature for agent ${agentId}`);
+        res.status(401).json({ error: 'Missing signature' });
+        return;
+      }
       const rawBody = JSON.stringify(req.body);
       if (!verifySignature(config.callbackSecret, rawBody, signature)) {
         console.error(`[callback] Invalid signature for agent ${agentId}`);
         res.status(401).json({ error: 'Invalid signature' });
         return;
       }
+    } else {
+      console.warn(`[callback] No callback secret configured — accepting unsigned callback from ${req.ip}`);
     }
 
     const event: CallbackEvent = {

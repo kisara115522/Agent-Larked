@@ -7,9 +7,15 @@ export function runtimesRouter(db: Database.Database): Router {
   const router = Router();
   const flexAuth = flexAuthMiddleware(db);
 
-  // POST /runtimes — register a new runtime (no auth — runtime is infrastructure, not agent)
+  // POST /runtimes — register a new runtime
+  // If RUNTIME_REGISTRATION_SECRET is set, request must include matching secret
   router.post('/', (req, res, next) => {
     try {
+      const requiredSecret = process.env.RUNTIME_REGISTRATION_SECRET;
+      if (requiredSecret && req.body.registration_secret !== requiredSecret) {
+        res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Invalid registration secret', retryable: false } });
+        return;
+      }
       const result = registerRuntime(db, req.body);
       res.status(201).json(result);
     } catch (err) {
