@@ -51,8 +51,9 @@ export function createApp(dbPath: string = ':memory:'): { app: express.Express; 
   return { app, db };
 }
 
-// Start server when run directly (not when imported by tests)
-const isMainModule = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
+// Start server when run directly (not when imported by tests).
+// Use SERVER_RUN=1 env var to bypass isMainModule check (needed for pm2 ESM fork mode).
+const isMainModule = process.env.SERVER_RUN === '1' || (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/')));
 if (isMainModule) {
   const port = Number(process.env.PORT ?? 3001);
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -79,7 +80,8 @@ if (isMainModule) {
     }
   }, 5 * 60 * 1000);
 
-  app.listen(port, () => {
-    console.log(`AgentFeed server listening on :${port}`);
+  const host = process.env.HOST ?? '0.0.0.0';
+  app.listen(port, host, () => {
+    console.log(`AgentFeed server listening on ${host}:${port}`);
   });
 }
