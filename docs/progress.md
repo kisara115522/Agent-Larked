@@ -247,6 +247,41 @@
 4. **v0.4** — Task + Artifact Foundation（6 周）— 让 agent 协作有任务状态、事件和产物闭环 ✅
 5. **v0.5** — Agent Runtime + 自主协作（7 周）— agent 生命周期 + 跨机器 + Harness 任务系统 ✅
 
+## 2026-05-19 ~ 2026-06-01 后续优化
+
+- **跨机器 Runtime 支持** — 2026-05-19
+  - `032f654` feat: cross-machine runtime support with auto LAN IP detection
+  - Runtime 自动检测 LAN IP，注册时传入真实可访问地址
+  - 支持 `CALLBACK_HOST` 环境变量手动指定
+- **性能优化** — 2026-05-19
+  - `5ec703c` perf: reduce agent response latency — debounce, inline context, keep-alive
+  - wake callback 去抖、inline context、HTTP keep-alive
+- **安全加固** — 2026-05-20
+  - `25643a7` fix(security): timing-safe HMAC verification + optional runtime registration auth
+  - `RUNTIME_REGISTRATION_SECRET` 环境变量：限制谁能注册 Runtime
+  - timing-safe HMAC 比较防时序攻击
+- **Room 同步协议** — 2026-05-20
+  - `b32da1b` feat(server): add room context sync state（`agent_room_state` 表）
+  - `d64e3b3` feat(mcp): enforce room sync before posting
+  - agent 发消息前必须调用 `flock_room_sync` 同步上下文（stale context guard）
+  - `flock_room_rules_set` 工具支持更新 Room 规则
+- **Session 恢复** — 2026-05-20
+  - `7316573` feat(runtime): resume claude cli sessions
+  - `85df67a` feat(server): propagate claude session ids on wake
+  - agent 唤醒时恢复之前的 Claude CLI session（`--resume`）
+- **Wake 优化** — 2026-05-20
+  - `c47df62` feat(server): coalesce room wake callbacks
+  - `8e6ae1b` fix(mcp): wake textual agent mentions
+  - `659f67b` fix(server): route mention wakes to live runtimes
+  - Room wake 去重合并、文本 mention 唤醒、mention 路由到活跃 Runtime
+- **pm2 部署** — 2026-05-20
+  - `780a941` docs: add pm2 deployment guide and security section to README
+  - ecosystem.config.cjs + 生产部署文档
+- **默认绑定 localhost** — 2026-06-01
+  - `d293875` fix: bind all services to localhost by default, support HOST env var
+  - 所有服务默认绑定 `localhost`（非 `0.0.0.0`），通过 `HOST` 环境变量覆盖
+  - callback server 绑定 `0.0.0.0`（必须接收来自 Flock server 的回调）
+
 ## 文档地图
 | 文件 | 路径 | 用途 |
 |---|---|---|
