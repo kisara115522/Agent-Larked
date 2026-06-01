@@ -98,28 +98,6 @@ interface OpenAIStreamChunk {
   };
 }
 
-/** OpenAI non-streaming response */
-interface OpenAIResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: Array<{
-    index: number;
-    message: {
-      role: string;
-      content: string | null;
-      tool_calls?: OpenAIToolCall[];
-    };
-    finish_reason: string | null;
-  }>;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
-
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 /** Default settings */
@@ -537,66 +515,6 @@ export class OpenAICompatBackend implements AgentBackend {
   }
 
   // ─── LLM API Call ──────────────────────────────────────────────────────
-
-  /**
-   * Make a single call to the OpenAI-compatible Chat Completions API.
-   * Uses non-streaming mode for simplicity (streaming support planned).
-   */
-  private async callLLM(
-    messages: OpenAIMessage[],
-    tools: OpenAITool[],
-    model: string,
-    systemPrompt: string | undefined,
-    signal: AbortSignal,
-  ): Promise<OpenAIResponse> {
-    const url = `${this.endpoint.replace(/\/+$/, '')}/chat/completions`;
-
-    // Build request body
-    const body: Record<string, unknown> = {
-      model,
-      messages: this.buildAPIMessages(messages, systemPrompt),
-      stream: false,
-    };
-
-    // Only include tools if we have them
-    if (tools.length > 0) {
-      body.tools = tools;
-      body.tool_choice = 'auto';
-    }
-
-    // Create timeout controller
-    const timeoutController = new AbortController();
-    const timeout = setTimeout(() => timeoutController.abort(), this.timeoutMs);
-
-    // Combine signals
-    const combinedSignal = combineSignals(signal, timeoutController.signal);
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-          ...this.headers,
-        },
-        body: JSON.stringify(body),
-        signal: combinedSignal,
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => 'unknown');
-        throw new APIError(
-          `OpenAI API error ${response.status}: ${errorBody}`,
-          response.status,
-        );
-      }
-
-      const data = (await response.json()) as OpenAIResponse;
-      return data;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
 
   /**
    * Build the messages array for the OpenAI API request.
