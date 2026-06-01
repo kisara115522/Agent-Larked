@@ -44,3 +44,7 @@ export type {
   JsonSchema,
   JsonSchemaProperty,
 } from './types.js';
+
+// Backend implementations
+export { ClaudeSdkBackend, createClaudeSdkBackend } from './claude-sdk.js';
+export { OpenAICompatBackend, createOpenAICompatBackend } from './openai-compat-backend.js';
