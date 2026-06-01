@@ -244,7 +244,18 @@ export class OpenAICompatBackend implements AgentBackend {
 
           try {
             toolInput = JSON.parse(toolCall.function.arguments);
-          } catch {
+          } catch (parseError) {
+            // Invalid JSON from LLM — report error and use empty object
+            yield {
+              type: 'system',
+              subtype: 'tool_parse_error',
+              data: {
+                toolId: toolCall.id,
+                toolName,
+                rawArguments: toolCall.function.arguments,
+                error: parseError instanceof Error ? parseError.message : String(parseError),
+              },
+            };
             toolInput = {};
           }
 
@@ -416,7 +427,7 @@ export class OpenAICompatBackend implements AgentBackend {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
+          ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
           ...this.headers,
         },
         body: JSON.stringify(body),
