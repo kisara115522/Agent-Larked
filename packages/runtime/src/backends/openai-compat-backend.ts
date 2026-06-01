@@ -260,7 +260,7 @@ export class OpenAICompatBackend implements AgentBackend {
         });
 
         // Execute all tool calls and yield results
-        for (const toolCall of toolCalls) {
+        for (const toolCall of streamResult.toolCalls!) {
           const toolName = toolCall.function.name;
           let toolInput: Record<string, unknown>;
 
