@@ -1,0 +1,272 @@
+/**
+ * ClaudeSdkBackend — implements AgentBackend using @anthropic-ai/claude-agent-sdk.
+ *
+ * This wraps the existing SDK query() generator into the unified AgentBackend
+ * interface. The SDK manages its own tool loop internally (Read, Edit, Bash,
+ * etc. + MCP tools), so we simply translate SDK messages into AgentEvents.
+ *
+ * Key behaviors:
+ *  - Maps SDK message types → unified AgentEvent stream
+ *  - Supports resume via sessionId
+ *  - Delegates tool execution entirely to the SDK (toolExecutor is unused)
+ *  - Converts MCP server configs to SDK format
+ *  - Yields ALL content blocks from multi-block messages (not just the first)
+ */
+
+import { query, type SDKMessage, type Query } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  AgentBackend,
+  AgentRunContext,
+  AgentEvent,
+  MCPServerConfig,
+} from './types.js';
+
+// ─── Default allowed tools ──────────────────────────────────────────────────
+
+const DEFAULT_ALLOWED_TOOLS = [
+  'Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'WebFetch',
+  'mcp__flock__',
+];
+
+// ─── Implementation ─────────────────────────────────────────────────────────
+
+export class ClaudeSdkBackend implements AgentBackend {
+  readonly name = 'claude-sdk';
+
+  private activeQueries = new Map<string, Query>();
+
+  run(ctx: AgentRunContext): AsyncIterable<AgentEvent> {
+    return this.createQuery(ctx, false);
+  }
+
+  abort(sessionId: string): void {
+    const q = this.activeQueries.get(sessionId);
+    if (q) {
+      q.abort();
+      this.activeQueries.delete(sessionId);
+    }
+  }
+
+  resume(sessionId: string, ctx: AgentRunContext): AsyncIterable<AgentEvent> {
+    return this.createQuery(ctx, true, sessionId);
+  }
+
+  /**
+   * Core implementation: creates the SDK query and yields unified events.
+   */
+  private async *createQuery(
+    ctx: AgentRunContext,
+    isResume: boolean,
+    resumeSessionId?: string,
+  ): AsyncIterable<AgentEvent> {
+    const mcpServers = buildMcpServersConfig(ctx.mcpServers);
+    const abortController = toAbortController(ctx.signal);
+
+    const result: Query = query({
+      prompt: ctx.prompt,
+      options: {
+        cwd: ctx.cwd,
+        allowedTools: ctx.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
+        permissionMode: ctx.permissionMode ?? 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
+        abortController,
+        model: ctx.model,
+        env: ctx.env
+          ? { ...process.env, ...ctx.env }
+          : process.env as Record<string, string | undefined>,
+        mcpServers,
+        settingSources: [],
+        ...(isResume && resumeSessionId ? { resume: resumeSessionId } : {}),
+      },
+    });
+
+    // Track the query for abort support
+    let sessionId = resumeSessionId ?? '';
+
+    try {
+      for await (const message of result) {
+        const events = translateMessage(message);
+
+        for (const event of events) {
+          // Track session ID from init events
+          if (event.type === 'init') {
+            sessionId = event.sessionId;
+            this.activeQueries.set(sessionId, result);
+          }
+
+          yield event;
+        }
+      }
+    } finally {
+      // Cleanup
+      if (sessionId) {
+        this.activeQueries.delete(sessionId);
+      }
+    }
+  }
+}
+
+// ─── Message Translation ────────────────────────────────────────────────────
+
+/**
+ * Translate an SDK message into unified AgentEvents.
+ * Returns an array because a single SDK message may contain multiple
+ * content blocks (text + tool_use + thinking), each becoming a separate event.
+ */
+function translateMessage(message: SDKMessage): AgentEvent[] {
+  switch (message.type) {
+    case 'system':
+      if (message.subtype === 'init') {
+        return [{
+          type: 'init',
+          sessionId: message.session_id,
+          model: message.model,
+          tools: message.tools ?? [],
+          mcpServers: message.mcp_servers?.map(s => ({
+            name: s.name,
+            status: s.status,
+          })),
+        }];
+      }
+      return [];
+
+    case 'assistant':
+      return translateAssistantMessage(message);
+
+    case 'result':
+      return [{
+        type: 'result',
+        subtype: message.subtype,
+        durationMs: message.duration_ms,
+        costUsd: message.total_cost_usd,
+        numTurns: message.num_turns,
+        sessionId: message.session_id,
+      }];
+
+    default:
+      return [];
+  }
+}
+
+/**
+ * Translate SDK assistant messages (which contain content blocks)
+ * into our unified event stream. An assistant message may contain
+ * multiple content blocks (text, tool_use, thinking) — we yield ALL of them.
+ */
+function translateAssistantMessage(message: SDKMessage): AgentEvent[] {
+  const content = (message as { content?: Array<{ type: string; [key: string]: unknown }> }).content;
+  if (!content || !Array.isArray(content)) {
+    return [];
+  }
+
+  const events: AgentEvent[] = [];
+  for (const block of content) {
+    const event = translateContentBlock(block);
+    if (event) {
+      events.push(event);
+    }
+  }
+
+  return events;
+}
+
+function translateContentBlock(block: { type: string; [key: string]: unknown }): AgentEvent | null {
+  switch (block.type) {
+    case 'text':
+      return {
+        type: 'text',
+        content: block.text as string,
+      };
+
+    case 'tool_use':
+      return {
+        type: 'tool_use',
+        id: block.id as string,
+        name: block.name as string,
+        input: block.input as Record<string, unknown>,
+      };
+
+    case 'tool_result':
+      return {
+        type: 'tool_result',
+        toolUseId: block.tool_use_id as string,
+        content: typeof block.content === 'string'
+          ? block.content
+          : JSON.stringify(block.content),
+        isError: block.is_error as boolean | undefined,
+      };
+
+    case 'thinking':
+      return {
+        type: 'thinking',
+        content: block.thinking as string,
+      };
+
+    default:
+      return null;
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Convert unified MCPServerConfig[] to the SDK's mcpServers object format.
+ */
+function buildMcpServersConfig(
+  configs: MCPServerConfig[],
+): Record<string, {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+}> {
+  const result: Record<string, {
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+    url?: string;
+    headers?: Record<string, string>;
+  }> = {};
+
+  for (const config of configs) {
+    if (config.transport.type === 'stdio') {
+      result[config.name] = {
+        command: config.transport.command,
+        args: config.transport.args,
+        env: config.transport.env,
+      };
+    } else if (config.transport.type === 'sse') {
+      result[config.name] = {
+        command: '', // SDK format placeholder
+        url: config.transport.url,
+        headers: config.transport.headers,
+      };
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Create an AbortController from an AbortSignal.
+ * The SDK expects an AbortController, not a signal.
+ */
+function toAbortController(signal: AbortSignal): AbortController {
+  const controller = new AbortController();
+
+  if (signal.aborted) {
+    controller.abort();
+  } else {
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  return controller;
+}
+
+/**
+ * Factory function for creating ClaudeSdkBackend instances.
+ */
+export function createClaudeSdkBackend(): ClaudeSdkBackend {
+  return new ClaudeSdkBackend();
+}
