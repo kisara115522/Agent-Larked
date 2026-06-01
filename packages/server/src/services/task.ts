@@ -263,6 +263,97 @@ function rowToTask(row: Record<string, unknown>): TaskInfo {
   };
 }
 
+// --- Task Artifacts ---
+
+export interface CreateArtifactRequest {
+  agent_id: string;
+  name: string;
+  path: string;
+  content_type?: string;
+  size?: number;
+}
+
+export interface ArtifactInfo {
+  id: string;
+  task_id: string;
+  agent_id: string;
+  name: string;
+  path: string;
+  content_type: string;
+  size: number;
+  created_at: string;
+}
+
+export function createArtifact(
+  db: Database.Database,
+  taskId: string,
+  req: CreateArtifactRequest,
+): ArtifactInfo {
+  // Verify task exists
+  const task = db.prepare('SELECT id, room_id FROM tasks WHERE id = ?').get(taskId) as { id: string; room_id: string } | undefined;
+  if (!task) {
+    throw new ServerError(ErrorCode.TASK_NOT_FOUND, 'Task not found', false, 404);
+  }
+
+  if (!req.name || !req.path) {
+    throw new ServerError(ErrorCode.VALIDATION_ERROR, 'name and path are required', false, 400);
+  }
+
+  const id = uuidv4();
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO task_artifacts (id, task_id, agent_id, name, path, content_type, size, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    taskId,
+    req.agent_id,
+    req.name,
+    req.path,
+    req.content_type ?? 'text/plain',
+    req.size ?? 0,
+    now,
+  );
+
+  return {
+    id,
+    task_id: taskId,
+    agent_id: req.agent_id,
+    name: req.name,
+    path: req.path,
+    content_type: req.content_type ?? 'text/plain',
+    size: req.size ?? 0,
+    created_at: now,
+  };
+}
+
+export function listArtifacts(
+  db: Database.Database,
+  taskId: string,
+): ArtifactInfo[] {
+  // Verify task exists
+  const task = db.prepare('SELECT id FROM tasks WHERE id = ?').get(taskId);
+  if (!task) {
+    throw new ServerError(ErrorCode.TASK_NOT_FOUND, 'Task not found', false, 404);
+  }
+
+  const rows = db.prepare(
+    'SELECT * FROM task_artifacts WHERE task_id = ? ORDER BY created_at ASC',
+  ).all(taskId) as Record<string, unknown>[];
+
+  return rows.map(row => ({
+    id: row.id as string,
+    task_id: row.task_id as string,
+    agent_id: row.agent_id as string,
+    name: row.name as string,
+    path: row.path as string,
+    content_type: (row.content_type as string) ?? 'text/plain',
+    size: (row.size as number) ?? 0,
+    created_at: row.created_at as string,
+  }));
+}
+
 /**
  * Check for stale tasks stuck in 'in_progress' beyond the timeout.
  * Tasks that exceed the timeout are retried (if retries remain) or marked as 'error'.
