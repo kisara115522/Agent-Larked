@@ -9,9 +9,10 @@
  *   registry.register('claude-sdk', createClaudeSdkBackend);
  *   registry.register('openai-compat', createOpenAICompatBackend);
  *
- *   const backend = registry.get('claude-sdk');
+ *   const backend = registry.get({ type: 'claude-sdk' });
  */
 
+import { createHash } from 'node:crypto';
 import type {
   AgentBackend,
   BackendConfig,
@@ -19,9 +20,21 @@ import type {
   BackendType,
 } from '../backends/types.js';
 
+const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+interface CachedBackend {
+  instance: AgentBackend;
+  createdAt: number;
+}
+
 export class BackendRegistry {
   private factories = new Map<string, BackendFactory>();
-  private instances = new Map<string, AgentBackend>();
+  private cache = new Map<string, CachedBackend>();
+  private cacheTtlMs: number;
+
+  constructor(options?: { cacheTtlMs?: number }) {
+    this.cacheTtlMs = options?.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
+  }
 
   /**
    * Register a backend factory.
@@ -33,14 +46,23 @@ export class BackendRegistry {
 
   /**
    * Get or create a backend instance for the given config.
-   * Instances are cached by config hash — same type + endpoint + apiKey
-   * returns the same instance. Different configs for the same type
-   * (e.g. two openai-compat with different endpoints) get separate instances.
+   * Instances are cached by config hash with TTL.
+   * Different configs for the same type (e.g. different API keys)
+   * get separate instances.
    */
   get(config: BackendConfig): AgentBackend {
     const cacheKey = this.configHash(config);
-    const existing = this.instances.get(cacheKey);
-    if (existing) return existing;
+    const cached = this.cache.get(cacheKey);
+
+    // Return cached instance if still valid
+    if (cached && (Date.now() - cached.createdAt) < this.cacheTtlMs) {
+      return cached.instance;
+    }
+
+    // Evict expired entry
+    if (cached) {
+      this.cache.delete(cacheKey);
+    }
 
     const factory = this.factories.get(config.type);
     if (!factory) {
@@ -50,17 +72,16 @@ export class BackendRegistry {
     }
 
     const instance = factory(config);
-    this.instances.set(cacheKey, instance);
+    this.cache.set(cacheKey, { instance, createdAt: Date.now() });
     return instance;
   }
 
   /**
-   * Generate a cache key from config. Two configs with the same
-   * type + endpoint + apiKey share the same backend instance.
-   * Different API keys produce different hashes to avoid sharing instances.
+   * Generate a cache key from config using SHA-256.
+   * Different API keys always produce different hashes (no collision).
    */
   private configHash(config: BackendConfig): string {
-    const keyHash = config.apiKey ? simpleHash(config.apiKey) : '';
+    const keyHash = config.apiKey ? sha256Hex(config.apiKey) : '';
     return `${config.type}::${config.apiEndpoint ?? ''}::${keyHash}`;
   }
 
@@ -83,7 +104,7 @@ export class BackendRegistry {
    */
   clear(): void {
     this.factories.clear();
-    this.instances.clear();
+    this.cache.clear();
   }
 }
 
@@ -94,15 +115,9 @@ export class BackendRegistry {
 export const defaultBackendRegistry = new BackendRegistry();
 
 /**
- * Simple non-cryptographic hash for cache key generation.
- * Avoids exposing API keys while differentiating different keys.
+ * SHA-256 hex digest, truncated to 16 chars for cache key brevity.
+ * Collision probability is negligible (2^-64).
  */
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0; // Convert to 32-bit integer
-  }
-  return Math.abs(hash).toString(36);
+function sha256Hex(str: string): string {
+  return createHash('sha256').update(str).digest('hex').slice(0, 16);
 }
