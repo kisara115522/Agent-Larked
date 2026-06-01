@@ -15,6 +15,7 @@
  * Design reference: Claude Code's queryLoop() in src/query.ts
  */
 
+import { randomUUID } from 'node:crypto';
 import type {
   AgentBackend,
   AgentRunContext,
@@ -23,6 +24,15 @@ import type {
   BackendConfig,
   JsonSchema,
 } from './types.js';
+
+// ─── Internal Types ─────────────────────────────────────────────────────────
+
+/** Result of a single streaming turn */
+interface StreamTurnResult {
+  textContent: string;
+  toolCalls?: OpenAIToolCall[];
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
 
 // ─── OpenAI API Types (minimal) ─────────────────────────────────────────────
 
@@ -203,60 +213,35 @@ export class OpenAICompatBackend implements AgentBackend {
 
         turnCount++;
 
-        // Call the LLM with streaming for real-time text output
-        let response: OpenAIResponse;
-        try {
-          response = await this.callLLMStreaming(
-            messages,
-            openaiTools,
-            model,
-            ctx.systemPrompt,
-            sessionAbort.signal,
-            (textDelta) => {
-              // Yield text chunks as they arrive for real-time output
-              // Note: this callback is used to forward text deltas to the caller
-              // We store them and yield after the stream completes
-            },
-          );
-        } catch (error: unknown) {
-          const msg = error instanceof Error ? error.message : String(error);
-          if (sessionAbort.signal.aborted) {
-            yield { type: 'error', message: 'Session aborted', subtype: 'abort' };
-          } else {
-            yield { type: 'error', message: `API error: ${msg}`, subtype: 'api_error' };
-          }
-          break;
-        }
-
-        // Parse the assistant message
-        const choice = response.choices?.[0];
-        if (!choice) {
+        // Check budget
+        if (ctx.maxBudgetUsd && totalCost >= ctx.maxBudgetUsd) {
           yield {
-            type: 'error',
-            message: 'No choices in API response',
-            subtype: 'api_error',
+            type: 'result',
+            subtype: 'error_max_budget_usd',
+            durationMs: Date.now() - startTime,
+            costUsd: totalCost,
+            numTurns: turnCount,
+            sessionId,
           };
           break;
         }
 
-        const assistantMessage = choice.message;
+        // Call the LLM with streaming — yield text deltas in real-time
+        const streamResult = yield* this.runStreamingTurn(
+          messages,
+          openaiTools,
+          model,
+          ctx.systemPrompt ?? undefined,
+          sessionAbort.signal,
+        );
 
         // Track usage / cost
-        if (response.usage) {
-          totalCost += estimateCost(response.usage.total_tokens, model);
-        }
-
-        // Emit text content
-        if (assistantMessage.content) {
-          yield {
-            type: 'text',
-            content: assistantMessage.content,
-          };
+        if (streamResult.usage) {
+          totalCost += estimateCost(streamResult.usage.total_tokens, model);
         }
 
         // Check for tool calls
-        const toolCalls = assistantMessage.tool_calls;
-        if (!toolCalls || toolCalls.length === 0) {
+        if (!streamResult.toolCalls || streamResult.toolCalls.length === 0) {
           // No tool calls — agent is done
           break;
         }
@@ -264,8 +249,8 @@ export class OpenAICompatBackend implements AgentBackend {
         // Add assistant message to conversation history
         messages.push({
           role: 'assistant',
-          content: assistantMessage.content ?? null,
-          tool_calls: toolCalls,
+          content: streamResult.textContent || null,
+          tool_calls: streamResult.toolCalls,
         });
 
         // Execute all tool calls and yield results
@@ -373,35 +358,20 @@ export class OpenAICompatBackend implements AgentBackend {
     return messages;
   }
 
-  // ─── Tool Conversion ───────────────────────────────────────────────────
+  // ─── Streaming Turn ────────────────────────────────────────────────────
 
   /**
-   * Convert internal ToolDefinitions to OpenAI function calling format.
+   * Run a single streaming LLM turn with retry logic.
+   * Yields TextEvent chunks in real-time as they arrive from the API.
+   * Returns the accumulated result (tool calls, usage) when streaming completes.
    */
-  private convertToolDefinitions(tools: ToolDefinition[]): OpenAITool[] {
-    return tools.map((tool) => ({
-      type: 'function' as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.inputSchema,
-      },
-    }));
-  }
-
-  // ─── LLM API Call ──────────────────────────────────────────────────────
-
-  /**
-   * Call the OpenAI-compatible API with retry logic for transient errors.
-   * Uses streaming mode for real-time text output.
-   */
-  private async callLLMWithRetry(
+  private async *runStreamingTurn(
     messages: OpenAIMessage[],
     tools: OpenAITool[],
     model: string,
     systemPrompt: string | undefined,
     signal: AbortSignal,
-  ): Promise<OpenAIResponse> {
+  ): AsyncGenerator<AgentEvent, StreamTurnResult, undefined> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
@@ -410,21 +380,13 @@ export class OpenAICompatBackend implements AgentBackend {
       }
 
       try {
-        return await this.callLLM(messages, tools, model, systemPrompt, signal);
+        return yield* this.executeStreamingTurn(messages, tools, model, systemPrompt, signal);
       } catch (error: unknown) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        // Don't retry on abort
-        if (signal.aborted) {
-          throw new Error('Aborted');
-        }
+        if (signal.aborted) throw new Error('Aborted');
+        if (isNonRetryableError(error)) throw error;
 
-        // Don't retry on 4xx errors (except 429 rate limit)
-        if (isNonRetryableError(error)) {
-          throw error;
-        }
-
-        // Retry with exponential backoff
         if (attempt < this.maxRetries) {
           const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
           await sleep(delay, signal);
@@ -436,21 +398,19 @@ export class OpenAICompatBackend implements AgentBackend {
   }
 
   /**
-   * Call the LLM with streaming support.
-   * Streams text deltas via callback and accumulates tool calls.
-   * Returns the complete response when streaming finishes.
+   * Execute a single streaming turn — reads SSE stream and yields text deltas.
+   * Returns StreamTurnResult with accumulated tool calls and usage.
    */
-  private async callLLMStreaming(
+  private async *executeStreamingTurn(
     messages: OpenAIMessage[],
     tools: OpenAITool[],
     model: string,
     systemPrompt: string | undefined,
     signal: AbortSignal,
-    onTextDelta: (delta: string) => void,
-  ): Promise<OpenAIResponse> {
+  ): AsyncGenerator<AgentEvent, StreamTurnResult, undefined> {
     const url = `${this.endpoint.replace(/\/+$/, '')}/chat/completions`;
 
-    // Build request body — enable streaming
+    // Build request body
     const body: Record<string, unknown> = {
       model,
       messages: this.buildAPIMessages(messages, systemPrompt),
@@ -487,45 +447,35 @@ export class OpenAICompatBackend implements AgentBackend {
         );
       }
 
-      // Process SSE stream
-      const accumulator: StreamAccumulator = {
-        content: '',
-        toolCalls: new Map(),
-        finishReason: null,
-      };
-
-      let chunkId = '';
-      let chunkModel = '';
+      // Process SSE stream — yield text deltas in real-time
+      const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
+      let textContent = '';
+      let usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined;
 
       for await (const chunk of readSSEStream(response, combinedSignal)) {
-        chunkId = chunk.id;
-        chunkModel = chunk.model;
-
         const choice = chunk.choices?.[0];
         if (!choice) continue;
 
         const delta = choice.delta;
 
-        // Accumulate text content
+        // Yield text content in real-time as it arrives
         if (delta.content) {
-          accumulator.content += delta.content;
-          onTextDelta(delta.content);
+          textContent += delta.content;
+          yield { type: 'text', content: delta.content };
         }
 
-        // Accumulate tool calls
+        // Accumulate tool calls from deltas
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {
             const idx = tc.index;
-            const existing = accumulator.toolCalls.get(idx);
+            const existing = toolCallsMap.get(idx);
 
             if (existing) {
-              // Update existing tool call
               if (tc.id) existing.id = tc.id;
               if (tc.function?.name) existing.name = tc.function.name;
-              if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+              if (tc.function?.arguments != null) existing.arguments += tc.function.arguments;
             } else if (tc.id || tc.function?.name) {
-              // Create new tool call
-              accumulator.toolCalls.set(idx, {
+              toolCallsMap.set(idx, {
                 id: tc.id ?? `call_${idx}`,
                 name: tc.function?.name ?? '',
                 arguments: tc.function?.arguments ?? '',
@@ -534,21 +484,16 @@ export class OpenAICompatBackend implements AgentBackend {
           }
         }
 
-        // Track finish reason
-        if (choice.finish_reason) {
-          accumulator.finishReason = choice.finish_reason;
-        }
-
         // Track usage (sent in last chunk)
         if (chunk.usage) {
-          accumulator.usage = chunk.usage;
+          usage = chunk.usage;
         }
       }
 
-      // Convert accumulator to OpenAIResponse format
-      const toolCallsArray =
-        accumulator.toolCalls.size > 0
-          ? Array.from(accumulator.toolCalls.entries())
+      // Convert accumulated tool calls to array
+      const toolCalls =
+        toolCallsMap.size > 0
+          ? Array.from(toolCallsMap.entries())
               .sort(([a], [b]) => a - b)
               .map(
                 ([, tc]) =>
@@ -563,28 +508,29 @@ export class OpenAICompatBackend implements AgentBackend {
               )
           : undefined;
 
-      return {
-        id: chunkId,
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: chunkModel,
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: accumulator.content || null,
-              tool_calls: toolCallsArray,
-            },
-            finish_reason: accumulator.finishReason,
-          },
-        ],
-        usage: accumulator.usage,
-      };
+      return { textContent, toolCalls, usage };
     } finally {
       clearTimeout(timeout);
     }
   }
+
+  // ─── Tool Conversion ───────────────────────────────────────────────────
+
+  /**
+   * Convert internal ToolDefinitions to OpenAI function calling format.
+   */
+  private convertToolDefinitions(tools: ToolDefinition[]): OpenAITool[] {
+    return tools.map((tool) => ({
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema,
+      },
+    }));
+  }
+
+  // ─── LLM API Call ──────────────────────────────────────────────────────
 
   /**
    * Make a single call to the OpenAI-compatible Chat Completions API.
@@ -667,23 +613,6 @@ export class OpenAICompatBackend implements AgentBackend {
 
 // ─── Streaming Implementation ────────────────────────────────────────────────
 
-/**
- * Accumulated result from a streaming LLM response.
- * As SSE chunks arrive, we accumulate text and tool calls into this structure.
- */
-interface StreamAccumulator {
-  content: string;
-  toolCalls: Map<
-    number,
-    {
-      id: string;
-      name: string;
-      arguments: string;
-    }
-  >;
-  finishReason: string | null;
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-}
 
 /**
  * Parse an SSE line from OpenAI's streaming response.
@@ -747,9 +676,9 @@ async function* readSSEStream(
 
 // ─── Utilities ──────────────────────────────────────────────────────────────
 
-/** Generate a unique session ID */
+/** Generate a unique session ID using crypto */
 function generateSessionId(): string {
-  return `oai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `oai-${randomUUID()}`;
 }
 
 /** Sleep with abort support */
