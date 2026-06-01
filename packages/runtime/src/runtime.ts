@@ -12,7 +12,7 @@ export class FlockAgentRuntime {
 
   constructor(config: RuntimeConfig) {
     this.config = config;
-    this.runner = new AgentRunner(this.reportActivity.bind(this), config.flockServerUrl);
+    this.runner = new AgentRunner(this.reportActivity.bind(this), config.flockServerUrl, config.dbPath);
   }
 
   async start(): Promise<void> {
