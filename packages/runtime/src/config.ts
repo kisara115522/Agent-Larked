@@ -1,6 +1,14 @@
 import { networkInterfaces } from 'node:os';
 import type { BackendConfig, BackendType } from './backends/types.js';
 
+const VALID_BACKEND_TYPES: readonly BackendType[] = ['claude-sdk', 'openai-compat'];
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? Math.floor(num) : fallback;
+}
+
 export interface RuntimeConfig {
   flockServerUrl: string;
   callbackHost: string;      // Advertised to server (LAN IP or hostname)
@@ -30,9 +38,9 @@ function detectLanIp(): string {
 export function loadConfig(): RuntimeConfig {
   const flockServerUrl = process.env.FLOCK_SERVER_URL ?? 'http://localhost:3001';
   const callbackHost = process.env.CALLBACK_HOST ?? detectLanIp();
-  const callbackPort = Number(process.env.CALLBACK_PORT ?? 4000);
-  const maxAgents = Number(process.env.MAX_AGENTS ?? 10);
-  const heartbeatIntervalMs = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 30_000);
+  const callbackPort = parsePositiveInt(process.env.CALLBACK_PORT, 4000);
+  const maxAgents = parsePositiveInt(process.env.MAX_AGENTS, 10);
+  const heartbeatIntervalMs = parsePositiveInt(process.env.HEARTBEAT_INTERVAL_MS, 30_000);
   const dbPath = process.env.DB_PATH ?? '';
 
   return {
@@ -60,7 +68,13 @@ export function loadConfig(): RuntimeConfig {
  *  - OPENAI_MODEL: Default model for OpenAI-compatible backend
  */
 export function loadBackendConfig(): BackendConfig {
-  const type: BackendType = (process.env.BACKEND_TYPE as BackendType) ?? 'claude-sdk';
+  const rawType = process.env.BACKEND_TYPE ?? 'claude-sdk';
+  if (!VALID_BACKEND_TYPES.includes(rawType as BackendType)) {
+    console.warn(`[config] WARNING: Invalid BACKEND_TYPE "${rawType}", falling back to "claude-sdk". Valid: ${VALID_BACKEND_TYPES.join(', ')}`);
+  }
+  const type: BackendType = (VALID_BACKEND_TYPES.includes(rawType as BackendType)
+    ? rawType
+    : 'claude-sdk') as BackendType;
 
   const config: BackendConfig = { type };
 
@@ -73,8 +87,8 @@ export function loadBackendConfig(): BackendConfig {
   if (type === 'openai-compat') {
     config.apiEndpoint = process.env.OPENAI_API_ENDPOINT ?? 'https://api.openai.com/v1';
     config.apiKey = process.env.OPENAI_API_KEY;
-    config.timeoutMs = Number(process.env.OPENAI_TIMEOUT_MS ?? 120_000);
-    config.maxRetries = Number(process.env.OPENAI_MAX_RETRIES ?? 3);
+    config.timeoutMs = parsePositiveInt(process.env.OPENAI_TIMEOUT_MS, 120_000);
+    config.maxRetries = parsePositiveInt(process.env.OPENAI_MAX_RETRIES, 3);
 
     if (process.env.OPENAI_MODEL) {
       config.model = process.env.OPENAI_MODEL;
@@ -87,4 +101,18 @@ export function loadBackendConfig(): BackendConfig {
   }
 
   return config;
+}
+
+/**
+ * Parse a string as a positive integer, falling back to default if invalid.
+ * Prevents NaN from propagating through the system.
+ */
+function parsePositiveInt(value: string | undefined, defaultValue: number): number {
+  if (value === undefined) return defaultValue;
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed) || parsed <= 0) {
+    console.warn(`[config] WARNING: Invalid numeric value "${value}", using default ${defaultValue}`);
+    return defaultValue;
+  }
+  return parsed;
 }
