@@ -56,13 +56,15 @@ export class FlockAgentRuntime {
     this.server = createCallbackServer(this.config, this.handleCallback.bind(this));
 
     return new Promise((resolve, reject) => {
-      const bindHost = process.env.HOST ?? '0.0.0.0';
+      // Callback server must bind 0.0.0.0 to receive callbacks from the Flock server,
+      // even when HOST=localhost for other services. The advertised callback_url uses
+      // the LAN IP so the server can reach us.
       this.serverInstance = this.server!.listen(
         this.config.callbackPort,
-        bindHost,
+        '0.0.0.0',
         () => {
           console.log(
-            `[runtime] Callback server listening on ${bindHost}:${this.config.callbackPort}`,
+            `[runtime] Callback server listening on 0.0.0.0:${this.config.callbackPort}`,
           );
           console.log(
             `[runtime] Advertised callback URL: http://${this.config.callbackHost}:${this.config.callbackPort}`,
