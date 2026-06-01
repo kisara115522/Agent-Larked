@@ -2,143 +2,205 @@ import { EventEmitter } from 'node:events';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ActivityReporter } from '../agent-runner.js';
 
-const spawnMock = vi.fn();
+// Mock the SDK query function
+const mockQuery = vi.fn();
 
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock,
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query: mockQuery,
 }));
 
 const { AgentRunner } = await import('../agent-runner.js');
 
-class MockChildProcess extends EventEmitter {
-  stdout = new EventEmitter();
-  stderr = new EventEmitter();
-  pid = 777;
-  killed = false;
-  kill = vi.fn();
+/** Creates an async generator that yields the given messages then completes */
+function createMockQuery(messages: unknown[], options?: { throwError?: Error }) {
+  return (async function* () {
+    if (options?.throwError) throw options.throwError;
+    for (const msg of messages) {
+      yield msg;
+    }
+  })();
 }
 
-describe('AgentRunner process reporting', () => {
+const INIT_MESSAGE = {
+  type: 'system' as const,
+  subtype: 'init' as const,
+  session_id: 'test-session-id',
+  model: 'claude-sonnet-4-6',
+  tools: ['Read', 'Edit', 'Bash'],
+  mcp_servers: [{ name: 'flock', status: 'connected' }],
+  cwd: '/test',
+  apiKeySource: 'api-key' as const,
+  permissionMode: 'bypassPermissions' as const,
+  slash_commands: [],
+  output_style: 'text',
+  skills: [],
+  plugins: [],
+  uuid: 'init-uuid',
+};
+
+const SUCCESS_RESULT = {
+  type: 'result' as const,
+  subtype: 'success' as const,
+  session_id: 'test-session-id',
+  duration_ms: 5000,
+  duration_api_ms: 3000,
+  is_error: false,
+  num_turns: 3,
+  result: 'Done!',
+  stop_reason: 'end_turn',
+  total_cost_usd: 0.01,
+  usage: { input_tokens: 100, output_tokens: 50 },
+  modelUsage: {},
+  permission_denials: [],
+  uuid: 'result-uuid',
+};
+
+const ERROR_RESULT = {
+  type: 'result' as const,
+  subtype: 'error_during_execution' as const,
+  session_id: 'test-session-id',
+  duration_ms: 1000,
+  duration_api_ms: 500,
+  is_error: true,
+  num_turns: 1,
+  stop_reason: 'error',
+  total_cost_usd: 0.001,
+  usage: { input_tokens: 50, output_tokens: 10 },
+  modelUsage: {},
+  permission_denials: [],
+  errors: ['API Error: 403'],
+  uuid: 'error-uuid',
+};
+
+describe('AgentRunner SDK integration', () => {
   beforeEach(() => {
-    spawnMock.mockReset();
+    mockQuery.mockReset();
   });
 
-  it('reports the real CLI failure output when Claude exits non-zero', async () => {
-    const child = new MockChildProcess();
-    spawnMock.mockReturnValue(child);
+  it('starts a new agent via SDK query and reports active on init', async () => {
+    mockQuery.mockReturnValue(createMockQuery([INIT_MESSAGE, SUCCESS_RESULT]));
     const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
     const runner = new AgentRunner(reporter, 'http://localhost:3001');
 
-    await runner.spawn('agent-1', 'Introduce yourself', 'agent-token', 'agent-name');
-    await new Promise((resolve) => setImmediate(resolve));
+    await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
+    // Let the async generator run
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-    const spawnOptions = spawnMock.mock.calls[0]?.[2];
-    expect(spawnOptions?.stdio?.[0]).toBe('ignore');
+    // Should have called query with correct options
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const call = mockQuery.mock.calls[0][0];
+    expect(call.prompt).toBe('Hello');
+    expect(call.options.allowedTools).toContain('mcp__flock__');
+    expect(call.options.permissionMode).toBe('bypassPermissions');
+    expect(call.options.mcpServers.flock).toBeDefined();
+    expect(call.options.mcpServers.flock.env.AGENT_NAME).toBe('agent-name');
+    expect(call.options.mcpServers.flock.env.AGENT_TOKEN).toBe('agent-token');
 
-    child.stderr.emit('data', Buffer.from('Warning: no stdin data received in 3s\n'));
-    child.stdout.emit('data', Buffer.from('Failed to authenticate. API Error: 403 insufficient prepaid balance\n'));
-    child.emit('close', 1);
-    await new Promise((resolve) => setImmediate(resolve));
-
-    const errorCall = vi.mocked(reporter).mock.calls.find((call) => call[1] === 'error');
-    expect(errorCall).toBeDefined();
-    expect(errorCall?.[2]).toContain('API Error: 403 insufficient prepaid balance');
-    expect(errorCall?.[3]).toMatchObject({
-      stdout: expect.stringContaining('Failed to authenticate'),
-      stderr: expect.stringContaining('Warning: no stdin'),
+    // Should report active status
+    const activeCall = vi.mocked(reporter).mock.calls.find((c) => c[2] === 'Agent active');
+    expect(activeCall).toBeDefined();
+    expect(activeCall?.[3]).toMatchObject({
+      session_id: 'test-session-id',
+      session_source: 'agent-sdk',
+      model: 'claude-sonnet-4-6',
     });
   });
 
-  it('applies model and provider settings to the Claude child process', async () => {
-    const child = new MockChildProcess();
-    spawnMock.mockReturnValue(child);
+  it('resumes an existing session when sessionId is provided', async () => {
+    mockQuery.mockReturnValue(createMockQuery([INIT_MESSAGE, SUCCESS_RESULT]));
     const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
     const runner = new AgentRunner(reporter, 'http://localhost:3001');
 
     await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name', {
-      model: 'opus',
-      provider: {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://provider.example/anthropic',
-          ANTHROPIC_AUTH_TOKEN: 'provider-token',
-        },
-      },
+      sessionId: 'existing-session-id',
     });
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-    const args = spawnMock.mock.calls[0]?.[1] as string[];
-    const spawnOptions = spawnMock.mock.calls[0]?.[2];
-    expect(args).toContain('--model');
-    expect(args).toContain('opus');
-    const settingsIndex = args.indexOf('--settings');
-    expect(settingsIndex).toBeGreaterThan(-1);
-    expect(JSON.parse(args[settingsIndex + 1])).toEqual({
-      env: {
-        ANTHROPIC_BASE_URL: 'https://provider.example/anthropic',
-        ANTHROPIC_AUTH_TOKEN: 'provider-token',
-      },
-    });
-    expect(spawnOptions?.env?.AGENT_PROVIDER).toBe('custom');
+    const call = mockQuery.mock.calls[0][0];
+    expect(call.options.resume).toBe('existing-session-id');
   });
 
-  it('starts a new Claude session with the generated session id', async () => {
-    const child = new MockChildProcess();
-    spawnMock.mockReturnValue(child);
+  it('applies model and provider settings', async () => {
+    mockQuery.mockReturnValue(createMockQuery([INIT_MESSAGE, SUCCESS_RESULT]));
     const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
     const runner = new AgentRunner(reporter, 'http://localhost:3001');
 
-    const sessionId = await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
-    await new Promise((resolve) => setImmediate(resolve));
+    await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name', {
+      model: 'claude-opus-4-6',
+      provider: { name: 'custom-provider', env: { CUSTOM_KEY: 'value' } },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-    const args = spawnMock.mock.calls[0]?.[1] as string[];
-    const sessionIndex = args.indexOf('--session-id');
-    expect(sessionIndex).toBeGreaterThan(-1);
-    expect(args[sessionIndex + 1]).toBe(sessionId);
-    expect(args).not.toContain('--resume');
+    const call = mockQuery.mock.calls[0][0];
+    expect(call.options.model).toBe('claude-opus-4-6');
+    expect(call.options.env?.CUSTOM_KEY).toBe('value');
   });
 
-  it('resumes an existing Claude session when a session id is provided', async () => {
-    const child = new MockChildProcess();
-    spawnMock.mockReturnValue(child);
+  it('reports error when SDK query throws', async () => {
+    mockQuery.mockReturnValue(createMockQuery([], { throwError: new Error('API key invalid') }));
     const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
-    const runner = new AgentRunner(reporter, 'http://localhost:3001');
-
-    const sessionId = await runner.spawn('agent-1', 'Hello again', 'agent-token', 'agent-name', {
-      sessionId: 'existing-claude-session',
-    });
-    await new Promise((resolve) => setImmediate(resolve));
-
-    const args = spawnMock.mock.calls[0]?.[1] as string[];
-    const resumeIndex = args.indexOf('--resume');
-    expect(sessionId).toBe('existing-claude-session');
-    expect(resumeIndex).toBeGreaterThan(-1);
-    expect(args[resumeIndex + 1]).toBe('existing-claude-session');
-    expect(args).not.toContain('--session-id');
-  });
-
-  it('reports spawn errors even if the child process errors before active reporting completes', async () => {
-    const child = new MockChildProcess();
-    spawnMock.mockReturnValue(child);
-    let resolveActiveReport: (() => void) | undefined;
-    const reporter: ActivityReporter = vi.fn().mockImplementation((_agentId, _type, detail) => {
-      if (detail === 'Agent active') {
-        return new Promise<void>((resolve) => {
-          resolveActiveReport = resolve;
-        });
-      }
-      return Promise.resolve();
-    });
     const runner = new AgentRunner(reporter, 'http://localhost:3001');
 
     await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-    expect(() => child.emit('error', new Error('spawn claude EACCES'))).not.toThrow();
-    resolveActiveReport?.();
-    await new Promise((resolve) => setImmediate(resolve));
-
-    const errorCall = vi.mocked(reporter).mock.calls.find((call) => call[1] === 'error');
+    expect(runner.isRunning('agent-1')).toBe(false);
+    const errorCall = vi.mocked(reporter).mock.calls.find((c) => c[1] === 'error');
     expect(errorCall).toBeDefined();
-    expect(errorCall?.[2]).toContain('spawn claude EACCES');
-    expect(runner.getAgent('agent-1')).toBeUndefined();
+    expect(errorCall?.[2]).toContain('API key invalid');
+  });
+
+  it('reports error when SDK returns error result', async () => {
+    mockQuery.mockReturnValue(createMockQuery([INIT_MESSAGE, ERROR_RESULT]));
+    const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
+    const runner = new AgentRunner(reporter, 'http://localhost:3001');
+
+    await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(runner.isRunning('agent-1')).toBe(false);
+    const errorCall = vi.mocked(reporter).mock.calls.find((c) => c[1] === 'error');
+    expect(errorCall).toBeDefined();
+    expect(errorCall?.[2]).toContain('error_during_execution');
+  });
+
+  it('marks agent dormant on successful completion', async () => {
+    mockQuery.mockReturnValue(createMockQuery([INIT_MESSAGE, SUCCESS_RESULT]));
+    const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
+    const runner = new AgentRunner(reporter, 'http://localhost:3001');
+
+    await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Agent should be dormant (completed), not deleted
+    const agent = runner.getAgent('agent-1');
+    expect(agent?.status).toBe('dormant');
+
+    const dormantCall = vi.mocked(reporter).mock.calls.find((c) => c[2]?.includes('dormant'));
+    expect(dormantCall).toBeDefined();
+  });
+
+  it('aborts the SDK query when stop() is called', async () => {
+    // Create a generator that hangs (never yields)
+    mockQuery.mockReturnValue((async function* () {
+      yield INIT_MESSAGE;
+      // Then hang indefinitely
+      await new Promise(() => {});
+    })());
+
+    const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
+    const runner = new AgentRunner(reporter, 'http://localhost:3001');
+
+    await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(runner.isRunning('agent-1')).toBe(true);
+
+    const stopped = await runner.stop('agent-1');
+    expect(stopped).toBe(true);
+    expect(runner.isRunning('agent-1')).toBe(false);
+
+    const stopCall = vi.mocked(reporter).mock.calls.find((c) => c[2] === 'Agent stopped');
+    expect(stopCall).toBeDefined();
   });
 });

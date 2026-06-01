@@ -1,12 +1,14 @@
-import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { query, type SDKMessage, type Query } from '@anthropic-ai/claude-agent-sdk';
 
 export interface AgentInstance {
   agentId: string;
   agentName: string;
   sessionId: string;
   status: 'spawning' | 'active' | 'dormant' | 'error';
-  process: ChildProcess | null;
+  abortController?: AbortController;
   startedAt: Date;
   lastActiveAt: Date;
   prompt: string;
@@ -33,14 +35,22 @@ export type ActivityReporter = (
   agentToken?: string,
 ) => Promise<void>;
 
+// Monorepo root — works from both src/ and dist/
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const MCP_SERVER_PATH = path.resolve(PROJECT_ROOT, 'packages/mcp/dist/index.js');
+
 export class AgentRunner {
   private agents: Map<string, AgentInstance> = new Map();
   private reportActivity: ActivityReporter;
   private flockServerUrl: string;
+  private dbPath: string;
 
-  constructor(reportActivity: ActivityReporter, flockServerUrl: string) {
+  constructor(reportActivity: ActivityReporter, flockServerUrl: string, dbPath?: string) {
     this.reportActivity = reportActivity;
     this.flockServerUrl = flockServerUrl;
+    this.dbPath = dbPath || path.resolve(PROJECT_ROOT, 'data/agentfeed.db');
   }
 
   /** Fetch agent name from Flock server by agent ID */
@@ -94,7 +104,6 @@ export class AgentRunner {
       agentName,
       sessionId,
       status: 'spawning',
-      process: null,
       startedAt: new Date(),
       lastActiveAt: new Date(),
       prompt,
@@ -109,6 +118,7 @@ export class AgentRunner {
       session_id: sessionId,
     }, agentToken);
 
+    // Run async — don't await, let it run in background
     this.runAgent(instance);
 
     return sessionId;
@@ -123,14 +133,10 @@ export class AgentRunner {
 
     console.log(`[runner] Stopping agent ${agentId}`);
 
-    if (instance.process && !instance.process.killed) {
-      instance.process.kill('SIGTERM');
-      // Force kill after 5 seconds
-      setTimeout(() => {
-        if (instance.process && !instance.process.killed) {
-          instance.process.kill('SIGKILL');
-        }
-      }, 5000);
+    // Abort the SDK query
+    if (instance.abortController) {
+      instance.abortController.abort();
+      instance.abortController = undefined;
     }
 
     instance.status = 'dormant';
@@ -144,130 +150,130 @@ export class AgentRunner {
   }
 
   private async runAgent(instance: AgentInstance): Promise<void> {
+    const provider = normalizeProvider(instance.options?.provider);
+    const isResume = Boolean(instance.options?.sessionId);
+
+    console.log(`[runner] Starting agent ${instance.agentId} via SDK (${isResume ? 'resume' : 'new'})`);
+
+    const abortController = new AbortController();
+    instance.abortController = abortController;
+
     try {
-      // Build the command to run Claude Code
-      const args: string[] = [
-        '-p', instance.prompt,
-        '--output-format', 'text',
-      ];
-      const provider = normalizeProvider(instance.options?.provider);
-      const resumeSession = Boolean(instance.options?.sessionId);
-
-      args.push(resumeSession ? '--resume' : '--session-id', instance.sessionId);
-
-      if (instance.options?.model) {
-        args.push('--model', instance.options.model);
-      }
-      if (provider?.env && Object.keys(provider.env).length > 0) {
-        args.push('--settings', JSON.stringify({ env: provider.env }));
-      }
-
-      console.log(`[runner] Starting Claude session ${instance.sessionId} (${resumeSession ? 'resume' : 'new'})`);
-
-      const child = spawn('claude', args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          // AGENT_NAME tells the MCP server to use ~/.flock/agents/{name}/identity.json
-          // instead of the global ~/.flock/identity.json
-          AGENT_NAME: instance.agentName,
-          AGENT_PROVIDER: provider?.name ?? 'default',
-          // AGENT_TOKEN lets the MCP server authenticate as the correct agent
-          ...(instance.agentToken ? { AGENT_TOKEN: instance.agentToken } : {}),
+      const result: Query = query({
+        prompt: instance.prompt,
+        options: {
+          cwd: PROJECT_ROOT,
+          allowedTools: [
+            'Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'WebFetch',
+            'mcp__flock__',
+          ],
+          permissionMode: 'bypassPermissions',
+          allowDangerouslySkipPermissions: true,
+          abortController,
+          model: instance.options?.model,
+          env: provider?.env
+            ? { ...process.env, ...provider.env }
+            : process.env as Record<string, string | undefined>,
+          mcpServers: {
+            flock: {
+              command: 'node',
+              args: [MCP_SERVER_PATH],
+              env: {
+                DB_PATH: this.dbPath,
+                AGENT_NAME: instance.agentName,
+                ...(instance.agentToken ? { AGENT_TOKEN: instance.agentToken } : {}),
+                ...(provider?.name ? { AGENT_PROVIDER: provider.name } : {}),
+              },
+            },
+          },
+          settingSources: [],
+          ...(isResume ? { resume: instance.options!.sessionId } : {}),
         },
       });
 
-      instance.process = child;
-      let stdout = '';
-      let stderr = '';
-      let finished = false;
+      // Track session state
+      let gotInit = false;
 
-      const reportError = (label: string, err: unknown) => {
-        console.error(`[runner] ${label} for ${instance.agentId}:`, err);
-        return this.reportActivity(instance.agentId, 'error', `${label}: ${formatError(err)}`, {
-          session_id: instance.sessionId,
-        }, instance.agentToken);
-      };
-
-      const completeOnce = (): boolean => {
-        if (finished) return false;
-        finished = true;
-        return true;
-      };
-
-      child.stdout?.on('data', (data: Buffer) => {
-        stdout += data.toString();
-        instance.lastActiveAt = new Date();
-      });
-
-      child.stderr?.on('data', (data: Buffer) => {
-        stderr += data.toString();
-        instance.lastActiveAt = new Date();
-      });
-
-      child.once('spawn', () => {
-        if (finished) return;
-        instance.status = 'active';
+      for await (const message of result) {
         instance.lastActiveAt = new Date();
 
-        void this.reportActivity(instance.agentId, 'status_change', 'Agent active', {
-          session_id: instance.sessionId,
-          session_source: 'claude-cli',
-          pid: child.pid,
-        }, instance.agentToken).catch((err) => {
-          console.error(`[runner] Failed to report active for ${instance.agentId}:`, err);
-        });
-      });
+        // Init message — SDK has started, extract session_id
+        if (message.type === 'system' && message.subtype === 'init') {
+          gotInit = true;
+          instance.sessionId = message.session_id;
+          instance.status = 'active';
 
-      child.once('close', (code) => {
-        if (!completeOnce()) return;
-        console.log(`[runner] Agent ${instance.agentId} exited with code ${code}`);
+          console.log(`[runner] Agent ${instance.agentId} active, session ${message.session_id}, model ${message.model}`);
 
-        if (code === 0) {
-          // Agent exited despite keep-alive instruction — mark dormant instead of
-          // deleting so the runtime knows it was recently active.
-          instance.status = 'dormant';
-          instance.process = null;
-          console.log(`[runner] Agent ${instance.agentId} exited despite keep-alive instruction, marked dormant`);
-          void this.reportActivity(instance.agentId, 'status_change', 'Agent completed (exited despite keep-alive)', {
-            session_id: instance.sessionId,
-            exit_code: code,
-            output_length: stdout.length,
+          void this.reportActivity(instance.agentId, 'status_change', 'Agent active', {
+            session_id: message.session_id,
+            session_source: 'agent-sdk',
+            model: message.model,
+            tools: message.tools?.length ?? 0,
+            mcp_servers: message.mcp_servers?.map(s => `${s.name}:${s.status}`).join(', ') ?? '',
           }, instance.agentToken).catch((err) => {
-            console.error(`[runner] Failed to report completion for ${instance.agentId}:`, err);
-          });
-        } else {
-          instance.status = 'error';
-          this.agents.delete(instance.agentId);
-          const stdoutTail = tail(stdout);
-          const stderrTail = tail(stderr);
-          const summary = summarizeFailure(stdoutTail, stderrTail);
-          void this.reportActivity(instance.agentId, 'error', `Agent exited with code ${code}${summary ? `: ${summary}` : ''}`, {
-            session_id: instance.sessionId,
-            exit_code: code,
-            stdout: stdoutTail,
-            stderr: stderrTail,
-          }, instance.agentToken).catch((err) => {
-            console.error(`[runner] Failed to report exit for ${instance.agentId}:`, err);
+            console.error(`[runner] Failed to report active for ${instance.agentId}:`, err);
           });
         }
-      });
 
-      child.once('error', (err) => {
-        if (!completeOnce()) return;
+        // Result message — agent finished
+        if (message.type === 'result') {
+          instance.sessionId = message.session_id;
+
+          if (message.subtype === 'error_during_execution' || message.subtype === 'error_max_turns' || message.subtype === 'error_max_budget_usd') {
+            instance.status = 'error';
+            this.agents.delete(instance.agentId);
+            console.error(`[runner] Agent ${instance.agentId} error (${message.subtype})`);
+            void this.reportActivity(instance.agentId, 'error', `Agent error: ${message.subtype}`, {
+              session_id: message.session_id,
+              duration_ms: message.duration_ms,
+              cost_usd: message.total_cost_usd,
+            }, instance.agentToken).catch((err) => {
+              console.error(`[runner] Failed to report error for ${instance.agentId}:`, err);
+            });
+          } else {
+            // Agent completed normally — mark dormant (can be woken)
+            instance.status = 'dormant';
+            instance.abortController = undefined;
+            console.log(`[runner] Agent ${instance.agentId} completed, marked dormant`);
+            void this.reportActivity(instance.agentId, 'status_change', 'Agent dormant (completed)', {
+              session_id: message.session_id,
+              duration_ms: message.duration_ms,
+              cost_usd: message.total_cost_usd,
+              num_turns: message.num_turns,
+            }, instance.agentToken).catch((err) => {
+              console.error(`[runner] Failed to report completion for ${instance.agentId}:`, err);
+            });
+          }
+        }
+      }
+
+      // If we never got an init message, something went wrong
+      if (!gotInit) {
+        console.warn(`[runner] Agent ${instance.agentId} finished without init message`);
         instance.status = 'error';
         this.agents.delete(instance.agentId);
-        void reportError('Process error', err).catch((reportErr) => {
-          console.error(`[runner] Failed to report process error for ${instance.agentId}:`, reportErr);
-        });
-      });
+        void this.reportActivity(instance.agentId, 'error', 'Agent finished without init message', {
+          session_id: instance.sessionId,
+        }, instance.agentToken).catch(() => {});
+      }
     } catch (err) {
-      console.error(`[runner] Failed to spawn agent ${instance.agentId}:`, err);
+      // AbortError is expected when stop() is called
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log(`[runner] Agent ${instance.agentId} aborted`);
+        instance.status = 'dormant';
+        instance.abortController = undefined;
+        return;
+      }
+
+      console.error(`[runner] Failed to run agent ${instance.agentId}:`, err);
       instance.status = 'error';
-      await this.reportActivity(instance.agentId, 'error', `Spawn failed: ${formatError(err)}`, {
-        session_id: instance.sessionId,
-      }, instance.agentToken);
       this.agents.delete(instance.agentId);
+      void this.reportActivity(instance.agentId, 'error', `Run failed: ${formatError(err)}`, {
+        session_id: instance.sessionId,
+      }, instance.agentToken).catch((reportErr) => {
+        console.error(`[runner] Failed to report run error for ${instance.agentId}:`, reportErr);
+      });
     }
   }
 
@@ -297,20 +303,6 @@ function sanitizeEnv(env: Record<string, string> | undefined): Record<string, st
   return cleanEntries.length > 0 ? Object.fromEntries(cleanEntries) : undefined;
 }
 
-function tail(value: string, max = 4000): string {
-  return value.length > max ? value.slice(value.length - max) : value;
-}
-
 function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-function summarizeFailure(stdout: string, stderr: string): string {
-  const combined = `${stdout}\n${stderr}`;
-  const lines = combined
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const priority = lines.find((line) => /API Error|Failed to authenticate|Error:/i.test(line));
-  return (priority ?? lines[0] ?? '').slice(0, 300);
 }
