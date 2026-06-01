@@ -329,6 +329,12 @@ export class AgentHarness {
       `text=${currentState.totalTextLength} chars`,
     );
 
+    // Cleanup: remove completed/errored sessions to prevent memory leak.
+    // Active sessions are kept for abort/dedup support.
+    if (currentState.status !== 'active' && currentState.status !== 'initializing') {
+      this.sessions.delete(agentId);
+    }
+
     return currentState;
   }
 

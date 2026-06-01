@@ -46,6 +46,8 @@ export interface AgentSpawnOptions extends BaseAgentSpawnOptions {
   backend?: 'claude-sdk' | 'openai-compat';
   /** Backend-specific config */
   backendConfig?: BackendConfig;
+  /** Environment variables for the agent session */
+  env?: Record<string, string>;
 }
 
 // Monorepo root
@@ -121,6 +123,12 @@ export class AgentRunnerV2 {
     const backendConfig: BackendConfig = options?.backendConfig
       ?? { type: options?.backend ?? 'claude-sdk', model: options?.model };
 
+    // Resolve env from provider if present
+    const providerEnv = resolveProviderEnv(options?.provider);
+    const mergedEnv: Record<string, string> | undefined = options?.env
+      ? { ...providerEnv, ...options.env }
+      : providerEnv;
+
     // Build spawn request
     const request: SpawnRequest = {
       agentId,
@@ -130,6 +138,7 @@ export class AgentRunnerV2 {
       backendConfig,
       model: options?.model,
       sessionId,
+      env: mergedEnv,
     };
 
     console.log(`[runner-v2] Spawning agent ${agentId} via harness (backend=${backendConfig.type})`);
@@ -186,4 +195,22 @@ export class AgentRunnerV2 {
     await this.harness.shutdown();
     this.agentInstances.clear();
   }
+}
+
+/**
+ * Resolve provider config to env vars.
+ * Converts the v1 `provider` field (name + env) to environment variables
+ * that can be passed through to the backend.
+ */
+function resolveProviderEnv(
+  provider: string | AgentProviderOptions | undefined,
+): Record<string, string> | undefined {
+  if (!provider) return undefined;
+  if (typeof provider === 'string') {
+    return { AGENT_PROVIDER: provider };
+  }
+  return {
+    ...(provider.name ? { AGENT_PROVIDER: provider.name } : {}),
+    ...provider.env,
+  };
 }
