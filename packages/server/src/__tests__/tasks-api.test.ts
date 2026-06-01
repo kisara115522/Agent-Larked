@@ -128,6 +128,78 @@ describe('Tasks API', () => {
       .set('Authorization', `Bearer ${agentToken}`)
       .expect(404);
   });
+
+  it('creates an artifact for a task', async () => {
+    const list = await request(app)
+      .get(`/tasks?room_id=${roomId}`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    const taskId = list.body.tasks[0].id;
+
+    const res = await request(app)
+      .post(`/tasks/${taskId}/artifacts`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({ name: 'output.json', path: '/tmp/output.json', content_type: 'application/json', size: 1024 })
+      .expect(201);
+
+    expect(res.body.id).toBeDefined();
+    expect(res.body.task_id).toBe(taskId);
+    expect(res.body.name).toBe('output.json');
+    expect(res.body.path).toBe('/tmp/output.json');
+    expect(res.body.content_type).toBe('application/json');
+    expect(res.body.size).toBe(1024);
+  });
+
+  it('lists artifacts for a task', async () => {
+    const list = await request(app)
+      .get(`/tasks?room_id=${roomId}`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    const taskId = list.body.tasks[0].id;
+
+    const res = await request(app)
+      .get(`/tasks/${taskId}/artifacts`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    expect(res.body.artifacts).toBeDefined();
+    expect(Array.isArray(res.body.artifacts)).toBe(true);
+    expect(res.body.artifacts.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.artifacts[0].name).toBe('output.json');
+  });
+
+  it('returns 404 for artifacts on unknown task', async () => {
+    await request(app)
+      .get('/tasks/nonexistent/artifacts')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(404);
+  });
+
+  it('returns 404 when creating artifact for unknown task', async () => {
+    await request(app)
+      .post('/tasks/nonexistent/artifacts')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({ name: 'test.txt', path: '/tmp/test.txt' })
+      .expect(404);
+  });
+
+  it('returns empty list for task with no artifacts', async () => {
+    // Create a fresh task
+    const taskRes = await request(app)
+      .post('/tasks')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({ room_id: roomId, title: 'No artifacts task' })
+      .expect(201);
+
+    const res = await request(app)
+      .get(`/tasks/${taskRes.body.id}/artifacts`)
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    expect(res.body.artifacts).toEqual([]);
+  });
 });
 
 describe('Task Stale Detection', () => {

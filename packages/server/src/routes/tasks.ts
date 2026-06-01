@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
-import { createTask, getTask, listTasks, updateTask } from '../services/task.js';
+import { createTask, getTask, listTasks, updateTask, createArtifact, listArtifacts } from '../services/task.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
@@ -118,6 +118,44 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
       }
 
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /tasks/:id/artifacts — create artifact for a task
+  router.post('/:id/artifacts', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
+    try {
+      const taskId = req.params.id as string;
+      const artifact = createArtifact(db, taskId, {
+        agent_id: req.agentId!,
+        name: req.body.name,
+        path: req.body.path,
+        content_type: req.body.content_type,
+        size: req.body.size,
+      });
+
+      // Emit SSE event
+      const task = db.prepare('SELECT room_id FROM tasks WHERE id = ?').get(taskId) as { room_id: string } | undefined;
+      if (task) {
+        eventBus.emitTaskArtifact(
+          { task_id: taskId, room_id: task.room_id, artifact_id: artifact.id, artifact_name: artifact.name, actor_id: req.agentId! },
+          task.room_id,
+          req.agentId!,
+        );
+      }
+
+      res.status(201).json(artifact);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /tasks/:id/artifacts — list artifacts for a task
+  router.get('/:id/artifacts', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
+    try {
+      const artifacts = listArtifacts(db, req.params.id as string);
+      res.json({ artifacts });
     } catch (err) {
       next(err);
     }

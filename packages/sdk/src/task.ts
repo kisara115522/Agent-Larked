@@ -194,15 +194,23 @@ export async function appendTaskEvent(
 }
 
 export async function addTaskArtifact(
-  _client: AgentFeedClient,
-  _taskId: string,
+  client: AgentFeedClient,
+  taskId: string,
   params: AddTaskArtifactParams,
 ): Promise<TaskArtifactItem> {
-  // Artifact endpoint not yet implemented on server; return a local placeholder
+  const result = await client.post<{ id: string; task_id: string; agent_id: string; name: string; path: string; content_type: string; size: number; created_at: string }>(
+    `/tasks/${taskId}/artifacts`,
+    {
+      name: params.name,
+      path: params.uri ?? params.content ?? '',
+      content_type: params.mime_type ?? (params.type === 'json' ? 'application/json' : params.type === 'code' ? 'text/plain' : 'text/plain'),
+      size: params.content?.length ?? 0,
+    },
+  );
   return {
-    id: crypto.randomUUID(),
+    id: result.id,
     type: params.type,
-    name: params.name,
-    created_at: new Date().toISOString(),
+    name: result.name,
+    created_at: result.created_at,
   };
 }
