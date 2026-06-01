@@ -267,7 +267,7 @@ export interface ResultEvent {
    *  - 'error_max_turns': hit max turns limit
    *  - 'error_max_budget_usd': hit budget limit
    */
-  subtype: 'completed' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd';
+  subtype: 'completed' | 'success' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd' | 'error_max_structured_output_retries';
   /** Duration in milliseconds */
   durationMs: number;
   /** Total cost in USD (if available) */

@@ -13,7 +13,7 @@
  *  - Yields ALL content blocks from multi-block messages (not just the first)
  */
 
-import { query, type SDKMessage, type Query } from '@anthropic-ai/claude-agent-sdk';
+import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type {
   AgentBackend,
   AgentRunContext,
@@ -33,17 +33,17 @@ const DEFAULT_ALLOWED_TOOLS = [
 export class ClaudeSdkBackend implements AgentBackend {
   readonly name = 'claude-sdk';
 
-  private activeQueries = new Map<string, Query>();
+  private activeAbortControllers = new Map<string, AbortController>();
 
   run(ctx: AgentRunContext): AsyncIterable<AgentEvent> {
     return this.createQuery(ctx, false);
   }
 
   abort(sessionId: string): void {
-    const q = this.activeQueries.get(sessionId);
-    if (q) {
-      q.abort();
-      this.activeQueries.delete(sessionId);
+    const ac = this.activeAbortControllers.get(sessionId);
+    if (ac) {
+      ac.abort();
+      this.activeAbortControllers.delete(sessionId);
     }
   }
 
@@ -62,12 +62,12 @@ export class ClaudeSdkBackend implements AgentBackend {
     const mcpServers = buildMcpServersConfig(ctx.mcpServers);
     const abortController = toAbortController(ctx.signal);
 
-    const result: Query = query({
+    const result = query({
       prompt: ctx.prompt,
       options: {
         cwd: ctx.cwd,
         allowedTools: ctx.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
-        permissionMode: ctx.permissionMode ?? 'bypassPermissions',
+        permissionMode: (ctx.permissionMode === 'ask' ? 'bypassPermissions' : ctx.permissionMode) ?? 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         abortController,
         model: ctx.model,
@@ -91,7 +91,7 @@ export class ClaudeSdkBackend implements AgentBackend {
           // Track session ID from init events
           if (event.type === 'init') {
             sessionId = event.sessionId;
-            this.activeQueries.set(sessionId, result);
+            this.activeAbortControllers.set(sessionId, abortController);
           }
 
           yield event;
@@ -100,7 +100,7 @@ export class ClaudeSdkBackend implements AgentBackend {
     } finally {
       // Cleanup
       if (sessionId) {
-        this.activeQueries.delete(sessionId);
+        this.activeAbortControllers.delete(sessionId);
       }
     }
   }
@@ -136,7 +136,7 @@ function translateMessage(message: SDKMessage): AgentEvent[] {
     case 'result':
       return [{
         type: 'result',
-        subtype: message.subtype,
+        subtype: mapResultSubtype(message.subtype),
         durationMs: message.duration_ms,
         costUsd: message.total_cost_usd,
         numTurns: message.num_turns,
@@ -265,8 +265,28 @@ function toAbortController(signal: AbortSignal): AbortController {
 }
 
 /**
- * Factory function for creating ClaudeSdkBackend instances.
+ * Map SDK result subtypes to our unified ResultEvent subtypes.
+ * SDK returns 'success' for normal completion, we map to 'completed'.
  */
-export function createClaudeSdkBackend(): ClaudeSdkBackend {
+function mapResultSubtype(
+  sdkSubtype: string,
+): 'completed' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd' {
+  switch (sdkSubtype) {
+    case 'success':
+      return 'completed';
+    case 'error_during_execution':
+    case 'error_max_turns':
+    case 'error_max_budget_usd':
+      return sdkSubtype;
+    default:
+      return 'completed';
+  }
+}
+
+/**
+ * Factory function for creating ClaudeSdkBackend instances.
+ * Accepts BackendConfig for interface compatibility (config is unused for this backend).
+ */
+export function createClaudeSdkBackend(_config?: import('./types.js').BackendConfig): ClaudeSdkBackend {
   return new ClaudeSdkBackend();
 }
