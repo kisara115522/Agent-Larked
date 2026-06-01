@@ -67,7 +67,7 @@ export class ClaudeSdkBackend implements AgentBackend {
       options: {
         cwd: ctx.cwd,
         allowedTools: ctx.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
-        permissionMode: (ctx.permissionMode === 'ask' ? 'bypassPermissions' : ctx.permissionMode) ?? 'bypassPermissions',
+        permissionMode: resolvePermissionMode(ctx.permissionMode),
         allowDangerouslySkipPermissions: true,
         abortController,
         model: ctx.model,
@@ -267,6 +267,8 @@ function toAbortController(signal: AbortSignal): AbortController {
 /**
  * Map SDK result subtypes to our unified ResultEvent subtypes.
  * SDK returns 'success' for normal completion, we map to 'completed'.
+ * SDK-specific error subtypes (like 'error_max_structured_output_retries')
+ * are mapped to 'error_during_execution' to avoid silently masking errors.
  */
 function mapResultSubtype(
   sdkSubtype: string,
@@ -278,9 +280,29 @@ function mapResultSubtype(
     case 'error_max_turns':
     case 'error_max_budget_usd':
       return sdkSubtype;
+    case 'error_max_structured_output_retries':
+      return 'error_during_execution';
     default:
-      return 'completed';
+      console.warn(`[claude-sdk] Unknown result subtype: "${sdkSubtype}", treating as error`);
+      return 'error_during_execution';
   }
+}
+
+/**
+ * Resolve permission mode for the SDK.
+ * The SDK does not support 'ask' mode — it only accepts 'bypassPermissions' and 'auto'.
+ * We log a warning when 'ask' is requested and fall back to 'bypassPermissions'.
+ */
+function resolvePermissionMode(
+  mode: import('./types.js').PermissionMode | undefined,
+): 'bypassPermissions' | 'auto' {
+  if (mode === 'ask') {
+    console.warn(
+      '[claude-sdk] Permission mode "ask" is not supported by Claude SDK, falling back to "bypassPermissions"',
+    );
+    return 'bypassPermissions';
+  }
+  return mode ?? 'bypassPermissions';
 }
 
 /**
