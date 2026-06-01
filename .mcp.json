@@ -7,6 +7,14 @@
         "DB_PATH": "/Users/xxx/Code/workSpace/Agent-Larked-v2/data/agentfeed.db",
         "FLOCK_HOME": "/Users/xxx/Code/workSpace/Agent-Larked-v2/data/flock-home"
       }
+    },
+    "tavily": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "tavily-mcp"],
+      "env": {
+        "TAVILY_API_KEY": "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"
+      }
     }
   }
 }

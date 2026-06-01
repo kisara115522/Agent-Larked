@@ -89,6 +89,7 @@ export interface SpawnRequest {
 export interface HarnessSession {
   sessionId: string;
   agentId: string;
+  backend: AgentBackend;
   backendName: string;
   state: SessionState;
   abortController: AbortController;
@@ -117,10 +118,10 @@ export class AgentHarness {
    * 5. Returns a HarnessSession for lifecycle management
    */
   async spawn(request: SpawnRequest): Promise<HarnessSession> {
-    // Check if already running
+    // Check if already running (including initializing to prevent race condition)
     const existing = this.sessions.get(request.agentId);
-    if (existing && existing.state.status === 'active') {
-      console.log(`[harness] Agent ${request.agentId} already active (session ${existing.sessionId})`);
+    if (existing && (existing.state.status === 'active' || existing.state.status === 'initializing')) {
+      console.log(`[harness] Agent ${request.agentId} already ${existing.state.status} (session ${existing.sessionId})`);
       return existing;
     }
 
@@ -183,6 +184,7 @@ export class AgentHarness {
     const session: HarnessSession = {
       sessionId,
       agentId: request.agentId,
+      backend,
       backendName: backend.name,
       state: sessionState,
       abortController,
@@ -202,7 +204,15 @@ export class AgentHarness {
     if (!session) return false;
 
     console.log(`[harness] Aborting agent ${agentId} (session ${session.sessionId})`);
+    // Abort the external signal
     session.abortController.abort();
+    // Also directly call backend.abort() for clean shutdown
+    // (e.g. ClaudeSdkBackend needs to call q.abort() on the SDK Query)
+    try {
+      session.backend.abort(session.sessionId);
+    } catch (err) {
+      console.warn(`[harness] backend.abort() failed for ${agentId}:`, err);
+    }
     return true;
   }
 

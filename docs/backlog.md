@@ -740,13 +740,13 @@
 - **状态：** done（2026-05-18，cc001 修复为查询 last spawn/runtime，不依赖 active+dormant 矛盾组合）
 - **计划版本：** v0.5 验收阻断
 
-### 🔴 Runtime runner 未实现 proposal 要求的 Agent SDK query/resume
+### ~~🔴 Runtime runner 未实现 proposal 要求的 Agent SDK query/resume~~
 - **发现于：** 2026-05-18，codex 验收发现
 - **问题：** `packages/runtime/src/agent-runner.ts` 使用 `spawn('claude', ['-p', prompt, '--output-format', 'text'])`，没有依赖或调用 Claude Agent SDK `query()`，也没有持久化/resume session、context compression recovering 状态、tool boundary unread 注入。
 - **影响：** `docs/proposals/v0.5-refactor.md` 和 `docs/roadmap.md` 中的 Runtime/session resume/边界注入验收标准并未兑现。
-- **建议修复：** 若 v0.5 范围仍要求 proposal，改用 Agent SDK 并实现 session resume/recovering/tool boundary 注入；若本轮只做 CLI spawn MVP，更新 progress/roadmap/API 文档，不能标为完成。
-- **状态：** open（已在 flock 分配给 cc001）
-- **计划版本：** v0.5 验收阻断
+- **修复：** 2026-06-01，agent-runner.ts 重写为使用 `@anthropic-ai/claude-agent-sdk` 的 `query()` async generator。Session resume 通过 SDK `resume` 选项。MCP server 内联配置。AbortController 替代 process.kill()。
+- **状态：** done（2d18e1d）
+- **计划版本：** v0.5
 
 ### 🔴 Runtime 身份/状态回写不可靠且 activity 端点无鉴权
 - **发现于：** 2026-05-18，codex 验收发现

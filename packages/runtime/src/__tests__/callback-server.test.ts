@@ -12,6 +12,7 @@ const baseConfig: RuntimeConfig = {
   maxAgents: 10,
   heartbeatIntervalMs: 30000,
   dbPath: '',
+  defaultBackend: { type: 'claude-sdk' },
 };
 
 describe('callback-server', () => {

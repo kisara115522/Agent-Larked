@@ -12,6 +12,7 @@ describe('FlockAgentRuntime registration', () => {
     maxAgents: 10,
     heartbeatIntervalMs: 30_000,
     dbPath: '',
+    defaultBackend: { type: 'claude-sdk' },
   };
 
   beforeEach(() => {

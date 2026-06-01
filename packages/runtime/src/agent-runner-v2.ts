@@ -21,6 +21,13 @@ import { fileURLToPath } from 'node:url';
 import { AgentHarness, type SpawnRequest, type HarnessSession } from './harness/index.js';
 import type { BackendConfig } from './backends/types.js';
 import { defaultBackendRegistry } from './harness/backend-registry.js';
+import { createClaudeSdkBackend } from './backends/claude-sdk.js';
+import { createOpenAICompatBackend } from './backends/openai-compat-backend.js';
+
+// Register built-in backends on module load.
+// Without this, the registry is empty and all spawns throw.
+defaultBackendRegistry.register('claude-sdk', createClaudeSdkBackend);
+defaultBackendRegistry.register('openai-compat', createOpenAICompatBackend);
 
 // Re-export types from original agent-runner.ts to avoid duplication.
 // Import from there to keep a single source of truth.
@@ -165,11 +172,8 @@ export class AgentRunnerV2 {
     if (!instance) return false;
 
     console.log(`[runner-v2] Stopping agent ${agentId}`);
+    // harness.abort() already aborts the AbortController and calls backend.abort()
     this.harness.abort(agentId);
-
-    if (instance.abortController) {
-      instance.abortController.abort();
-    }
 
     instance.status = 'dormant';
     this.agentInstances.delete(agentId);
