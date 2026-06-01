@@ -102,17 +102,3 @@ export function loadBackendConfig(): BackendConfig {
 
   return config;
 }
-
-/**
- * Parse a string as a positive integer, falling back to default if invalid.
- * Prevents NaN from propagating through the system.
- */
-function parsePositiveInt(value: string | undefined, defaultValue: number): number {
-  if (value === undefined) return defaultValue;
-  const parsed = parseInt(value, 10);
-  if (isNaN(parsed) || parsed <= 0) {
-    console.warn(`[config] WARNING: Invalid numeric value "${value}", using default ${defaultValue}`);
-    return defaultValue;
-  }
-  return parsed;
-}

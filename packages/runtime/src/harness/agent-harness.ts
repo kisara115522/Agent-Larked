@@ -246,6 +246,12 @@ export class AgentHarness {
     console.log(`[harness] Shutting down ${this.sessions.size} sessions...`);
     for (const [agentId, session] of this.sessions) {
       session.abortController.abort();
+      // Also call backend.abort() for clean internal shutdown
+      try {
+        session.backend.abort(session.sessionId);
+      } catch (err) {
+        console.warn(`[harness] backend.abort() failed during shutdown for ${agentId}:`, err);
+      }
     }
     // Wait for all sessions to finish
     const promises = Array.from(this.sessions.values()).map(s =>
