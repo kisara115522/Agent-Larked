@@ -57,9 +57,11 @@ export class BackendRegistry {
   /**
    * Generate a cache key from config. Two configs with the same
    * type + endpoint + apiKey share the same backend instance.
+   * Different API keys produce different hashes to avoid sharing instances.
    */
   private configHash(config: BackendConfig): string {
-    return `${config.type}::${config.apiEndpoint ?? ''}::${config.apiKey ? '***' : ''}`;
+    const keyHash = config.apiKey ? simpleHash(config.apiKey) : '';
+    return `${config.type}::${config.apiEndpoint ?? ''}::${keyHash}`;
   }
 
   /**
@@ -90,3 +92,17 @@ export class BackendRegistry {
  * Backends register themselves here at import time.
  */
 export const defaultBackendRegistry = new BackendRegistry();
+
+/**
+ * Simple non-cryptographic hash for cache key generation.
+ * Avoids exposing API keys while differentiating different keys.
+ */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
