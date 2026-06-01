@@ -473,7 +473,7 @@ export class OpenAICompatBackend implements AgentBackend {
             if (existing) {
               if (tc.id) existing.id = tc.id;
               if (tc.function?.name) existing.name = tc.function.name;
-              if (tc.function?.arguments != null) existing.arguments += tc.function.arguments;
+              if (tc.function?.arguments) existing.arguments += tc.function.arguments;
             } else if (tc.id || tc.function?.name) {
               toolCallsMap.set(idx, {
                 id: tc.id ?? `call_${idx}`,
@@ -733,23 +733,25 @@ function estimateCost(totalTokens: number, model: string): number {
   const modelLower = model.toLowerCase();
 
   // Price per 1M tokens (input+output average, rough estimate)
-  const priceMap: Record<string, number> = {
-    'gpt-4o': 5.0,
-    'gpt-4o-mini': 0.3,
-    'gpt-4-turbo': 15.0,
-    'gpt-4': 45.0,
-    'gpt-3.5-turbo': 0.5,
-    'deepseek-chat': 0.27,
-    'deepseek-coder': 0.27,
-    'deepseek-reasoner': 0.55,
-    'claude-3-opus': 22.5,
-    'claude-3-sonnet': 5.25,
-    'claude-3-haiku': 0.375,
-  };
+  // Ordered by specificity — longer names first to avoid prefix collisions
+  const priceMap: Array<[string, number]> = [
+    ['gpt-4o-mini', 0.3],
+    ['gpt-4o', 5.0],
+    ['gpt-4-turbo', 15.0],
+    ['gpt-4', 45.0],
+    ['gpt-3.5-turbo', 0.5],
+    ['deepseek-reasoner', 0.55],
+    ['deepseek-chat', 0.27],
+    ['deepseek-coder', 0.27],
+    ['claude-3.5-sonnet', 5.0],
+    ['claude-3-opus', 22.5],
+    ['claude-3-sonnet', 5.25],
+    ['claude-3-haiku', 0.375],
+  ];
 
-  // Find matching price
-  for (const [key, price] of Object.entries(priceMap)) {
-    if (modelLower.includes(key)) {
+  // Exact match first, then prefix match
+  for (const [key, price] of priceMap) {
+    if (modelLower === key || modelLower.startsWith(key + '-') || modelLower.startsWith(key + ':')) {
       return (totalTokens / 1_000_000) * price;
     }
   }
