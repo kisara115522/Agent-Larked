@@ -626,19 +626,17 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-/** Combine multiple AbortSignals into one */
+/**
+ * Combine multiple AbortSignals into one.
+ * Uses AbortSignal.any() (Node 20+) to avoid listener leak.
+ */
 function combineSignals(...signals: AbortSignal[]): AbortSignal {
-  const controller = new AbortController();
-
-  for (const signal of signals) {
-    if (signal.aborted) {
-      controller.abort();
-      return controller.signal;
-    }
-    signal.addEventListener('abort', () => controller.abort(), { once: true });
+  // Filter out already-aborted signals
+  if (signals.some((s) => s.aborted)) {
+    return AbortSignal.abort();
   }
-
-  return controller.signal;
+  // AbortSignal.any() handles cleanup internally — no listener leak
+  return AbortSignal.any(signals);
 }
 
 /** Check if an error is non-retryable (4xx except 429) */
