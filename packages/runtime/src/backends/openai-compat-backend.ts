@@ -178,9 +178,15 @@ export class OpenAICompatBackend implements AgentBackend {
     const sessionAbort = new AbortController();
     this.abortControllers.set(sessionId, sessionAbort);
 
-    // Link external signal to our controller
+    // Link external signal to our controller.
+    // { once: true } ensures the listener self-removes after firing.
+    // The finally block below handles cleanup if the signal never fires.
     const onExternalAbort = () => sessionAbort.abort();
-    ctx.signal.addEventListener('abort', onExternalAbort, { once: true });
+    if (ctx.signal.aborted) {
+      sessionAbort.abort();
+    } else {
+      ctx.signal.addEventListener('abort', onExternalAbort, { once: true });
+    }
 
     const startTime = Date.now();
     let totalCost = 0;
