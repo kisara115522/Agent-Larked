@@ -1,14 +1,16 @@
 # Progress
 
 ## 当前状态
-- **v0.5 Runtime SDK 集成进行中** — 2026-06-01
+- **v0.5 已完成** — 2026-06-01
   - ✅ agent-runner.ts 从 CLI child process 切换到 Agent SDK `query()`
   - ✅ Session resume 通过 SDK `resume` 选项
   - ✅ MCP server 内联配置（`mcpServers` option）
   - ✅ AbortController 替代 process.kill()
   - ✅ bypassPermissions daemon 模式
+  - ✅ 后端抽象层（ClaudeSdkBackend + OpenAICompatBackend + AgentHarness）
   - ✅ 42 个测试全部通过
-  - 🔄 Task artifact API（agent 后台进行中）
+  - ✅ 端到端协作测试完成（5 agent 同时工作）
+  - 📋 **下一步：v0.6 UX 补全** — 见 `docs/plans/2026-06-01-ux-critical-issues.md`
 - **v0.1 已完成** — 2026-05-05
 - **v0.1.1 已完成** — 2026-05-05（关键修复：GET /rooms、文件数据库、成员列表、whoami）
 - **v0.1.2 已完成** — 2026-05-05（Lark→Flock 全局重命名）
