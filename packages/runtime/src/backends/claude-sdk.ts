@@ -154,7 +154,10 @@ function translateMessage(message: SDKMessage): AgentEvent[] {
  * multiple content blocks (text, tool_use, thinking) — we yield ALL of them.
  */
 function translateAssistantMessage(message: SDKMessage): AgentEvent[] {
-  const content = (message as { content?: Array<{ type: string; [key: string]: unknown }> }).content;
+  // SDKMessage is a union; assistant messages have a `content` array of blocks.
+  // Use runtime check instead of unsafe cast.
+  const msg = message as Record<string, unknown>;
+  const content = msg.content;
   if (!content || !Array.isArray(content)) {
     return [];
   }
@@ -172,35 +175,54 @@ function translateAssistantMessage(message: SDKMessage): AgentEvent[] {
 
 function translateContentBlock(block: { type: string; [key: string]: unknown }): AgentEvent | null {
   switch (block.type) {
-    case 'text':
-      return {
-        type: 'text',
-        content: block.text as string,
-      };
+    case 'text': {
+      const text = block.text;
+      if (typeof text !== 'string') {
+        console.warn('[claude-sdk] Unexpected text block format:', block);
+        return null;
+      }
+      return { type: 'text', content: text };
+    }
 
-    case 'tool_use':
+    case 'tool_use': {
+      const { id, name, input } = block;
+      if (typeof id !== 'string' || typeof name !== 'string') {
+        console.warn('[claude-sdk] Unexpected tool_use block format:', block);
+        return null;
+      }
       return {
         type: 'tool_use',
-        id: block.id as string,
-        name: block.name as string,
-        input: block.input as Record<string, unknown>,
+        id,
+        name,
+        input: (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>,
       };
+    }
 
-    case 'tool_result':
+    case 'tool_result': {
+      const toolUseId = block.tool_use_id;
+      if (typeof toolUseId !== 'string') {
+        console.warn('[claude-sdk] Unexpected tool_result block format:', block);
+        return null;
+      }
+      const content = typeof block.content === 'string'
+        ? block.content
+        : JSON.stringify(block.content ?? '');
       return {
         type: 'tool_result',
-        toolUseId: block.tool_use_id as string,
-        content: typeof block.content === 'string'
-          ? block.content
-          : JSON.stringify(block.content),
-        isError: block.is_error as boolean | undefined,
+        toolUseId,
+        content,
+        isError: typeof block.is_error === 'boolean' ? block.is_error : undefined,
       };
+    }
 
-    case 'thinking':
-      return {
-        type: 'thinking',
-        content: block.thinking as string,
-      };
+    case 'thinking': {
+      const thinking = block.thinking;
+      if (typeof thinking !== 'string') {
+        console.warn('[claude-sdk] Unexpected thinking block format:', block);
+        return null;
+      }
+      return { type: 'thinking', content: thinking };
+    }
 
     default:
       return null;
