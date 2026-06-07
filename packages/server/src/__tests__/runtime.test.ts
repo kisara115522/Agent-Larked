@@ -70,6 +70,7 @@ describe('Runtime Management', () => {
         host: 'localhost',
         port: 9100,
         callback_url: 'http://localhost:9100',
+        callback_secret: first.body.callback_secret,
         max_agents: 7,
       })
       .expect(201);
@@ -85,6 +86,36 @@ describe('Runtime Management', () => {
 
     const matching = list.body.runtimes.filter((runtime: { callback_url: string }) => runtime.callback_url === 'http://localhost:9100');
     expect(matching).toHaveLength(1);
+  });
+
+  it('does not reveal an existing callback secret to an unauthenticated duplicate registration', async () => {
+    const first = await request(app)
+      .post('/runtimes')
+      .send({
+        host: 'localhost',
+        port: 9150,
+        callback_url: 'http://localhost:9150',
+        max_agents: 3,
+      })
+      .expect(201);
+
+    const duplicate = await request(app)
+      .post('/runtimes')
+      .send({
+        host: 'localhost',
+        port: 9150,
+        callback_url: 'http://localhost:9150',
+        max_agents: 7,
+      })
+      .expect(403);
+
+    expect(duplicate.body.error.message).toMatch(/callback secret/i);
+
+    const row = db.prepare(
+      'SELECT callback_secret, max_agents FROM agent_runtimes WHERE id = ?',
+    ).get(first.body.id) as { callback_secret: string; max_agents: number };
+    expect(row.callback_secret).toBe(first.body.callback_secret);
+    expect(row.max_agents).toBe(3);
   });
 
   it('lists registered runtimes', async () => {
@@ -225,6 +256,70 @@ describe('Runtime Management', () => {
 
     expect(statusRes.body.status).toBe('active');
     expect(statusRes.body.session_id).toBe('session-from-runtime');
+  });
+
+  it('accepts activity from the spawn token after a later token rotation', async () => {
+    const firstSpawn = await request(app)
+      .post(`/agents/${agentId}/spawn`)
+      .set('Cookie', humanCookie)
+      .send({ prompt: 'First runtime process' })
+      .expect(201);
+
+    await request(app)
+      .post(`/agents/${agentId}/spawn`)
+      .set('Cookie', humanCookie)
+      .send({ prompt: 'Second runtime process rotates token' })
+      .expect(201);
+
+    await request(app)
+      .post(`/agents/${agentId}/activity`)
+      .set('Authorization', `Bearer ${firstSpawn.body.agent_token}`)
+      .send({
+        activity_type: 'status_change',
+        detail: 'Agent dormant (completed)',
+        metadata: { session_id: 'first-runtime-session' },
+      })
+      .expect(201);
+  });
+
+  it('marks an agent dormant when runtime reports completion', async () => {
+    const res = await request(app)
+      .post(`/agents/${agentId}/spawn`)
+      .set('Cookie', humanCookie)
+      .send({ prompt: 'Completion status probe' })
+      .expect(201);
+
+    await request(app)
+      .post(`/agents/${agentId}/activity`)
+      .set('Authorization', `Bearer ${res.body.agent_token}`)
+      .send({
+        activity_type: 'status_change',
+        detail: 'Agent active',
+        metadata: { session_id: 'completion-session' },
+      })
+      .expect(201);
+
+    await request(app)
+      .post(`/agents/${agentId}/activity`)
+      .set('Authorization', `Bearer ${res.body.agent_token}`)
+      .send({
+        activity_type: 'status_change',
+        detail: 'Agent dormant (completed)',
+        metadata: { session_id: 'completion-session' },
+      })
+      .expect(201);
+
+    const statusRes = await request(app)
+      .get(`/agents/${agentId}/status`)
+      .set('Cookie', humanCookie)
+      .expect(200);
+
+    const spawnRow = db.prepare(
+      'SELECT status FROM agent_spawns WHERE agent_id = ? ORDER BY spawned_at DESC LIMIT 1',
+    ).get(agentId) as { status: string };
+
+    expect(statusRes.body.status).toBe('dormant');
+    expect(spawnRow.status).toBe('stopped');
   });
 
   it('passes room context to runtime callback on spawn', async () => {

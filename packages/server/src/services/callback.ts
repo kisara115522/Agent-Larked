@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { regenerateToken } from './identity.js';
+import { hashToken } from '../middleware/auth.js';
 import { cleanupStaleRuntimes, selectAvailableRuntime } from './runtime.js';
 import { ensureAgentRoomState } from './room-context.js';
 
@@ -100,13 +101,14 @@ function createWakeSession(
   if (agent.status === 'spawning' && hasPendingRoomWake(db, agentId, roomId)) return null;
 
   const { token } = regenerateToken(db, agentId);
+  const tokenHash = hashToken(token);
   const now = new Date().toISOString();
   const sessionId = latestClaudeSessionId(db, agentId);
   db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status = 'spawning'").run(now, agentId);
   db.prepare(`
-    INSERT INTO agent_spawns (id, agent_id, runtime_id, session_id, session_source, status, spawned_at, last_active_at, prompt)
-    VALUES (?, ?, ?, ?, ?, 'spawning', ?, ?, ?)
-  `).run(randomUUID(), agentId, runtimeId, sessionId ?? null, sessionId ? 'claude-cli' : null, now, now, prompt ?? null);
+    INSERT INTO agent_spawns (id, agent_id, runtime_id, session_id, session_source, agent_token_hash, status, spawned_at, last_active_at, prompt)
+    VALUES (?, ?, ?, ?, ?, ?, 'spawning', ?, ?, ?)
+  `).run(randomUUID(), agentId, runtimeId, sessionId ?? null, sessionId ? 'claude-cli' : null, tokenHash, now, now, prompt ?? null);
   db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
 
   return { runtime, agent, token, sessionId };

@@ -236,6 +236,7 @@ CREATE TABLE IF NOT EXISTS agent_spawns (
   runtime_id TEXT REFERENCES agent_runtimes(id),
   session_id TEXT,
   session_source TEXT,
+  agent_token_hash TEXT,
   status TEXT DEFAULT 'active',
   spawned_at TEXT DEFAULT (datetime('now')),
   last_active_at TEXT,
@@ -489,6 +490,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateMessagesFromAgentHistoryField(db);
   migrateAgentSpawnsRuntimeNullable(db);
   migrateColumn(db, 'agent_spawns', 'session_source', 'TEXT');
+  migrateColumn(db, 'agent_spawns', 'agent_token_hash', 'TEXT');
   migrateRemoveHumanFkConstraints(db);
   backfillHumanProfiles(db);
   migrateColumn(db, 'wake_events', 'status', "TEXT NOT NULL DEFAULT 'queued'");
@@ -718,6 +720,7 @@ function migrateAgentSpawnsRuntimeNullable(db: Database.Database): void {
           runtime_id TEXT REFERENCES agent_runtimes(id),
           session_id TEXT,
           session_source TEXT,
+          agent_token_hash TEXT,
           status TEXT DEFAULT 'active',
           spawned_at TEXT DEFAULT (datetime('now')),
           last_active_at TEXT,
@@ -725,8 +728,8 @@ function migrateAgentSpawnsRuntimeNullable(db: Database.Database): void {
         );
       `);
       db.exec(`
-        INSERT INTO agent_spawns_new (id, agent_id, runtime_id, session_id, session_source, status, spawned_at, last_active_at, prompt)
-        SELECT id, agent_id, runtime_id, session_id, NULL, status, spawned_at, last_active_at, prompt
+        INSERT INTO agent_spawns_new (id, agent_id, runtime_id, session_id, session_source, agent_token_hash, status, spawned_at, last_active_at, prompt)
+        SELECT id, agent_id, runtime_id, session_id, NULL, NULL, status, spawned_at, last_active_at, prompt
         FROM agent_spawns;
       `);
       db.exec('DROP TABLE agent_spawns;');

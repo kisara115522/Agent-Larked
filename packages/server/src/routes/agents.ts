@@ -132,7 +132,6 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         throw new ServerError(ErrorCode.AGENT_NOT_FOUND, 'Agent not found', false, 404);
       }
 
-      // Create spawn record
       const spawnId = crypto.randomUUID();
       const now = new Date().toISOString();
       const prompt = req.body.prompt ?? null;
@@ -159,11 +158,15 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Runtime is offline or unavailable. Start a runtime daemon first.', false, 400);
       }
 
+      // Generate a new token for this spawn session
+      const { token } = regenerateToken(db, agentId);
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+
       // Use 'spawning' status — runtime will update to 'active' once process starts
       db.prepare(`
-        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
-        VALUES (?, ?, ?, 'spawning', ?, ?, ?)
-      `).run(spawnId, agentId, runtimeId, now, now, prompt);
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, agent_token_hash, status, spawned_at, last_active_at, prompt)
+        VALUES (?, ?, ?, ?, 'spawning', ?, ?, ?)
+      `).run(spawnId, agentId, runtimeId, tokenHash, now, now, prompt);
 
       // Don't mark profile as active yet — wait for runtime confirmation
       db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
@@ -171,9 +174,6 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       if (eventBus) {
         eventBus.emitAgentStatus({ agent_id: agentId, status: 'spawning' });
       }
-
-      // Generate a new token for this spawn session
-      const { token } = regenerateToken(db, agentId);
 
       // Notify runtime to actually spawn the agent process
       notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token, roomId ?? undefined, roomName ?? undefined);
@@ -255,12 +255,16 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         throw new ServerError(ErrorCode.VALIDATION_ERROR, 'Runtime is offline or unavailable. Start a runtime daemon first.', false, 400);
       }
 
-      // Create new spawn record for the wake
       const spawnId = crypto.randomUUID();
+      // Generate a new token for this wake session
+      const { token } = regenerateToken(db, agentId);
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+
+      // Create new spawn record for the wake
       db.prepare(`
-        INSERT INTO agent_spawns (id, agent_id, runtime_id, status, spawned_at, last_active_at, prompt)
-        VALUES (?, ?, ?, 'spawning', ?, ?, ?)
-      `).run(spawnId, agentId, runtimeId, now, now, prompt);
+        INSERT INTO agent_spawns (id, agent_id, runtime_id, agent_token_hash, status, spawned_at, last_active_at, prompt)
+        VALUES (?, ?, ?, ?, 'spawning', ?, ?, ?)
+      `).run(spawnId, agentId, runtimeId, tokenHash, now, now, prompt);
 
       // Don't mark profile as active yet — wait for runtime confirmation
       db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
@@ -268,9 +272,6 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       if (eventBus) {
         eventBus.emitAgentStatus({ agent_id: agentId, status: 'spawning' });
       }
-
-      // Generate a new token for this wake session
-      const { token } = regenerateToken(db, agentId);
 
       // Notify runtime to wake the agent
       notifyRuntimeSpawn(db, runtimeId, agentId, prompt ?? undefined, token, roomId ?? undefined, roomName ?? undefined);
@@ -374,7 +375,18 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       const token = authHeader.slice(7);
       const tokenHash = createHash('sha256').update(token).digest('hex');
       const profile = db.prepare('SELECT id FROM profiles WHERE id = ? AND token_hash = ?').get(agentId, tokenHash) as { id: string } | undefined;
-      if (!profile) {
+      const spawn = profile
+        ? null
+        : db.prepare(`
+          SELECT id
+          FROM agent_spawns
+          WHERE agent_id = ?
+            AND agent_token_hash = ?
+            AND status IN ('active', 'spawning')
+          ORDER BY spawned_at DESC
+          LIMIT 1
+        `).get(agentId, tokenHash) as { id: string } | undefined;
+      if (!profile && !spawn) {
         res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } });
         return;
       }
@@ -394,25 +406,45 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
       // Handle status changes from runtime — update spawn and profile status
       if (activity_type === 'status_change' && metadata) {
         const meta = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
-        if (detail === 'Agent completed' || detail === 'Agent stopped') {
-          db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status IN ('active', 'spawning')").run(now, agentId);
-          db.prepare("UPDATE profiles SET status = 'dormant', updated_at = ? WHERE id = ?").run(now, agentId);
-          if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'dormant' });
+        if (detail === 'Agent completed' || detail === 'Agent stopped' || detail === 'Agent dormant (completed)') {
+          if (spawn) {
+            db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE id = ?").run(now, spawn.id);
+          } else {
+            db.prepare("UPDATE agent_spawns SET status = 'stopped', last_active_at = ? WHERE agent_id = ? AND status IN ('active', 'spawning')").run(now, agentId);
+          }
+          const activeCount = db.prepare(
+            "SELECT COUNT(*) AS count FROM agent_spawns WHERE agent_id = ? AND status IN ('active', 'spawning')",
+          ).get(agentId) as { count: number };
+          if (activeCount.count === 0) {
+            db.prepare("UPDATE profiles SET status = 'dormant', updated_at = ? WHERE id = ?").run(now, agentId);
+            if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'dormant' });
+          }
         } else if (detail === 'Agent active') {
-          db.prepare("UPDATE agent_spawns SET status = 'active', session_id = COALESCE(?, session_id), session_source = COALESCE(?, session_source), last_active_at = ? WHERE agent_id = ? AND status = 'spawning'")
-            .run(
-              typeof meta.session_id === 'string' ? meta.session_id : null,
-              typeof meta.session_source === 'string' ? meta.session_source : null,
-              now,
-              agentId,
-            );
+          const sessionId = typeof meta.session_id === 'string' ? meta.session_id : null;
+          const sessionSource = typeof meta.session_source === 'string' ? meta.session_source : null;
+          if (spawn) {
+            db.prepare("UPDATE agent_spawns SET status = 'active', session_id = COALESCE(?, session_id), session_source = COALESCE(?, session_source), last_active_at = ? WHERE id = ?")
+              .run(sessionId, sessionSource, now, spawn.id);
+          } else {
+            db.prepare("UPDATE agent_spawns SET status = 'active', session_id = COALESCE(?, session_id), session_source = COALESCE(?, session_source), last_active_at = ? WHERE agent_id = ? AND status = 'spawning'")
+              .run(sessionId, sessionSource, now, agentId);
+          }
           db.prepare("UPDATE profiles SET status = 'active', updated_at = ?, last_active_at = ? WHERE id = ?").run(now, now, agentId);
           if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'active' });
         }
       } else if (activity_type === 'error') {
-        db.prepare("UPDATE agent_spawns SET status = 'error', last_active_at = ? WHERE agent_id = ? AND status IN ('active', 'spawning')").run(now, agentId);
-        db.prepare("UPDATE profiles SET status = 'error', updated_at = ? WHERE id = ?").run(now, agentId);
-        if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'error' });
+        if (spawn) {
+          db.prepare("UPDATE agent_spawns SET status = 'error', last_active_at = ? WHERE id = ?").run(now, spawn.id);
+        } else {
+          db.prepare("UPDATE agent_spawns SET status = 'error', last_active_at = ? WHERE agent_id = ? AND status IN ('active', 'spawning')").run(now, agentId);
+        }
+        const activeCount = db.prepare(
+          "SELECT COUNT(*) AS count FROM agent_spawns WHERE agent_id = ? AND status IN ('active', 'spawning')",
+        ).get(agentId) as { count: number };
+        if (activeCount.count === 0) {
+          db.prepare("UPDATE profiles SET status = 'error', updated_at = ? WHERE id = ?").run(now, agentId);
+          if (eventBus) eventBus.emitAgentStatus({ agent_id: agentId, status: 'error' });
+        }
       }
 
       if (eventBus) {

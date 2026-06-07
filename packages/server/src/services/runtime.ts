@@ -7,6 +7,7 @@ export interface RegisterRuntimeRequest {
   host: string;
   port: number;
   callback_url: string;
+  callback_secret?: string;
   capabilities?: string[];
   max_agents?: number;
 }
@@ -42,6 +43,15 @@ export function registerRuntime(
   ).get(req.callback_url) as { id: string; callback_secret: string } | undefined;
 
   if (existing) {
+    if (req.callback_secret !== existing.callback_secret) {
+      throw new ServerError(
+        ErrorCode.FORBIDDEN,
+        'Existing runtime callback secret is required to update this callback URL',
+        false,
+        403,
+      );
+    }
+
     db.prepare(`
       UPDATE agent_runtimes SET host = ?, port = ?, capabilities = ?, max_agents = ?, status = 'online', last_heartbeat_at = ?
       WHERE id = ?
