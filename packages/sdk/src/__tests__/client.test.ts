@@ -7,6 +7,7 @@ import { sendMessage, getMessages } from '../messaging.js';
 import { sendDirectMessage, getDirectMessages, listDirectChats } from '../direct-chat.js';
 import { react, getThread } from '../reaction.js';
 import { subscribeRoom, unsubscribeRoom } from '../sse.js';
+import { getTask as getTaskDetail } from '../task.js';
 import { ErrorCode } from '@flock/shared';
 
 const BASE = 'http://localhost:3000';
@@ -18,6 +19,20 @@ function mockFetch(response: unknown, status = 200) {
     statusText: status === 200 ? 'OK' : 'Error',
     json: () => Promise.resolve(response),
   });
+  vi.stubGlobal('fetch', fn);
+  return fn;
+}
+
+function mockFetchSequence(responses: unknown[]) {
+  const fn = vi.fn();
+  for (const response of responses) {
+    fn.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: () => Promise.resolve(response),
+    });
+  }
   vi.stubGlobal('fetch', fn);
   return fn;
 }
@@ -268,5 +283,62 @@ describe('Subscribe', () => {
       `${BASE}/rooms/r1/unsubscribe`,
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+});
+
+describe('Task', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('getTask includes artifacts from the task artifact endpoint', async () => {
+    const fetchFn = mockFetchSequence([
+      {
+        id: 'task-1',
+        room_id: 'room-1',
+        parent_task_id: null,
+        title: 'Write report',
+        description: '',
+        status: 'todo',
+        assigned_to: null,
+        required_capabilities: [],
+        priority: 0,
+        retry_count: 0,
+        max_retries: 2,
+        message_id: null,
+        orchestrator_id: null,
+        created_by: 'agent-1',
+        created_at: '2026-06-01T00:00:00.000Z',
+        updated_at: '2026-06-01T00:00:00.000Z',
+        completed_at: null,
+      },
+      { events: [] },
+      {
+        artifacts: [{
+          id: 'artifact-1',
+          task_id: 'task-1',
+          agent_id: 'agent-1',
+          name: 'report.json',
+          path: '/tmp/report.json',
+          content_type: 'application/json',
+          size: 42,
+          created_at: '2026-06-01T00:01:00.000Z',
+        }],
+      },
+    ]);
+    const client = new AgentFeedClient({ baseUrl: BASE, token: 'tok' });
+
+    const result = await getTaskDetail(client, 'task-1');
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      `${BASE}/tasks/task-1/artifacts`,
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(result.artifacts).toEqual([
+      {
+        id: 'artifact-1',
+        type: 'json',
+        name: 'report.json',
+        created_at: '2026-06-01T00:01:00.000Z',
+      },
+    ]);
   });
 });

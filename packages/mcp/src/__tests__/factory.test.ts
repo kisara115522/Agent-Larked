@@ -13,6 +13,7 @@ let db: Database.Database;
 let client: Client;
 let tempDir: string;
 let origFlockHome: string | undefined;
+let agentId: string;
 
 beforeAll(async () => {
   tempDir = mkdtempSync(join(tmpdir(), 'flock-factory-'));
@@ -22,7 +23,7 @@ beforeAll(async () => {
   db = createDatabase(':memory:');
 
   // Register an agent so agentIdProvider works
-  const agentId = 'test-agent-id';
+  agentId = 'test-agent-id';
   const tokenHash = 'test-hash';
   db.prepare(
     "INSERT INTO profiles (id, name, display_name, token_hash, status, created_at, updated_at) VALUES (?, 'TestAgent', 'Test', ?, 'active', datetime('now'), datetime('now'))",
@@ -72,6 +73,8 @@ describe('createMcpServer factory', () => {
     expect(toolNames).toContain('flock_wait');
     expect(toolNames).toContain('flock_dm_send');
     expect(toolNames).toContain('flock_react');
+    expect(toolNames).toContain('flock_task_create');
+    expect(toolNames).toContain('flock_task_artifact');
   });
 
   it('flock_room_list returns rooms for authenticated agent', async () => {
@@ -80,5 +83,40 @@ describe('createMcpServer factory', () => {
     const content = result.content as { type: string; text: string }[];
     const data = JSON.parse(content[0].text);
     expect(data).toHaveProperty('rooms');
+  });
+
+  it('flock_task_artifact creates an artifact for a task', async () => {
+    db.prepare(
+      "INSERT INTO rooms (id, name, visibility, created_by, created_at) VALUES ('room-1', 'Artifacts Room', 'public', ?, datetime('now'))",
+    ).run(agentId);
+    db.prepare(
+      "INSERT INTO room_members (room_id, agent_id, joined_at) VALUES ('room-1', ?, datetime('now'))",
+    ).run(agentId);
+
+    const taskResult = await client.callTool({
+      name: 'flock_task_create',
+      arguments: { room_id: 'room-1', title: 'Collect artifacts' },
+    });
+    const taskContent = taskResult.content as { type: string; text: string }[];
+    const task = JSON.parse(taskContent[0].text) as { id: string };
+
+    const result = await client.callTool({
+      name: 'flock_task_artifact',
+      arguments: {
+        task_id: task.id,
+        type: 'json',
+        name: 'summary.json',
+        content: '{"ok":true}',
+        mime_type: 'application/json',
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const content = result.content as { type: string; text: string }[];
+    const artifact = JSON.parse(content[0].text) as { task_id: string; name: string; content_type: string; size: number };
+    expect(artifact.task_id).toBe(task.id);
+    expect(artifact.name).toBe('summary.json');
+    expect(artifact.content_type).toBe('application/json');
+    expect(artifact.size).toBe(11);
   });
 });

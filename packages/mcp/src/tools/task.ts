@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
-import { createTask, getTask, listTasks, updateTask } from '@flock/server/services/task';
+import { createArtifact, createTask, getTask, listTasks, updateTask } from '@flock/server/services/task';
 import { getAgentId } from '../db.js';
 
 export function registerTaskTools(
@@ -96,6 +96,40 @@ export function registerTaskTools(
   );
 
   server.tool(
+    'flock_task_artifact',
+    'Add an artifact to a task. Artifacts represent task outputs such as text, JSON, code, or URI references.',
+    {
+      task_id: z.string().describe('Task ID to attach the artifact to'),
+      type: z.enum(['text', 'json', 'code', 'uri']).describe('Artifact type'),
+      name: z.string().describe('Artifact name'),
+      content: z.string().optional().describe('Inline content for text/json/code artifacts'),
+      uri: z.string().optional().describe('URI for uri artifacts'),
+      mime_type: z.string().optional().describe('MIME type for display'),
+      metadata: z.record(z.unknown()).optional().describe('Optional display metadata'),
+    },
+    async (args) => {
+      try {
+        const agentId = agentIdProvider();
+        if (!agentId) {
+          return { content: [{ type: 'text' as const, text: 'Error: Agent not registered.' }], isError: true };
+        }
+        const content = args.uri ?? args.content ?? '';
+        const result = createArtifact(db, args.task_id, {
+          agent_id: agentId,
+          name: args.name,
+          path: content,
+          content_type: args.mime_type ?? contentTypeForArtifact(args.type),
+          size: args.content ? Buffer.byteLength(args.content, 'utf8') : 0,
+        });
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text' as const, text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
     'flock_project_status',
     'Get all tasks in a room as a project overview. Any agent can call this to see overall progress.',
     {
@@ -136,4 +170,10 @@ export function registerTaskTools(
       }
     },
   );
+}
+
+function contentTypeForArtifact(type: 'text' | 'json' | 'code' | 'uri'): string {
+  if (type === 'json') return 'application/json';
+  if (type === 'uri') return 'text/uri-list';
+  return 'text/plain';
 }

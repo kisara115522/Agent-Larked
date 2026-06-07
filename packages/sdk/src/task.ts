@@ -105,6 +105,17 @@ interface ServerTaskEvent {
   created_at: string;
 }
 
+interface ServerTaskArtifact {
+  id: string;
+  task_id: string;
+  agent_id: string;
+  name: string;
+  path: string;
+  content_type: string;
+  size: number;
+  created_at: string;
+}
+
 // --- SDK functions ---
 
 export async function createTask(
@@ -139,9 +150,10 @@ export async function getTask(
   client: AgentFeedClient,
   taskId: string,
 ): Promise<TaskDetailResponse> {
-  const [task, eventsResp] = await Promise.all([
+  const [task, eventsResp, artifactsResp] = await Promise.all([
     client.get<ServerTask>(`/tasks/${taskId}`),
     client.get<{ events: ServerTaskEvent[] }>(`/tasks/${taskId}/events`).catch(() => ({ events: [] })),
+    client.get<{ artifacts: ServerTaskArtifact[] }>(`/tasks/${taskId}/artifacts`).catch(() => ({ artifacts: [] })),
   ]);
 
   const assignees = task.assigned_to ? [task.assigned_to] : [];
@@ -157,7 +169,14 @@ export async function getTask(
     created_at: e.created_at,
   }));
 
-  return { task: task as unknown as Task, assignees, events, artifacts: [] };
+  const artifacts: TaskArtifactItem[] = artifactsResp.artifacts.map(a => ({
+    id: a.id,
+    type: artifactTypeFromContentType(a.content_type),
+    name: a.name,
+    created_at: a.created_at,
+  }));
+
+  return { task: task as unknown as Task, assignees, events, artifacts };
 }
 
 export async function appendTaskEvent(
@@ -213,4 +232,11 @@ export async function addTaskArtifact(
     name: result.name,
     created_at: result.created_at,
   };
+}
+
+function artifactTypeFromContentType(contentType: string): ArtifactType {
+  if (contentType.includes('json')) return 'json';
+  if (contentType.includes('javascript') || contentType.includes('typescript') || contentType.includes('x-python')) return 'code';
+  if (contentType.includes('uri-list')) return 'uri';
+  return 'text';
 }
