@@ -22,9 +22,12 @@ describe('AgentRunner', () => {
   });
 
   it('should report activity on spawn', async () => {
-    // Mock spawn to avoid actually running claude
-    const originalRunAgent = (runner as any).runAgent.bind(runner);
-    (runner as any).runAgent = vi.fn();
+    const sessionPromise = new Promise(() => {});
+    (runner as any).harness.spawn = vi.fn().mockResolvedValue({
+      sessionId: 'session-1',
+      abortController: new AbortController(),
+      promise: sessionPromise,
+    });
 
     await runner.spawn('agent-1', 'Hello');
 
@@ -38,13 +41,14 @@ describe('AgentRunner', () => {
   });
 
   it('should not spawn duplicate agent', async () => {
-    (runner as any).runAgent = vi.fn();
+    const sessionPromise = new Promise(() => {});
+    (runner as any).harness.spawn = vi.fn().mockResolvedValue({
+      sessionId: 'session-1',
+      abortController: new AbortController(),
+      promise: sessionPromise,
+    });
 
     const session1 = await runner.spawn('agent-1', 'Hello');
-    // Simulate the process starting (runAgent would do this normally)
-    const agent = runner.getAgent('agent-1');
-    if (agent) agent.status = 'active';
-
     const session2 = await runner.spawn('agent-1', 'Hello again');
 
     expect(session1).toBe(session2);
@@ -52,14 +56,26 @@ describe('AgentRunner', () => {
   });
 
   it('should not spawn a duplicate process while an agent is still spawning', async () => {
-    const runAgent = vi.fn();
-    (runner as any).runAgent = runAgent;
+    let resolveHarnessSpawn: (session: unknown) => void;
+    const harnessSpawnPromise = new Promise((resolve) => {
+      resolveHarnessSpawn = resolve;
+    });
+    const harnessSpawn = vi.fn().mockReturnValue(harnessSpawnPromise);
+    (runner as any).harness.spawn = harnessSpawn;
 
-    const session1 = await runner.spawn('agent-1', 'Hello');
+    const session1Promise = runner.spawn('agent-1', 'Hello');
+    await Promise.resolve();
     const session2 = await runner.spawn('agent-1', 'Hello again');
+    const instance = runner.getAgent('agent-1');
+    resolveHarnessSpawn!({
+      sessionId: instance!.sessionId,
+      abortController: new AbortController(),
+      promise: new Promise(() => {}),
+    });
+    const session1 = await session1Promise;
 
     expect(session1).toBe(session2);
-    expect(runAgent).toHaveBeenCalledTimes(1);
+    expect(harnessSpawn).toHaveBeenCalledTimes(1);
     expect(runner.getAllAgents()).toHaveLength(1);
   });
 });

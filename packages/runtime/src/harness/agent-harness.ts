@@ -277,7 +277,9 @@ export class AgentHarness {
     let currentState = state;
 
     try {
-      const eventStream = backend.run(ctx);
+      const eventStream = ctx.sessionId && backend.resume
+        ? backend.resume(ctx.sessionId, ctx)
+        : backend.run(ctx);
 
       for await (const event of eventStream) {
         currentState = await processEvent(
@@ -300,22 +302,30 @@ export class AgentHarness {
         }
       }
     } catch (err) {
-      console.error(`[harness] Session ${sessionId} error:`, err);
-      currentState = {
-        ...currentState,
-        status: 'error',
-        endTime: Date.now(),
-        error: err instanceof Error ? err.message : String(err),
-      };
+      if (ctx.signal.aborted) {
+        currentState = {
+          ...currentState,
+          status: 'aborted',
+          endTime: Date.now(),
+        };
+      } else {
+        console.error(`[harness] Session ${sessionId} error:`, err);
+        currentState = {
+          ...currentState,
+          status: 'error',
+          endTime: Date.now(),
+          error: err instanceof Error ? err.message : String(err),
+        };
 
-      // Report the error
-      await this.config.reportActivity(
-        agentId,
-        'error',
-        `Harness error: ${currentState.error}`,
-        { session_id: sessionId },
-        agentToken,
-      ).catch(() => {});
+        // Report the error
+        await this.config.reportActivity(
+          agentId,
+          'error',
+          `Harness error: ${currentState.error}`,
+          { session_id: sessionId },
+          agentToken,
+        ).catch(() => {});
+      }
     }
 
     // Final state update

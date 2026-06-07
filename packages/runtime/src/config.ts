@@ -1,4 +1,5 @@
 import { networkInterfaces } from 'node:os';
+import { resolve } from 'node:path';
 import type { BackendConfig, BackendType } from './backends/types.js';
 
 const VALID_BACKEND_TYPES: readonly BackendType[] = ['claude-sdk', 'openai-compat'];
@@ -14,6 +15,7 @@ export interface RuntimeConfig {
   callbackHost: string;      // Advertised to server (LAN IP or hostname)
   callbackPort: number;
   callbackSecret: string | null;
+  callbackSecretPath?: string;
   registrationSecret: string | null;  // Optional pre-shared secret for registration
   maxAgents: number;
   heartbeatIntervalMs: number;
@@ -42,12 +44,15 @@ export function loadConfig(): RuntimeConfig {
   const maxAgents = parsePositiveInt(process.env.MAX_AGENTS, 10);
   const heartbeatIntervalMs = parsePositiveInt(process.env.HEARTBEAT_INTERVAL_MS, 30_000);
   const dbPath = process.env.DB_PATH ?? '';
+  const callbackSecretPath = process.env.RUNTIME_CALLBACK_SECRET_PATH
+    ?? resolve(process.cwd(), 'data/runtime-callback-secrets.json');
 
   return {
     flockServerUrl,
     callbackHost,
     callbackPort,
-    callbackSecret: null, // Set after registration
+    callbackSecret: process.env.RUNTIME_CALLBACK_SECRET ?? null,
+    callbackSecretPath,
     registrationSecret: process.env.RUNTIME_REGISTRATION_SECRET ?? null,
     maxAgents,
     heartbeatIntervalMs,

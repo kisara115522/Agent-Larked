@@ -90,6 +90,7 @@ describe('AgentRunner SDK integration', () => {
     expect(mockQuery).toHaveBeenCalledTimes(1);
     const call = mockQuery.mock.calls[0][0];
     expect(call.prompt).toBe('Hello');
+    expect(call.options.resume).toBeUndefined();
     expect(call.options.allowedTools).toContain('mcp__flock__');
     expect(call.options.permissionMode).toBe('bypassPermissions');
     expect(call.options.mcpServers.flock).toBeDefined();
@@ -101,7 +102,7 @@ describe('AgentRunner SDK integration', () => {
     expect(activeCall).toBeDefined();
     expect(activeCall?.[3]).toMatchObject({
       session_id: 'test-session-id',
-      session_source: 'agent-sdk',
+      session_source: 'agent-harness',
       model: 'claude-sonnet-4-6',
     });
   });
@@ -172,9 +173,9 @@ describe('AgentRunner SDK integration', () => {
     await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Agent should be dormant (completed), not deleted
+    // Completed agents are removed from the in-memory active-instance map.
     const agent = runner.getAgent('agent-1');
-    expect(agent?.status).toBe('dormant');
+    expect(agent).toBeUndefined();
 
     const dormantCall = vi.mocked(reporter).mock.calls.find((c) => c[2]?.includes('dormant'));
     expect(dormantCall).toBeDefined();
@@ -200,6 +201,27 @@ describe('AgentRunner SDK integration', () => {
     expect(stopped).toBe(true);
     expect(runner.isRunning('agent-1')).toBe(false);
 
+    const stopCall = vi.mocked(reporter).mock.calls.find((c) => c[2] === 'Agent stopped');
+    expect(stopCall).toBeDefined();
+  });
+
+  it('does not report an error when an aborted SDK query throws', async () => {
+    mockQuery.mockReturnValue((async function* () {
+      yield INIT_MESSAGE;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      throw new Error('Claude Code process aborted by user');
+    })());
+
+    const reporter: ActivityReporter = vi.fn().mockResolvedValue(undefined);
+    const runner = new AgentRunner(reporter, 'http://localhost:3001');
+
+    await runner.spawn('agent-1', 'Hello', 'agent-token', 'agent-name');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await runner.stop('agent-1');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const errorCall = vi.mocked(reporter).mock.calls.find((c) => c[1] === 'error');
+    expect(errorCall).toBeUndefined();
     const stopCall = vi.mocked(reporter).mock.calls.find((c) => c[2] === 'Agent stopped');
     expect(stopCall).toBeDefined();
   });

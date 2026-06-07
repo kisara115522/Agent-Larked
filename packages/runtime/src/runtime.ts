@@ -1,4 +1,6 @@
 import type { RuntimeConfig } from './config.js';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { createCallbackServer, type CallbackEvent } from './callback-server.js';
 import { AgentRunner, type AgentSpawnOptions } from './agent-runner.js';
 
@@ -78,6 +80,9 @@ export class FlockAgentRuntime {
 
   private async register(): Promise<void> {
     const callbackUrl = `http://${this.config.callbackHost}:${this.config.callbackPort}`;
+    if (!this.config.callbackSecret) {
+      this.config.callbackSecret = readPersistedCallbackSecret(this.config.callbackSecretPath, callbackUrl);
+    }
     const maxAttempts = 10;
     let lastError: unknown;
 
@@ -113,6 +118,7 @@ export class FlockAgentRuntime {
         // Store the callback secret returned by the server for signature verification
         if (data.callback_secret) {
           this.config.callbackSecret = data.callback_secret;
+          persistCallbackSecret(this.config.callbackSecretPath, callbackUrl, data.callback_secret);
         }
 
         console.log(`[runtime] Registered as runtime ${this.runtimeId}`);
@@ -184,6 +190,7 @@ export class FlockAgentRuntime {
       sessionId: event.session_id,
       model: event.agent_model,
       provider: normalizeProvider(event.agent_provider),
+      backendConfig: this.config.defaultBackend,
     });
   }
 
@@ -208,6 +215,7 @@ export class FlockAgentRuntime {
       sessionId: event.session_id,
       model: event.agent_model,
       provider: normalizeProvider(event.agent_provider),
+      backendConfig: this.config.defaultBackend,
     });
   }
 
@@ -250,6 +258,41 @@ export class FlockAgentRuntime {
       console.error(`[activity] Error reporting for ${agentId}:`, err);
     }
   }
+}
+
+type CallbackSecretStore = Record<string, string>;
+
+function readPersistedCallbackSecret(path: string | undefined, callbackUrl: string): string | null {
+  if (!path) return null;
+
+  try {
+    const data = JSON.parse(readFileSync(path, 'utf8')) as CallbackSecretStore;
+    const secret = data[callbackUrl];
+    return typeof secret === 'string' && secret.length > 0 ? secret : null;
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
+      return null;
+    }
+    console.warn(`[runtime] Could not read callback secret store ${path}:`, err);
+    return null;
+  }
+}
+
+function persistCallbackSecret(path: string | undefined, callbackUrl: string, secret: string): void {
+  if (!path) return;
+
+  let data: CallbackSecretStore = {};
+  try {
+    data = JSON.parse(readFileSync(path, 'utf8')) as CallbackSecretStore;
+  } catch (err) {
+    if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) {
+      console.warn(`[runtime] Could not read callback secret store ${path}; overwriting:`, err);
+    }
+  }
+
+  data[callbackUrl] = secret;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
 }
 
 function normalizeProvider(provider: unknown): AgentSpawnOptions['provider'] {
