@@ -186,16 +186,16 @@ export function resetAgentCache(): void {
   cachedAgentName = null;
 }
 
-/** Set the current agent's status to online in the DB. */
+/** Set the current agent's status to active in the DB (called by PostToolUse hook). */
 export function setAgentOnline(database: Database.Database): void {
   if (!cachedAgentId) return;
   const now = new Date().toISOString();
-  database.prepare('UPDATE profiles SET status = ?, updated_at = ?, last_active_at = ? WHERE id = ?').run('online', now, now, cachedAgentId);
+  database.prepare('UPDATE profiles SET status = ?, updated_at = ?, last_active_at = ? WHERE id = ?').run('active', now, now, cachedAgentId);
 }
 
-/** Set the current agent's status to offline in the DB. */
+/** Set the current agent's status to dormant in the DB (called by Stop hook / process exit). */
 export function setAgentOffline(database: Database.Database): void {
   if (!cachedAgentId) return;
   const now = new Date().toISOString();
-  database.prepare('UPDATE profiles SET status = ?, updated_at = ? WHERE id = ?').run('offline', now, cachedAgentId);
+  database.prepare('UPDATE profiles SET status = ?, updated_at = ? WHERE id = ?').run('dormant', now, cachedAgentId);
 }
