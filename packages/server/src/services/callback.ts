@@ -108,7 +108,7 @@ function createWakeSession(
   db.prepare(`
     INSERT INTO agent_spawns (id, agent_id, runtime_id, session_id, session_source, agent_token_hash, status, spawned_at, last_active_at, prompt)
     VALUES (?, ?, ?, ?, ?, ?, 'spawning', ?, ?, ?)
-  `).run(randomUUID(), agentId, runtimeId, sessionId ?? null, sessionId ? 'claude-cli' : null, tokenHash, now, now, prompt ?? null);
+  `).run(randomUUID(), agentId, runtimeId, sessionId ?? null, sessionId ? 'agent-harness' : null, tokenHash, now, now, prompt ?? null);
   db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
 
   return { runtime, agent, token, sessionId };
@@ -122,7 +122,7 @@ function hasPendingRoomWake(db: Database.Database, agentId: string, roomId: stri
     WHERE agent_id = ? AND status = 'spawning' AND prompt LIKE ?
     ORDER BY spawned_at DESC
     LIMIT 1
-  `).get(agentId, `You were woken in room "%(${roomId})%`) as { id: string } | undefined;
+  `).get(agentId, `%${roomId}%`) as { id: string } | undefined;
   return Boolean(row);
 }
 
@@ -216,7 +216,7 @@ function latestClaudeSessionId(db: Database.Database, agentId: string): string |
   const row = db.prepare(`
     SELECT session_id
     FROM agent_spawns
-    WHERE agent_id = ? AND session_id IS NOT NULL AND session_source = 'claude-cli'
+    WHERE agent_id = ? AND session_id IS NOT NULL AND session_source = 'agent-harness'
     ORDER BY spawned_at DESC
     LIMIT 1
   `).get(agentId) as { session_id: string } | undefined;
@@ -332,7 +332,10 @@ async function sendCallbackWithRetry(
   event: CallbackEvent | RuntimeCallbackEvent,
   maxRetries = 3,
 ): Promise<boolean> {
-  if (!runtime.callback_secret) return false;
+  if (!runtime.callback_secret) {
+    console.warn(`[callback] Runtime ${runtime.id} has no callback_secret — cannot deliver ${event.type} for agent ${agentId}. Re-register the runtime to fix.`);
+    return false;
+  }
 
   const baseUrl = runtime.callback_url.replace(/\/+$/, '');
   const url = `${baseUrl}/agents/${agentId}/callback`;
