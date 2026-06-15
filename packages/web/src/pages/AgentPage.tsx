@@ -62,13 +62,18 @@ export function AgentPage() {
   const loadAgent = useCallback(async () => {
     if (!token || !id) return;
     try {
-      const [agentData, tasksRes, activityRes, configRes] = await Promise.all([
+      const [agentData, statusData, tasksRes, activityRes, configRes] = await Promise.all([
         get<Agent>(`/agents/${id}`, token),
+        get<{ status: string; runtime_id: string | null; session_id: string | null; last_active_at: string | null }>(`/agents/${id}/status`, token).catch(() => null),
         get<{ tasks: Task[] }>('/tasks', token).catch(() => ({ tasks: [] })),
         get<{ logs: Array<{ id: string; activity_type: string; detail?: string; created_at: string }> }>(`/agents/${id}/activity`, token).catch(() => ({ logs: [] })),
         get<{ agent_configs: AgentConfig[] }>(`/configs?agent_id=${id}`, token).catch(() => ({ agent_configs: [] })),
       ]);
-      setAgent(agentData);
+      setAgent({
+        ...agentData,
+        runtime_id: statusData?.runtime_id ?? undefined,
+        session_id: statusData?.session_id ?? undefined,
+      });
       setTasks(tasksRes.tasks.filter(t => t.assigned_to === id));
       setConfigs(configRes.agent_configs);
       const modelConfig = configRes.agent_configs.find(c => c.config_type === 'model')?.config_value;
@@ -111,6 +116,12 @@ export function AgentPage() {
         const data = event.data as { agent_id: string; status: string };
         if (data.agent_id === id) {
           setAgent(prev => prev ? { ...prev, status: data.status } : prev);
+          // Re-fetch runtime/session info whenever status changes
+          if (token && id) {
+            get<{ status: string; runtime_id: string | null; session_id: string | null }>(`/agents/${id}/status`, token)
+              .then(s => setAgent(prev => prev ? { ...prev, runtime_id: s.runtime_id ?? undefined, session_id: s.session_id ?? undefined } : prev))
+              .catch(() => {});
+          }
         }
       }
       if ((event.event === 'room_message' || event.event === 'direct_message') && id) {
