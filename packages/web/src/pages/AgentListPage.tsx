@@ -192,7 +192,7 @@ export function AgentListPage() {
         </Modal>
       )}
 
-      {spawnAgent && <SpawnModal agents={agents} runtimes={runtimes} rooms={rooms} onClose={() => setSpawnAgent(null)} onSpawned={loadAgents} />}
+      {spawnAgent && <SpawnModal agents={agents} runtimes={runtimes} rooms={rooms} defaultAgentId={spawnAgent.id} onClose={() => setSpawnAgent(null)} onSpawned={loadAgents} />}
       {dmAgent && <DMModal agentId={dmAgent.id} agentName={dmAgent.name} agentBio={dmAgent.bio} onClose={() => setDmAgent(null)} />}
       {wakeAgent && <WakeSingleModal agentId={wakeAgent.id} agentName={wakeAgent.name} agentStatus={wakeAgent.status} lastActive={wakeAgent.last_active_at ? formatRelativeTime(wakeAgent.last_active_at) : undefined} rooms={rooms} runtimes={runtimes} onClose={() => setWakeAgent(null)} onWoken={loadAgents} />}
     </div>

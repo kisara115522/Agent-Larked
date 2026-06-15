@@ -18,16 +18,18 @@ interface Runtime {
   max_agents: number;
 }
 
-export function SpawnModal({ agents, runtimes, rooms, defaultRoomId, onClose, onSpawned }: {
+export function SpawnModal({ agents, runtimes, rooms, defaultAgentId, defaultRoomId, onClose, onSpawned }: {
   agents: Agent[];
   runtimes: Runtime[];
   rooms?: Array<{ id: string; name: string }>;
+  defaultAgentId?: string;
   defaultRoomId?: string;
   onClose: () => void;
   onSpawned: () => void;
 }) {
   const { token, human } = useAuth();
-  const [selectedAgent, setSelectedAgent] = useState(agents[0]?.id || '');
+  const validDefaultAgent = defaultAgentId && agents.some(a => a.id === defaultAgentId) ? defaultAgentId : agents[0]?.id || '';
+  const [selectedAgent, setSelectedAgent] = useState(validDefaultAgent);
   const [selectedRuntime, setSelectedRuntime] = useState('auto');
   const [selectedRoom, setSelectedRoom] = useState(defaultRoomId || '');
   const [prompt, setPrompt] = useState('');
