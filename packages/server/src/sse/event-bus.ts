@@ -7,6 +7,11 @@ interface SSEClient {
   res: Response;
 }
 
+interface HumanSSEClient {
+  humanId: string;
+  res: Response;
+}
+
 interface PollerRow {
   id: string;
   from_agent: string;
@@ -20,6 +25,7 @@ interface PollerRow {
 
 export class EventBus {
   private clients = new Map<string, SSEClient>(); // agentId → client
+  private humanClients = new Map<string, HumanSSEClient>(); // humanId → client
   private subscriptions = new Map<string, Set<string>>(); // roomId → Set<agentId>
   private lastMessageOrder = 0;
   private lastTaskEventTime = '';
@@ -38,6 +44,22 @@ export class EventBus {
       const current = this.clients.get(agentId);
       if (current?.res === res) {
         this.clients.delete(agentId);
+      }
+    });
+  }
+
+  addHumanClient(humanId: string, res: Response): void {
+    const existing = this.humanClients.get(humanId);
+    if (existing) {
+      existing.res.end();
+    }
+
+    this.humanClients.set(humanId, { humanId, res });
+
+    res.on('close', () => {
+      const current = this.humanClients.get(humanId);
+      if (current?.res === res) {
+        this.humanClients.delete(humanId);
       }
     });
   }
@@ -69,11 +91,14 @@ export class EventBus {
 
   emitRoomMessage(event: SSERoomMessageEvent, roomId: string, senderId: string): void {
     const subs = this.subscriptions.get(roomId);
-    if (!subs) return;
-
-    for (const agentId of subs) {
-      if (agentId === senderId) continue;
-      this.send(agentId, 'room_message', event);
+    if (subs) {
+      for (const agentId of subs) {
+        if (agentId === senderId) continue;
+        this.send(agentId, 'room_message', event);
+      }
+    }
+    for (const [, client] of this.humanClients) {
+      this.sendToHuman(client, 'room_message', event);
     }
   }
 
@@ -90,51 +115,73 @@ export class EventBus {
     this.send(recipientId, 'direct_message', event);
   }
 
-  /** Broadcast agent status change to all connected agents */
+  /** Broadcast agent status change to all connected agents and human clients */
   emitAgentStatus(event: SSEAgentStatusEvent): void {
     for (const [agentId] of this.clients) {
       if (agentId === event.agent_id) continue;
       this.send(agentId, 'agent_status', event);
     }
+    for (const [, client] of this.humanClients) {
+      this.sendToHuman(client, 'agent_status', event);
+    }
   }
 
   emitTaskCreated(event: SSETaskCreatedEvent, roomId: string, senderId: string): void {
     const subs = this.subscriptions.get(roomId);
-    if (!subs) return;
-    for (const agentId of subs) {
-      if (agentId === senderId) continue;
-      this.send(agentId, 'task_created', event);
+    if (subs) {
+      for (const agentId of subs) {
+        if (agentId === senderId) continue;
+        this.send(agentId, 'task_created', event);
+      }
+    }
+    for (const [, client] of this.humanClients) {
+      this.sendToHuman(client, 'task_created', event);
     }
   }
 
   emitTaskStatus(event: SSETaskStatusEvent, roomId: string, senderId: string): void {
     const subs = this.subscriptions.get(roomId);
-    if (!subs) return;
-    for (const agentId of subs) {
-      if (agentId === senderId) continue;
-      this.send(agentId, 'task_status', event);
+    if (subs) {
+      for (const agentId of subs) {
+        if (agentId === senderId) continue;
+        this.send(agentId, 'task_status', event);
+      }
+    }
+    for (const [, client] of this.humanClients) {
+      this.sendToHuman(client, 'task_status', event);
     }
   }
 
   emitTaskArtifact(event: SSETaskArtifactEvent, roomId: string, senderId: string): void {
     const subs = this.subscriptions.get(roomId);
-    if (!subs) return;
-    for (const agentId of subs) {
-      if (agentId === senderId) continue;
-      this.send(agentId, 'task_artifact', event);
+    if (subs) {
+      for (const agentId of subs) {
+        if (agentId === senderId) continue;
+        this.send(agentId, 'task_artifact', event);
+      }
+    }
+    for (const [, client] of this.humanClients) {
+      this.sendToHuman(client, 'task_artifact', event);
     }
   }
 
   emitWorkflowEvent(event: { agent_id: string; activity_type: string; detail: string; metadata: unknown; created_at: string }): void {
-    for (const [agentId, _client] of this.clients) {
+    for (const [agentId] of this.clients) {
+      if (agentId === event.agent_id) continue;
       this.send(agentId, 'workflow_event', event);
+    }
+    for (const [, client] of this.humanClients) {
+      this.sendToHuman(client, 'workflow_event', event);
     }
   }
 
   private send(agentId: string, eventType: string, data: unknown): void {
     const client = this.clients.get(agentId);
-    if (!client) return; // Agent offline, skip (best-effort)
+    if (!client) return;
+    client.res.write(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
 
+  private sendToHuman(client: HumanSSEClient, eventType: string, data: unknown): void {
     client.res.write(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
   }
 
