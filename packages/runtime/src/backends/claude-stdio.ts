@@ -10,6 +10,7 @@
  *
  * Modeled on multica's claudeBackend (server/pkg/agent/claude.go).
  */
+import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import type {
@@ -75,14 +76,24 @@ export class ClaudeStdioBackend implements AgentBackend {
     const args = buildClaudeArgs(ctx, { mcpConfigPath: mcp.path, resumeSessionId });
     const env = buildChildEnv(ctx.env);
 
-    const child = spawn(CLAUDE_BIN, args, {
-      cwd: ctx.cwd,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }) as ChildProcessWithoutNullStreams;
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawn(CLAUDE_BIN, args, {
+        cwd: ctx.cwd,
+        env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }) as ChildProcessWithoutNullStreams;
+    } catch (err: unknown) {
+      mcp.cleanup();
+      const msg = err instanceof Error ? err.message : String(err);
+      yield { type: 'error', message: `spawn claude: ${msg}`, subtype: 'unknown' } as AgentEvent;
+      return;
+    }
 
     const queue = createEventQueue<AgentEvent>();
-    let trackingKey = resumeSessionId ?? `pending:${child.pid}`;
+    // Use pid when available; fall back to a random key to avoid "pending:undefined"
+    // collisions when multiple spawns fail concurrently.
+    let trackingKey = resumeSessionId ?? `pending:${child.pid ?? randomUUID()}`;
     this.active.set(trackingKey, child);
 
     let sawResult = false;
@@ -116,12 +127,19 @@ export class ClaudeStdioBackend implements AgentBackend {
 
       for (const ev of translateStreamMessage(msg)) {
         // Re-key the active map to the real session id so abort() works.
-        if (ev.type === 'init' && ev.sessionId) {
+        // Guard on child.killed: if abort() already removed+killed the child
+        // before init arrived, do NOT re-insert it into the active map.
+        if (ev.type === 'init' && ev.sessionId && !child.killed) {
           this.active.delete(trackingKey);
           trackingKey = ev.sessionId;
           this.active.set(trackingKey, child);
         }
-        if (ev.type === 'result') sawResult = true;
+        if (ev.type === 'result') {
+          sawResult = true;
+          // Signal EOF on stdin so the claude CLI can exit cleanly after
+          // delivering the result frame, instead of waiting for more input.
+          try { child.stdin.end(); } catch { /* ignore */ }
+        }
         queue.push(ev);
       }
     });
@@ -146,10 +164,14 @@ export class ClaudeStdioBackend implements AgentBackend {
     };
 
     // ctx.signal abort → kill child (covers harness/shutdown abort).
-    if (ctx.signal.aborted) {
+    const onAbort = (): void => {
+      this.active.delete(trackingKey);
       this.killChild(child);
+    };
+    if (ctx.signal.aborted) {
+      onAbort();
     } else {
-      ctx.signal.addEventListener('abort', () => this.killChild(child), { once: true });
+      ctx.signal.addEventListener('abort', onAbort, { once: true });
     }
 
     child.once('error', (err: Error) => {
@@ -159,21 +181,25 @@ export class ClaudeStdioBackend implements AgentBackend {
 
     child.once('exit', (code, signal) => {
       rl.close();
-      if (sawResult) {
-        finish();
-        return;
-      }
-      // Process ended without a result frame.
-      if (signal === 'SIGTERM' || signal === 'SIGKILL') {
-        finish({ type: 'error', message: 'aborted', subtype: 'abort' });
-      } else {
-        const tail = stderrTail.trim();
-        finish({
-          type: 'error',
-          message: `claude exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})${tail ? `: ${tail}` : ''}`,
-          subtype: 'unknown',
-        });
-      }
+      // Defer to the next event-loop tick so any line events already queued
+      // by readline (e.g. the result frame) are processed before we seal the queue.
+      setImmediate(() => {
+        if (sawResult) {
+          finish();
+          return;
+        }
+        // Process ended without a result frame.
+        if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+          finish({ type: 'error', message: 'aborted', subtype: 'abort' });
+        } else {
+          const tail = stderrTail.trim();
+          finish({
+            type: 'error',
+            message: `claude exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})${tail ? `: ${tail}` : ''}`,
+            subtype: 'unknown',
+          });
+        }
+      });
     });
 
     yield* queue.drain();

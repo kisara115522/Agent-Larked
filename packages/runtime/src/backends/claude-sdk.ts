@@ -20,6 +20,7 @@ import type {
   AgentEvent,
   MCPServerConfig,
 } from './types.js';
+import { isInternalClaudeEnvKey } from './child-env.js';
 
 // ─── Default allowed tools ──────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ export class ClaudeSdkBackend implements AgentBackend {
         allowDangerouslySkipPermissions: true,
         abortController,
         model: ctx.model,
-        env: stripEffortEnv(ctx.env ? { ...process.env, ...ctx.env } : process.env),
+        env: stripInternalEnv(ctx.env ? { ...process.env, ...ctx.env } : process.env),
         mcpServers,
         settingSources: [],
         // Use preset to preserve Claude Code's internal system prompt (stream-json protocol,
@@ -353,13 +354,15 @@ function mapResultSubtype(
 }
 
 /**
- * Strip CLAUDE_EFFORT from the subprocess environment to prevent the parent session's
- * effort setting from enabling extended thinking in spawned agents. Extended thinking
- * produces signatures the Bedrock proxy validates across turns, causing 400 errors.
+ * Strip all internal Claude env keys from the subprocess environment.
+ * Delegates to isInternalClaudeEnvKey so both backends use the same filter list.
+ * This prevents CLAUDE_EFFORT (extended thinking), CLAUDECODE, CLAUDE_CODE_SESSION_ID,
+ * etc. from leaking into the spawned agent's environment.
  */
-function stripEffortEnv(env: Record<string, string | undefined>): Record<string, string | undefined> {
-  const { CLAUDE_EFFORT: _dropped, ...rest } = env;
-  return rest;
+function stripInternalEnv(env: Record<string, string | undefined>): Record<string, string | undefined> {
+  return Object.fromEntries(
+    Object.entries(env).filter(([k]) => !isInternalClaudeEnvKey(k)),
+  );
 }
 
 /**
