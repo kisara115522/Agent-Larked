@@ -344,7 +344,7 @@ export interface MCPSSETransport {
  *  - 'claude-sdk': uses the existing Claude Agent SDK
  *  - 'openai-compat': uses OpenAI-compatible API (DeepSeek, Ollama, etc.)
  */
-export type BackendType = 'claude-sdk' | 'openai-compat';
+export type BackendType = 'claude-sdk' | 'claude-stdio' | 'openai-compat';
 
 /**
  * Configuration for backend selection and initialization.
