@@ -72,3 +72,23 @@ export function buildControlAllow(requestId: string, input: unknown): string {
   };
   return JSON.stringify(frame) + '\n';
 }
+
+// ─── Translation ─────────────────────────────────────────────────────────────
+
+/** Map a result message to a ResultEvent subtype, honoring is_error. */
+export function mapResultSubtype(
+  msg: StreamJsonMessage,
+): 'completed' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd' {
+  // CRITICAL: subtype "success" can co-occur with is_error:true (e.g. API 400).
+  if (msg.is_error) return 'error_during_execution';
+  switch (msg.subtype) {
+    case 'success':
+      return 'completed';
+    case 'error_max_turns':
+      return 'error_max_turns';
+    case 'error_max_budget_usd':
+      return 'error_max_budget_usd';
+    default:
+      return 'completed';
+  }
+}
