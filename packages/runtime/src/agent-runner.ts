@@ -5,9 +5,11 @@ import { AgentHarness, type SpawnRequest } from './harness/index.js';
 import type { BackendConfig } from './backends/types.js';
 import { defaultBackendRegistry } from './harness/backend-registry.js';
 import { createClaudeSdkBackend } from './backends/claude-sdk.js';
+import { createClaudeStdioBackend } from './backends/claude-stdio.js';
 import { createOpenAICompatBackend } from './backends/openai-compat-backend.js';
 
 defaultBackendRegistry.register('claude-sdk', createClaudeSdkBackend);
+defaultBackendRegistry.register('claude-stdio', createClaudeStdioBackend);
 defaultBackendRegistry.register('openai-compat', createOpenAICompatBackend);
 
 export interface AgentInstance {
