@@ -51,8 +51,17 @@ export class ClaudeStdioBackend implements AgentBackend {
     // TODO: implemented in subsequent commits
   }
 
-  private killChild(_child: ChildProcessWithoutNullStreams): void {
-    // TODO: implemented in subsequent commits
+  private killChild(child: ChildProcessWithoutNullStreams): void {
+    try {
+      child.stdin.end();
+    } catch { /* ignore */ }
+    child.kill('SIGTERM');
+    const t = setTimeout(() => {
+      if (!child.killed) child.kill('SIGKILL');
+    }, SIGKILL_GRACE_MS);
+    // Don't keep the event loop alive just for the grace timer.
+    t.unref?.();
+    child.once('exit', () => clearTimeout(t));
   }
 
   private async *exec(
@@ -161,5 +170,3 @@ export function createClaudeStdioBackend(_config?: BackendConfig): ClaudeStdioBa
   return new ClaudeStdioBackend();
 }
 
-// Suppress unused-import warnings for helpers used in later commits.
-void (SIGKILL_GRACE_MS as unknown);
