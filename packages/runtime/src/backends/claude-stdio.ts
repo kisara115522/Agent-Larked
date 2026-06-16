@@ -134,9 +134,24 @@ export class ClaudeStdioBackend implements AgentBackend {
       finish({ type: 'error', message: `spawn claude: ${err.message}`, subtype: 'unknown' });
     });
 
-    void sawResult; void stderrTail;
-    // child exit wired in next commit.
-    void finish;
+    child.once('exit', (code, signal) => {
+      rl.close();
+      if (sawResult) {
+        finish();
+        return;
+      }
+      // Process ended without a result frame.
+      if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+        finish({ type: 'error', message: 'aborted', subtype: 'abort' });
+      } else {
+        const tail = stderrTail.trim();
+        finish({
+          type: 'error',
+          message: `claude exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})${tail ? `: ${tail}` : ''}`,
+          subtype: 'unknown',
+        });
+      }
+    });
 
     yield* queue.drain();
   }
