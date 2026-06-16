@@ -1,5 +1,6 @@
 import { networkInterfaces } from 'node:os';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import type { BackendConfig, BackendType } from './backends/types.js';
 
 const VALID_BACKEND_TYPES: readonly BackendType[] = ['claude-sdk', 'claude-stdio', 'openai-compat'];
@@ -44,8 +45,11 @@ export function loadConfig(): RuntimeConfig {
   const maxAgents = parsePositiveInt(process.env.MAX_AGENTS, 10);
   const heartbeatIntervalMs = parsePositiveInt(process.env.HEARTBEAT_INTERVAL_MS, 30_000);
   const dbPath = process.env.DB_PATH ?? '';
+  // When launched via `npm -w`, cwd is the package dir; fall back to monorepo root.
+  const defaultSecretPath = resolve(process.cwd(), 'data/runtime-callback-secrets.json');
+  const rootSecretPath = resolve(process.cwd(), '../../data/runtime-callback-secrets.json');
   const callbackSecretPath = process.env.RUNTIME_CALLBACK_SECRET_PATH
-    ?? resolve(process.cwd(), 'data/runtime-callback-secrets.json');
+    ?? (existsSync(defaultSecretPath) ? defaultSecretPath : rootSecretPath);
 
   return {
     flockServerUrl,
