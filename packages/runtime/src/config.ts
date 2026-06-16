@@ -2,7 +2,7 @@ import { networkInterfaces } from 'node:os';
 import { resolve } from 'node:path';
 import type { BackendConfig, BackendType } from './backends/types.js';
 
-const VALID_BACKEND_TYPES: readonly BackendType[] = ['claude-sdk', 'openai-compat'];
+const VALID_BACKEND_TYPES: readonly BackendType[] = ['claude-sdk', 'claude-stdio', 'openai-compat'];
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
