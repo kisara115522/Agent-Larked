@@ -189,7 +189,7 @@ export class ClaudeStdioBackend implements AgentBackend {
           return;
         }
         // Process ended without a result frame.
-        if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+        if (['SIGTERM', 'SIGKILL', 'SIGINT'].includes(signal ?? '')) {
           finish({ type: 'error', message: 'aborted', subtype: 'abort' });
         } else {
           const tail = stderrTail.trim();

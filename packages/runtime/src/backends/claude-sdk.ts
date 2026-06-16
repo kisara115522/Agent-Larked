@@ -105,8 +105,17 @@ export class ClaudeSdkBackend implements AgentBackend {
           yield event;
         }
       }
+    } catch (err: unknown) {
+      // AbortError is expected when the caller calls abort() or cancels the signal.
+      // Yield a structured abort event instead of propagating the exception so both
+      // backends behave identically on abort (stdio yields this event; SDK throws).
+      if (isAbortError(err)) {
+        yield { type: 'error', message: 'aborted', subtype: 'abort' } as AgentEvent;
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        yield { type: 'error', message: msg, subtype: 'api_error' } as AgentEvent;
+      }
     } finally {
-      // Cleanup
       if (sessionId) {
         this.activeAbortControllers.delete(sessionId);
       }
@@ -388,4 +397,12 @@ function resolvePermissionMode(
  */
 export function createClaudeSdkBackend(_config?: import('./types.js').BackendConfig): ClaudeSdkBackend {
   return new ClaudeSdkBackend();
+}
+
+function isAbortError(err: unknown): boolean {
+  if (err instanceof Error) {
+    // Node/browser AbortError name, or DOMException abort code
+    return err.name === 'AbortError' || (err as NodeJS.ErrnoException).code === 'ABORT_ERR';
+  }
+  return false;
 }
