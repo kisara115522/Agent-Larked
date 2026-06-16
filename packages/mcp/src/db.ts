@@ -62,7 +62,14 @@ export function getDatabase(): Database.Database {
     // fall back to the default rather than trying to open '' (→ CWD → SQLITE_CANTOPEN).
     const rawPath = process.env.DB_PATH || join(PROJECT_ROOT, 'data', 'agentfeed.db');
     const dbPath = resolve(rawPath);
-    db = createDatabase(dbPath);
+    try {
+      db = createDatabase(dbPath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `[MCP] Failed to open database at "${dbPath}" (DB_PATH=${JSON.stringify(process.env.DB_PATH)}): ${msg}`,
+      );
+    }
   }
   return db;
 }
