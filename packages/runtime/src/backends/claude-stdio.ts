@@ -142,6 +142,13 @@ export class ClaudeStdioBackend implements AgentBackend {
       mcp.cleanup();
     };
 
+    // ctx.signal abort → kill child (covers harness/shutdown abort).
+    if (ctx.signal.aborted) {
+      this.killChild(child);
+    } else {
+      ctx.signal.addEventListener('abort', () => this.killChild(child), { once: true });
+    }
+
     child.once('error', (err: Error) => {
       finish({ type: 'error', message: `spawn claude: ${err.message}`, subtype: 'unknown' });
     });
