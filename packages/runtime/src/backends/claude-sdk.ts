@@ -76,6 +76,9 @@ export class ClaudeSdkBackend implements AgentBackend {
           : process.env as Record<string, string | undefined>,
         mcpServers,
         settingSources: [],
+        ...(ctx.systemPrompt ? { systemPrompt: ctx.systemPrompt } : {}),
+        ...(ctx.maxTurns != null ? { maxTurns: ctx.maxTurns } : {}),
+        ...(ctx.maxBudgetUsd != null ? { maxBudgetUsd: ctx.maxBudgetUsd } : {}),
         ...(isResume && resumeSessionId ? { resume: resumeSessionId } : {}),
       },
     });
