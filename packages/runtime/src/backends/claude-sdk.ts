@@ -80,10 +80,7 @@ export class ClaudeSdkBackend implements AgentBackend {
         systemPrompt: ctx.systemPrompt
           ? { type: 'preset' as const, preset: 'claude_code' as const, append: ctx.systemPrompt }
           : { type: 'preset' as const, preset: 'claude_code' as const },
-        // Explicitly set effort to 'low' to prevent CLAUDE_EFFORT=high from the parent process
-        // env from enabling extended thinking. Extended thinking produces signatures the Bedrock
-        // proxy validates across turns, causing 400 errors on turn 2+.
-        effort: 'low' as const,
+
         ...(ctx.maxTurns != null ? { maxTurns: ctx.maxTurns } : {}),
         ...(ctx.maxBudgetUsd != null ? { maxBudgetUsd: ctx.maxBudgetUsd } : {}),
         ...(isResume && resumeSessionId ? { resume: resumeSessionId } : {}),
