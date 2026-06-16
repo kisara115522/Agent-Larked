@@ -47,4 +47,5 @@ export type {
 
 // Backend implementations
 export { ClaudeSdkBackend, createClaudeSdkBackend } from './claude-sdk.js';
+export { ClaudeStdioBackend, createClaudeStdioBackend } from './claude-stdio.js';
 export { OpenAICompatBackend, createOpenAICompatBackend } from './openai-compat-backend.js';
