@@ -140,6 +140,9 @@ function translateMessage(message: SDKMessage): AgentEvent[] {
     case 'assistant':
       return translateAssistantMessage(message);
 
+    case 'user':
+      return translateUserMessage(message);
+
     case 'result':
       return [{
         type: 'result',
@@ -166,6 +169,30 @@ function translateMessage(message: SDKMessage): AgentEvent[] {
 function translateAssistantMessage(message: SDKMessage): AgentEvent[] {
   const msg = message as Record<string, unknown>;
   // The SDK wraps the Anthropic API message in a `message` field.
+  const inner = msg.message as Record<string, unknown> | undefined;
+  const content = inner?.content;
+  if (!content || !Array.isArray(content)) {
+    return [];
+  }
+
+  const events: AgentEvent[] = [];
+  for (const block of content) {
+    const event = translateContentBlock(block);
+    if (event) {
+      events.push(event);
+    }
+  }
+
+  return events;
+}
+
+/**
+ * Translate SDK user messages. These carry tool_result blocks that echo back
+ * tool execution results — previously unreachable because translateMessage had
+ * no 'user' case (Bug #1).
+ */
+function translateUserMessage(message: SDKMessage): AgentEvent[] {
+  const msg = message as Record<string, unknown>;
   const inner = msg.message as Record<string, unknown> | undefined;
   const content = inner?.content;
   if (!content || !Array.isArray(content)) {
