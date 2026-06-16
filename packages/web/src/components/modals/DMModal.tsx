@@ -35,6 +35,7 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<string>('dormant');
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +96,17 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
       });
     });
   }, [subscribe, agentId, agentName, human]);
+
+  // Subscribe to agent status changes for live status indicator
+  useEffect(() => {
+    return subscribe((sseEvent) => {
+      if (sseEvent.event !== 'agent_status') return;
+      const data = sseEvent.data as { agent_id: string; status: string };
+      if (data.agent_id === agentId) {
+        setAgentStatus(data.status);
+      }
+    });
+  }, [subscribe, agentId]);
 
   const handleSend = async () => {
     if (!token || !input.trim() || sending) return;
@@ -166,7 +178,21 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
           </div>
           <div>
             <div className="text-[15px] font-semibold">{agentName}</div>
-            <div className="text-xs text-text-muted">{agentBio || '无描述'}</div>
+            <div className="text-xs text-text-muted flex items-center gap-1.5">
+              {agentBio || '无描述'}
+              {agentStatus === 'spawning' && (
+                <span className="inline-flex items-center gap-1 text-amber-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  启动中…
+                </span>
+              )}
+              {agentStatus === 'active' && (
+                <span className="inline-flex items-center gap-1 text-green-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  工作中
+                </span>
+              )}
+            </div>
           </div>
           <button onClick={onClose} className="ml-auto text-text-muted hover:text-text text-xl">×</button>
         </div>
