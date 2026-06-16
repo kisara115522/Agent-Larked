@@ -57,7 +57,10 @@ const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..'
 export function getDatabase(): Database.Database {
   if (!db) {
     // Always resolve to absolute path to avoid cwd-dependent behavior
-    const rawPath = process.env.DB_PATH ?? join(PROJECT_ROOT, 'data', 'agentfeed.db');
+    // Defense-in-depth: treat empty DB_PATH same as unset.
+    // The runtime should always pass a valid path, but if it doesn't,
+    // fall back to the default rather than trying to open '' (→ CWD → SQLITE_CANTOPEN).
+    const rawPath = process.env.DB_PATH || join(PROJECT_ROOT, 'data', 'agentfeed.db');
     const dbPath = resolve(rawPath);
     db = createDatabase(dbPath);
   }
