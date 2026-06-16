@@ -126,7 +126,7 @@ export class AgentHarness {
     }
 
     // Resolve backend
-    const backendConfig: BackendConfig = request.backendConfig ?? { type: 'claude-sdk' };
+    const backendConfig: BackendConfig = request.backendConfig ?? { type: 'claude-stdio' };
     const backend = this.registry.get(backendConfig);
 
     // Generate session ID

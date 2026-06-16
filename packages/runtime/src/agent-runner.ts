@@ -113,7 +113,7 @@ export class AgentRunner {
     this.agentInstances.set(agentId, instance);
 
     const backendConfig: BackendConfig = options?.backendConfig
-      ?? { type: options?.backend ?? 'claude-sdk', model: options?.model };
+      ?? { type: options?.backend ?? 'claude-stdio', model: options?.model };
     const providerEnv = resolveProviderEnv(options?.provider);
     const mergedEnv = providerEnv || options?.env
       ? { ...providerEnv, ...options?.env }

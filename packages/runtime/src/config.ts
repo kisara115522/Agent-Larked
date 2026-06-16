@@ -73,13 +73,13 @@ export function loadConfig(): RuntimeConfig {
  *  - OPENAI_MODEL: Default model for OpenAI-compatible backend
  */
 export function loadBackendConfig(): BackendConfig {
-  const rawType = process.env.BACKEND_TYPE ?? 'claude-sdk';
+  const rawType = process.env.BACKEND_TYPE ?? 'claude-stdio';
   if (!VALID_BACKEND_TYPES.includes(rawType as BackendType)) {
-    console.warn(`[config] WARNING: Invalid BACKEND_TYPE "${rawType}", falling back to "claude-sdk". Valid: ${VALID_BACKEND_TYPES.join(', ')}`);
+    console.warn(`[config] WARNING: Invalid BACKEND_TYPE "${rawType}", falling back to "claude-stdio". Valid: ${VALID_BACKEND_TYPES.join(', ')}`);
   }
   const type: BackendType = (VALID_BACKEND_TYPES.includes(rawType as BackendType)
     ? rawType
-    : 'claude-sdk') as BackendType;
+    : 'claude-stdio') as BackendType;
 
   const config: BackendConfig = { type };
 
