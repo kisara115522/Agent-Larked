@@ -122,15 +122,17 @@ export class ClaudeStdioBackend implements AgentBackend {
       // If the pipe is already broken the exit handler will surface the error.
     }
 
-    // Placeholder: end queue on exit — full lifecycle wiring in next commits.
-    child.once('exit', () => {
-      rl.close();
+    // ── lifecycle: finish() closes the queue and cleans up ──
+    const finish = (extra?: AgentEvent): void => {
+      if (extra) queue.push(extra);
+      queue.end();
       this.active.delete(trackingKey);
       mcp.cleanup();
-      queue.end();
-    });
+    };
 
     void sawResult; void stderrTail;
+    // finish() wired to child error/exit in subsequent commits.
+    void finish;
 
     yield* queue.drain();
   }
