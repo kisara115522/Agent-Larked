@@ -290,10 +290,13 @@ export class AgentHarness {
           agentToken,
         );
 
-        // Update the session's state reference
+        // Update the session's state reference (and sync real SDK sessionId for abort)
         const session = this.sessions.get(agentId);
         if (session) {
           session.state = currentState;
+          if (event.type === 'init' && event.sessionId) {
+            session.sessionId = event.sessionId;
+          }
         }
 
         // Check for abort
@@ -361,6 +364,9 @@ export class AgentHarness {
           command: 'node',
           args: [this.config.mcpServerPath],
           env: {
+            ...Object.fromEntries(
+              Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined),
+            ),
             DB_PATH: this.config.dbPath,
             AGENT_NAME: request.agentName,
             ...(request.agentToken ? { AGENT_TOKEN: request.agentToken } : {}),
