@@ -27,7 +27,7 @@ describe('buildClaudeArgs', () => {
     '--strict-mcp-config',
     '--permission-mode', 'bypassPermissions',
     '--disallowedTools', 'AskUserQuestion',
-    '--effort', 'normal',
+    '--effort', 'low',
   ];
 
   it('always includes all required protocol flags', () => {
@@ -44,11 +44,13 @@ describe('buildClaudeArgs', () => {
     expect(args[idx + 1]).toBe('/tmp/my-mcp.json');
   });
 
-  it('always passes --effort normal to override settings.json effortLevel', () => {
+  it('always passes --effort low to override settings.json effortLevel', () => {
     const args = buildClaudeArgs(baseCtx(), { mcpConfigPath: '/tmp/mcp.json' });
     const idx = args.indexOf('--effort');
     expect(idx).toBeGreaterThan(-1);
-    expect(args[idx + 1]).toBe('normal');
+    // 'low' is the minimum valid effort level, disabling extended thinking.
+    // 'normal' is NOT valid (CLI warns and ignores it → settings.json effort leaks).
+    expect(args[idx + 1]).toBe('low');
   });
 
   it('omits --model when ctx.model is undefined', () => {
