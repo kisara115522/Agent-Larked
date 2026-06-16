@@ -94,8 +94,10 @@ export class ClaudeStdioBackend implements AgentBackend {
       } catch {
         return; // non-JSON noise (banner etc.)
       }
-      // Translation and queue push added in subsequent commits.
-      void msg;
+      for (const ev of translateStreamMessage(msg)) {
+        if (ev.type === 'result') sawResult = true;
+        queue.push(ev);
+      }
     });
 
     // Write the initial user message. stdin stays OPEN (control_request needs
@@ -126,5 +128,4 @@ export function createClaudeStdioBackend(_config?: BackendConfig): ClaudeStdioBa
 
 // Suppress unused-import warnings for helpers used in later commits.
 void (buildControlAllow as unknown);
-void (translateStreamMessage as unknown);
 void (SIGKILL_GRACE_MS as unknown);
