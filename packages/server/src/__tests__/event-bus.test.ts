@@ -86,4 +86,43 @@ describe('EventBus', () => {
 
     expect(second.writes).toHaveLength(1);
   });
+
+  it('emitDirectMessage reaches human SSE clients', () => {
+    const bus = new EventBus();
+    const humanRes = responseStub();
+    const agentRes = responseStub();
+
+    bus.addHumanClient('human-1', humanRes.res);
+    bus.addClient('agent-1', agentRes.res);
+
+    bus.emitDirectMessage(
+      { message_id: 'dm-1', from: 'agent-1', to: 'human-1', content: 'hello human', sequence: 1 },
+      'human-1',  // recipientId
+      'agent-1',  // senderId
+    );
+
+    // Human client should receive the DM event
+    expect(humanRes.writes).toHaveLength(1);
+    expect(humanRes.writes[0]).toContain('event: direct_message');
+    expect(humanRes.writes[0]).toContain('hello human');
+
+    // Agent recipient should also receive (existing behavior)
+    expect(agentRes.writes).toHaveLength(0); // recipientId === human-1, not agent-1's client
+  });
+
+  it('emitDirectMessage does not send to sender', () => {
+    const bus = new EventBus();
+    const humanRes = responseStub();
+
+    bus.addHumanClient('human-1', humanRes.res);
+
+    // Sender and recipient are the same
+    bus.emitDirectMessage(
+      { message_id: 'dm-2', from: 'human-1', to: 'human-1', content: 'self', sequence: 1 },
+      'human-1',
+      'human-1',
+    );
+
+    expect(humanRes.writes).toHaveLength(0);
+  });
 });
