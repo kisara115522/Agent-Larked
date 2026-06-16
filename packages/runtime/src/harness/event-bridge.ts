@@ -73,23 +73,37 @@ export async function processEvent(
       return handleInit(event, state, agentId, reportActivity, agentToken);
 
     case 'text':
+      reportActivity(agentId, 'message', event.content.slice(0, 2000), {}, agentToken).catch(() => {});
       return {
         ...state,
         totalTextLength: state.totalTextLength + event.content.length,
       };
 
     case 'thinking':
-      // Thinking events are informational; track but don't report
+      reportActivity(agentId, 'think', event.content.slice(0, 500), {}, agentToken).catch(() => {});
       return state;
 
     case 'tool_use':
+      reportActivity(
+        agentId,
+        'tool_call',
+        event.name,
+        { tool_id: event.id, input: event.input },
+        agentToken,
+      ).catch(() => {});
       return {
         ...state,
         toolCallCount: state.toolCallCount + 1,
       };
 
     case 'tool_result':
-      // Tool results are tracked via tool_use count
+      reportActivity(
+        agentId,
+        'tool_result',
+        event.content.slice(0, 500),
+        { tool_use_id: event.toolUseId, is_error: event.isError },
+        agentToken,
+      ).catch(() => {});
       return state;
 
     case 'result':
