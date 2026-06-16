@@ -282,6 +282,14 @@
 ### 测试统计
 126 tests, 12 test files, 全部通过（0 TS 编译错误）
 
+### Code Review follow-ups（三轮独立审查，2026-06-16）
+三轮独立 Code Reviewer 审查后完成 F1–F4 修复：
+
+- **F1** (commit `fcedd5a`): `ResultEvent.subtype` 联合类型去掉 `'success'` 和 `'error_max_structured_output_retries'`——这两个是 SDK 内部 wire 值，已被 mapResultSubtype 映射为 `'completed'`/`'error_during_execution'`，从不暴露给消费方；更新测试文件用 `ResultEvent` 具名类型替代 `AgentEvent`
+- **F2** (commit `fcedd5a`): `claude-sdk.ts` init 事件的 `session_id`/`model` 字段、result 事件的 `session_id` 字段均加 `?? ''` 空值兜底——SDK 类型为 `string|undefined`，接口声明为非 optional `string`，避免严格 null 检查合约被违反
+- **F3** (commit `135404f`): `createQuery` catch 块捕获 AbortError（`err.name === 'AbortError'` 或 `code === 'ABORT_ERR'`），yield `{type:'error',subtype:'abort'}` 而非让异常传播——与 stdio 后端行为一致，消费方不再需要针对两个后端写不同的 try/catch
+- **F4** (commit `135404f`): `claude-stdio.ts` exit signal 检查从 `SIGTERM|SIGKILL` 扩展为 `['SIGTERM','SIGKILL','SIGINT'].includes(signal ?? '')`，避免 OS 发送 SIGINT 时被错误分类为 unknown 错误
+
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
 2. **v0.2** — MCP Server（4 周）— **最高优先级**，解决"agent 无法感知新消息"的核心问题 ✅
