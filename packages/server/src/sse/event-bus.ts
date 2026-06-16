@@ -112,7 +112,13 @@ export class EventBus {
 
   emitDirectMessage(event: SSEDirectMessageEvent, recipientId: string, senderId: string): void {
     if (recipientId === senderId) return;
+    // Push to the agent recipient (existing behavior)
     this.send(recipientId, 'direct_message', event);
+    // Also push to all human SSE clients so humans see DMs in real-time.
+    // Human frontend filters by event.from/event.to to find its own conversations.
+    for (const [, client] of this.humanClients) {
+      this.sendToHuman(client, 'direct_message', event);
+    }
   }
 
   /** Broadcast agent status change to all connected agents and human clients */
