@@ -221,4 +221,35 @@
 - ✅ env/provider 丢失
 - ✅ SDK 类型不安全断言
 
+### v0.5.1 — stdio backend migration follow-ups（2026-06-16）
+
+### 🟡 ClaudeStdioBackend 集成测试（真实 claude CLI）
+- **发现于：** 2026-06-16，stdio migration（计划 §8 验收标准）
+- **问题：** 当前测试用 mock child_process.spawn，无真实 CLI 调用；claude 2.1.178 验证的 wire 格式可能在未来版本变化
+- **影响：** 回归漏检窗口
+- **建议修复：** 加 `__tests__/claude-stdio-integration.test.ts`，设 `CLAUDE_CLI_PATH` 环境变量，跳过条件 `if (!process.env.CLAUDE_CLI_PATH) skip`；验证 init/text/result 帧可正确解析
+- **状态：** open
+
+### 🟡 CLAUDE_CLI_PATH 配置文档
+- **发现于：** 2026-06-16，stdio migration
+- **问题：** ClaudeStdioBackend 默认用 `claude` bin（process.env.CLAUDE_CLI_PATH ?? 'claude'），但无 README 说明如何在非默认路径安装的环境下配置
+- **建议修复：** 在 packages/runtime/README.md（或 root README）补 CLAUDE_CLI_PATH 配置说明
+- **状态：** open
+
+### 🟢 stream-json 未知 content block 类型告警
+- **发现于：** 2026-06-16，stdio migration
+- **问题：** translateContentBlock 遇到未知 type（如 image_url）静默返回 null；生产出现新 block 类型时无日志
+- **建议修复：** 在 default 分支加 `console.warn('[stream-json] unknown block type:', block.type)` 
+- **状态：** open
+
+### 🟢 control_request 非 can_use_tool 类型处理
+- **发现于：** 2026-06-16，stdio migration
+- **问题：** buildControlAllow 只处理 `can_use_tool` subtype；若 claude CLI 未来新增其他 control_request subtype，当前代码会为其发送 allow，语义可能不正确
+- **建议修复：** control_request 处理前检查 subtype，未知类型记录告警而非自动 allow
+- **状态：** open
+
+### 🟢 Claude SDK Bug #3（已修）归档说明
+- `buildMcpServers` 中 raw `process.env` 展开向 MCP 子进程泄漏了 CLAUDECODE/CLAUDE_CODE_* env key（C54 已修）
+- 若未来新增 CLAUDECODE_* 前缀的内部 env key，`isInternalClaudeEnvKey` 会自动过滤
+
 </details>
