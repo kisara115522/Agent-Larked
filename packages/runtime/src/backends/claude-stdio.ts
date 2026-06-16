@@ -69,7 +69,15 @@ export class ClaudeStdioBackend implements AgentBackend {
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as ChildProcessWithoutNullStreams;
 
-    // Cleanup and exit — more wiring in subsequent commits.
+    // Write the initial user message. stdin stays OPEN (control_request needs
+    // the same stream; closing early strands the child — multica's hard-won note).
+    try {
+      child.stdin.write(buildUserInput(ctx.prompt));
+    } catch {
+      // If the pipe is already broken the exit handler will surface the error.
+    }
+
+    // Cleanup placeholder — event wiring in next commits.
     mcp.cleanup();
     child.kill('SIGTERM');
   }
@@ -81,7 +89,6 @@ export function createClaudeStdioBackend(_config?: BackendConfig): ClaudeStdioBa
 
 // Suppress unused-import warnings for helpers used in later commits.
 void (createEventQueue as unknown);
-void (buildUserInput as unknown);
 void (buildControlAllow as unknown);
 void (translateStreamMessage as unknown);
 void (createInterface as unknown);
