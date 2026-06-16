@@ -213,10 +213,13 @@ export function clearPendingRoomWakesForTests(): void {
 }
 
 function latestClaudeSessionId(db: Database.Database, agentId: string): string | undefined {
+  // Only resume sessions that ended cleanly. Error/stopped-with-error spawns may have
+  // thinking blocks with invalid signatures that cause Bedrock proxy failures on resume.
   const row = db.prepare(`
     SELECT session_id
     FROM agent_spawns
     WHERE agent_id = ? AND session_id IS NOT NULL AND session_source = 'agent-harness'
+      AND status NOT IN ('error')
     ORDER BY spawned_at DESC
     LIMIT 1
   `).get(agentId) as { session_id: string } | undefined;

@@ -71,12 +71,19 @@ export class ClaudeSdkBackend implements AgentBackend {
         allowDangerouslySkipPermissions: true,
         abortController,
         model: ctx.model,
-        env: ctx.env
-          ? { ...process.env, ...ctx.env }
-          : process.env as Record<string, string | undefined>,
+        env: stripEffortEnv(ctx.env ? { ...process.env, ...ctx.env } : process.env),
         mcpServers,
         settingSources: [],
-        ...(ctx.systemPrompt ? { systemPrompt: ctx.systemPrompt } : {}),
+        // Use preset to preserve Claude Code's internal system prompt (stream-json protocol,
+        // tool usage instructions, etc.). Passing a plain string replaces the default entirely,
+        // which breaks multi-turn sessions because the protocol instructions disappear.
+        systemPrompt: ctx.systemPrompt
+          ? { type: 'preset' as const, preset: 'claude_code' as const, append: ctx.systemPrompt }
+          : { type: 'preset' as const, preset: 'claude_code' as const },
+        // Explicitly set effort to 'low' to prevent CLAUDE_EFFORT=high from the parent process
+        // env from enabling extended thinking. Extended thinking produces signatures the Bedrock
+        // proxy validates across turns, causing 400 errors on turn 2+.
+        effort: 'low' as const,
         ...(ctx.maxTurns != null ? { maxTurns: ctx.maxTurns } : {}),
         ...(ctx.maxBudgetUsd != null ? { maxBudgetUsd: ctx.maxBudgetUsd } : {}),
         ...(isResume && resumeSessionId ? { resume: resumeSessionId } : {}),
@@ -155,12 +162,15 @@ function translateMessage(message: SDKMessage): AgentEvent[] {
  * Translate SDK assistant messages (which contain content blocks)
  * into our unified event stream. An assistant message may contain
  * multiple content blocks (text, tool_use, thinking) — we yield ALL of them.
+ *
+ * SDK shape: { type: 'assistant', message: BetaMessage, ... }
+ * Content blocks are in message.message.content, NOT message.content.
  */
 function translateAssistantMessage(message: SDKMessage): AgentEvent[] {
-  // SDKMessage is a union; assistant messages have a `content` array of blocks.
-  // Use runtime check instead of unsafe cast.
   const msg = message as Record<string, unknown>;
-  const content = msg.content;
+  // The SDK wraps the Anthropic API message in a `message` field.
+  const inner = msg.message as Record<string, unknown> | undefined;
+  const content = inner?.content;
   if (!content || !Array.isArray(content)) {
     return [];
   }
@@ -311,6 +321,16 @@ function mapResultSubtype(
       console.warn(`[claude-sdk] Unknown result subtype: "${sdkSubtype}", treating as error`);
       return 'error_during_execution';
   }
+}
+
+/**
+ * Strip CLAUDE_EFFORT from the subprocess environment to prevent the parent session's
+ * effort setting from enabling extended thinking in spawned agents. Extended thinking
+ * produces signatures the Bedrock proxy validates across turns, causing 400 errors.
+ */
+function stripEffortEnv(env: Record<string, string | undefined>): Record<string, string | undefined> {
+  const { CLAUDE_EFFORT: _dropped, ...rest } = env;
+  return rest;
 }
 
 /**
