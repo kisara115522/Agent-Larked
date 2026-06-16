@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildUserInput,
+  buildControlAllow,
 } from '../backends/stream-json.js';
 import type { StreamJsonMessage } from '../backends/stream-json.js';
 
@@ -19,5 +20,38 @@ describe('buildUserInput', () => {
     expect(Array.isArray(parsed.message?.content)).toBe(true);
     expect(parsed.message?.content?.[0].type).toBe('text');
     expect(parsed.message?.content?.[0].text).toBe('hello world');
+  });
+});
+
+// ─── buildControlAllow ────────────────────────────────────────────────────────
+
+describe('buildControlAllow', () => {
+  it('ends with a newline', () => {
+    expect(buildControlAllow('req-1', {})).toMatch(/\n$/);
+  });
+
+  it('produces behavior:allow with correct request_id', () => {
+    const raw = buildControlAllow('req-abc', { path: '/tmp' });
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    expect(parsed.type).toBe('control_response');
+    const response = parsed.response as Record<string, unknown>;
+    expect(response.request_id).toBe('req-abc');
+    const inner = response.response as Record<string, unknown>;
+    expect(inner.behavior).toBe('allow');
+    expect(inner.updatedInput).toEqual({ path: '/tmp' });
+  });
+
+  it('coerces non-object input to {}', () => {
+    const raw = buildControlAllow('req-x', 'not-an-object');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const inner = (parsed.response as Record<string, unknown>).response as Record<string, unknown>;
+    expect(inner.updatedInput).toEqual({});
+  });
+
+  it('coerces null input to {}', () => {
+    const raw = buildControlAllow('req-null', null);
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const inner = (parsed.response as Record<string, unknown>).response as Record<string, unknown>;
+    expect(inner.updatedInput).toEqual({});
   });
 });
