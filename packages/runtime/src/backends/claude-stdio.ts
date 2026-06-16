@@ -70,8 +70,33 @@ export class ClaudeStdioBackend implements AgentBackend {
     }) as ChildProcessWithoutNullStreams;
 
     const queue = createEventQueue<AgentEvent>();
-    const trackingKey = resumeSessionId ?? `pending:${child.pid}`;
+    let trackingKey = resumeSessionId ?? `pending:${child.pid}`;
     this.active.set(trackingKey, child);
+
+    let sawResult = false;
+    let stderrTail = '';
+    const STDERR_TAIL_MAX = 8192;
+
+    // ── stderr → bounded tail (for diagnostics on unexpected exit) ──
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX);
+    });
+
+    // ── stdout → line parse ──
+    const rl = createInterface({ input: child.stdout });
+    rl.on('line', (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      let msg: StreamJsonMessage;
+      try {
+        msg = JSON.parse(trimmed) as StreamJsonMessage;
+      } catch {
+        return; // non-JSON noise (banner etc.)
+      }
+      // Translation and queue push added in subsequent commits.
+      void msg;
+    });
 
     // Write the initial user message. stdin stays OPEN (control_request needs
     // the same stream; closing early strands the child — multica's hard-won note).
@@ -81,11 +106,15 @@ export class ClaudeStdioBackend implements AgentBackend {
       // If the pipe is already broken the exit handler will surface the error.
     }
 
-    // Placeholder: immediately end the queue so drain() returns.
-    // Replaced in subsequent commits with real stdout parsing + exit wiring.
-    mcp.cleanup();
-    this.active.delete(trackingKey);
-    queue.end();
+    // Placeholder: end queue on exit — full lifecycle wiring in next commits.
+    child.once('exit', () => {
+      rl.close();
+      this.active.delete(trackingKey);
+      mcp.cleanup();
+      queue.end();
+    });
+
+    void sawResult; void stderrTail;
 
     yield* queue.drain();
   }
@@ -98,5 +127,4 @@ export function createClaudeStdioBackend(_config?: BackendConfig): ClaudeStdioBa
 // Suppress unused-import warnings for helpers used in later commits.
 void (buildControlAllow as unknown);
 void (translateStreamMessage as unknown);
-void (createInterface as unknown);
 void (SIGKILL_GRACE_MS as unknown);
