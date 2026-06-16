@@ -46,5 +46,13 @@ export interface StreamJsonMessage {
   request?: { subtype?: string; tool_name?: string; input?: unknown };
 }
 
-// Re-export AgentEvent for use by the translator (keeps imports in claude-stdio.ts lean).
-export type { AgentEvent };
+// ─── Input frame ──────────────────────────────────────────────────────────────
+
+/** Build a single stream-json user-input line (newline-terminated). */
+export function buildUserInput(prompt: string): string {
+  const frame = {
+    type: 'user',
+    message: { role: 'user', content: [{ type: 'text', text: prompt }] },
+  };
+  return JSON.stringify(frame) + '\n';
+}
