@@ -5,6 +5,7 @@ dist/
 
 # Database
 data/
+**/*.db
 
 # Local settings (machine-specific)
 .claude/settings.local.json
