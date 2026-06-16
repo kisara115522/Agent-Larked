@@ -39,14 +39,12 @@ export class ClaudeStdioBackend implements AgentBackend {
    *  re-keyed to the real session id once the init event arrives. */
   private active = new Map<string, ChildProcessWithoutNullStreams>();
 
-  run(_ctx: AgentRunContext): AsyncIterable<AgentEvent> {
-    // TODO: implemented in subsequent commits
-    return (async function* () {})();
+  run(ctx: AgentRunContext): AsyncIterable<AgentEvent> {
+    return this.exec(ctx, undefined);
   }
 
-  resume(_sessionId: string, _ctx: AgentRunContext): AsyncIterable<AgentEvent> {
-    // TODO: implemented in subsequent commits
-    return (async function* () {})();
+  resume(sessionId: string, ctx: AgentRunContext): AsyncIterable<AgentEvent> {
+    return this.exec(ctx, sessionId);
   }
 
   abort(_sessionId: string): void {
@@ -58,10 +56,22 @@ export class ClaudeStdioBackend implements AgentBackend {
   }
 
   private async *exec(
-    _ctx: AgentRunContext,
-    _resumeSessionId: string | undefined,
+    ctx: AgentRunContext,
+    resumeSessionId: string | undefined,
   ): AsyncGenerator<AgentEvent> {
-    // TODO: implemented in subsequent commits
+    const mcp = writeMcpConfigToTemp(ctx.mcpServers);
+    const args = buildClaudeArgs(ctx, { mcpConfigPath: mcp.path, resumeSessionId });
+    const env = buildChildEnv(ctx.env);
+
+    const child = spawn(CLAUDE_BIN, args, {
+      cwd: ctx.cwd,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }) as ChildProcessWithoutNullStreams;
+
+    // Cleanup and exit — more wiring in subsequent commits.
+    mcp.cleanup();
+    child.kill('SIGTERM');
   }
 }
 
@@ -70,13 +80,9 @@ export function createClaudeStdioBackend(_config?: BackendConfig): ClaudeStdioBa
 }
 
 // Suppress unused-import warnings for helpers used in later commits.
-void (buildChildEnv as unknown);
-void (buildClaudeArgs as unknown);
-void (writeMcpConfigToTemp as unknown);
 void (createEventQueue as unknown);
 void (buildUserInput as unknown);
 void (buildControlAllow as unknown);
 void (translateStreamMessage as unknown);
 void (createInterface as unknown);
-void (spawn as unknown);
 void (SIGKILL_GRACE_MS as unknown);
