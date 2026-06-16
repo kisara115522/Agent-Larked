@@ -135,7 +135,10 @@ export class ClaudeStdioBackend implements AgentBackend {
     }
 
     // ── lifecycle: finish() closes the queue and cleans up ──
+    let finished = false;
     const finish = (extra?: AgentEvent): void => {
+      if (finished) return;
+      finished = true;
       if (extra) queue.push(extra);
       queue.end();
       this.active.delete(trackingKey);
@@ -150,6 +153,7 @@ export class ClaudeStdioBackend implements AgentBackend {
     }
 
     child.once('error', (err: Error) => {
+      rl.close();
       finish({ type: 'error', message: `spawn claude: ${err.message}`, subtype: 'unknown' });
     });
 

@@ -252,4 +252,37 @@
 - `buildMcpServers` 中 raw `process.env` 展开向 MCP 子进程泄漏了 CLAUDECODE/CLAUDE_CODE_* env key（C54 已修）
 - 若未来新增 CLAUDECODE_* 前缀的内部 env key，`isInternalClaudeEnvKey` 会自动过滤
 
+### 🟡 claude-sdk.ts stripEffortEnv 不完整 — 内部 env key 仍然泄漏
+- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **问题：** `stripEffortEnv()` 只移除 `CLAUDE_EFFORT`；`CLAUDECODE`、`CLAUDE_CODE_ENTRYPOINT`、`CLAUDE_CODE_EXECPATH`、`CLAUDE_CODE_SESSION_ID`、`CLAUDE_CODE_SSE_PORT` 仍然传入 SDK 子进程，与 `child-env.ts` 文档的意图不一致
+- **影响：** SDK backend 路径（BACKEND_TYPE=claude-sdk）存在内部 env key 泄漏
+- **建议修复：** 在 claude-sdk.ts 引入 `isInternalClaudeEnvKey`，替换 `stripEffortEnv` 实现
+- **状态：** open
+
+### 🟡 ClaudeStdioBackend abort(sessionId) 在 init 事件到达前是 no-op
+- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **问题：** exec() 启动到第一个 init 事件之间，map key 为 `pending:${pid}`；此时调用 `abort(realSessionId)` 静默失效（ctx.signal abort 路径仍然有效）
+- **影响：** 前 ~100ms 内通过 backend.abort(sessionId) 直接中止会失效
+- **建议修复：** 考虑在 init 事件前的 abort 调用中记录 pending key，或在 abort() 中支持扫描 pending 前缀
+- **状态：** open
+
+### 🟢 ClaudeStdioBackend child.pid 为 undefined 时 pending:undefined key 冲突
+- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **问题：** spawn 失败时 `child.pid` 为 `undefined`，多个并发失败的 spawn 会共用 `"pending:undefined"` key，后者覆盖前者
+- **建议修复：** 在 `child.pid === undefined` 时使用 `crypto.randomUUID()` 或单调计数器作为 fallback key
+- **状态：** open
+
+### 🟢 claude-sdk.ts SSE transport command: '' placeholder 可能触发 SDK 校验错误
+- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **问题：** `buildMcpServersConfig` 中 SSE transport 写入 `command: ''`，SDK 可能不接受空 command 字段与 url 字段共存
+- **建议修复：** 确认 SDK 对 SSE transport 的期望格式，移除不需要的 `command: ''` 字段
+- **状态：** open
+
+### 🟢 toAbortController 在正常完成时不移除 abort listener（claude-sdk.ts）
+- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **问题：** 父 signal 上的 `{ once: true }` listener 在正常完成时不会移除，长期存活的父 signal 上会积累 listener
+- **影响：** 低优先级；只在父 signal 生命周期长（如 room-wide signal）时才有影响
+- **建议修复：** 正常完成时主动移除 listener，或改为 scoped AbortController
+- **状态：** open
+
 </details>
