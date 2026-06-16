@@ -275,17 +275,17 @@ describe('loadBackendConfig', () => {
     process.env = { ...originalEnv };
   });
 
-  it('should default to claude-sdk backend', () => {
+  it('should default to claude-stdio backend', () => {
     const config = loadBackendConfig();
-    expect(config.type).toBe('claude-sdk');
+    expect(config.type).toBe('claude-stdio');
     expect(config.apiEndpoint).toBeUndefined();
     expect(config.apiKey).toBeUndefined();
   });
 
-  it('should load claude-sdk backend with model override', () => {
+  it('should load claude-stdio backend with model override', () => {
     process.env.AGENT_MODEL = 'claude-opus-4-20250514';
     const config = loadBackendConfig();
-    expect(config.type).toBe('claude-sdk');
+    expect(config.type).toBe('claude-stdio');
     expect(config.model).toBe('claude-opus-4-20250514');
   });
 
@@ -318,7 +318,7 @@ describe('loadBackendConfig', () => {
   });
 
   it('should accept various backend types', () => {
-    const types: BackendType[] = ['claude-sdk', 'openai-compat'];
+    const types: BackendType[] = ['claude-sdk', 'claude-stdio', 'openai-compat'];
     for (const type of types) {
       process.env.BACKEND_TYPE = type;
       if (type === 'openai-compat') process.env.OPENAI_API_KEY = 'test';
