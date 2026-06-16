@@ -1,9 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSSE } from '../../context/SSEContext';
 import { get, post } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { getAgentGradient, getAgentInitials } from '../../utils/agent-style';
+import { useAgentActivity } from '../../hooks/useAgentActivity';
+import { AgentActivityTrace } from '../activity/AgentActivityTrace';
+import type { AgentActivity } from '../../types/activity';
 
 interface Message {
   id: string;
@@ -120,6 +123,39 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
   const gradient = getAgentGradient(agentName);
   const initials = getAgentInitials(agentName);
 
+  // Agent activity timeline (think/tool_call chain)
+  const { activities } = useAgentActivity(agentId);
+
+  // Group activities into turns aligned with agent messages.
+  // Each "turn" = activities between the previous human message and this agent message.
+  const activitiesByMessageId = useMemo(() => {
+    if (activities.length === 0 || messages.length === 0) return new Map<string, AgentActivity[]>();
+    const map = new Map<string, AgentActivity[]>();
+    const humanTimestamps = messages
+      .filter(m => m.isHuman)
+      .map(m => new Date(m.time).getTime());
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.isHuman) continue;
+
+      // Find the previous human message timestamp
+      const msgTime = new Date(msg.time).getTime();
+      const prevHumanTime = humanTimestamps.filter(t => t < msgTime).pop() ?? 0;
+
+      // Collect activities between prevHumanTime and msgTime (inclusive of nearby)
+      const turnActivities = activities.filter(a => {
+        const aTime = new Date(a.created_at).getTime();
+        return aTime >= prevHumanTime && aTime <= msgTime + 5000; // +5s tolerance
+      });
+
+      if (turnActivities.length > 0) {
+        map.set(msg.id, turnActivities);
+      }
+    }
+    return map;
+  }, [messages, activities]);
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div className="w-[480px] h-[600px] bg-surface border border-border rounded-[14px] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -151,6 +187,12 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
                   <span className="text-[11px] text-text-dim font-mono">{msg.time}</span>
                 </div>
                 <div className="text-sm mt-0.5">{msg.text}</div>
+                {!msg.isHuman && activitiesByMessageId.has(msg.id) && (
+                  <AgentActivityTrace
+                    activities={activitiesByMessageId.get(msg.id)!}
+                    className="mt-1"
+                  />
+                )}
               </div>
             </div>
           ))}
