@@ -446,19 +446,19 @@ export function wakeDirectMessageAgent(
   eventBus?: EventBus,
 ): void {
   const profile = db.prepare('SELECT status FROM profiles WHERE id = ?').get(agentId) as { status: string } | undefined;
-  if (!profile || profile.status !== 'dormant') return;
+  if (!profile) return;
+  // Don't wake agents that are already active or spawning
+  if (profile.status === 'active' || profile.status === 'spawning') return;
 
-  const spawn = db.prepare(
-    "SELECT runtime_id FROM agent_spawns WHERE agent_id = ? ORDER BY spawned_at DESC LIMIT 1",
-  ).get(agentId) as { runtime_id: string } | undefined;
-  if (!spawn?.runtime_id) return;
+  // Use selectRuntimeForWake which falls back to any available runtime
+  // when the agent has no prior spawn record (newly created agents).
+  const runtime = selectRuntimeForWake(db, agentId);
+  if (!runtime) {
+    console.warn(`[callback] No online runtime available to wake agent ${agentId} for DM from ${senderName}`);
+    return;
+  }
 
-  const runtime = db.prepare(
-    'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
-  ).get(spawn.runtime_id) as RuntimeRow | undefined;
-  if (!runtime || runtime.status !== 'online') return;
-
-  const prompt = `${senderName} sent you a direct message:\n\n"${excerpt}"\n\nUse the Flock direct-message tools to read the conversation and reply directly if useful.`;
+  const prompt = `${senderName} sent you a direct message:\n\n"${excerpt}"\n\nUse flock_dm_read to read the full conversation history, then flock_dm_send to reply. After replying, call flock_wait to wait for the next message.`;
   const session = createWakeSession(db, agentId, runtime.id, undefined, prompt, eventBus);
   if (!session) return;
 
