@@ -28,6 +28,7 @@ import type {
   MCPServerConfig,
 } from '../backends/types.js';
 import { BackendRegistry, defaultBackendRegistry } from './backend-registry.js';
+import { buildChildEnv } from '../backends/child-env.js';
 import { composeSystemPrompt, type ComposeOptions, type AgentIdentity, type RoomContext } from './prompt-composer.js';
 import {
   processEvent,
@@ -363,14 +364,11 @@ export class AgentHarness {
           type: 'stdio',
           command: 'node',
           args: [this.config.mcpServerPath],
-          env: {
-            ...Object.fromEntries(
-              Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined),
-            ),
+          env: buildChildEnv({
             DB_PATH: this.config.dbPath,
             AGENT_NAME: request.agentName,
             ...(request.agentToken ? { AGENT_TOKEN: request.agentToken } : {}),
-          },
+          }),
         },
       },
     ];
