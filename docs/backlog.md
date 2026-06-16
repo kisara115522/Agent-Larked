@@ -17,6 +17,36 @@
 
 ---
 
+## 2026-06-16 DM/消息可见性修复发现
+
+### 🟡 MCP lifecycle.test.ts 测试与代码不匹配
+- **发现于：** 2026-06-16，A4 修复时
+- **问题：** lifecycle.test.ts 断言 status 为 `'online'`/`'offline'`，但 db.ts 代码写 `'active'`/`'dormant'`
+- **影响：** 2 个测试永久失败（pre-existing）
+- **建议修复：** 更新测试期望值为 `'active'`/`'dormant'`
+- **状态：** open
+
+### 🟡 wake-callback.test.ts 3 个测试失败
+- **发现于：** 2026-06-16，A13 修复时
+- **问题：** session_id 断言、超时、301 redirect — 均为 pre-existing
+- **影响：** 测试套件不全绿
+- **建议修复：** 逐个排查修复
+- **状态：** open
+
+### 🟢 [deleted]/system 等保留 profile 出现在列表
+- **发现于：** 2026-06-16，排查时发现
+- **问题：** profiles 表有 [deleted]/system 行，前端是否过滤待确认
+- **状态：** open
+
+### 🟢 emitDirectMessage 广播给所有 human 客户端
+- **发现于：** 2026-06-16，A9 修复时
+- **问题：** 当前 emitDirectMessage 给所有 humanClients 推送，前端需按 from/to 过滤自己的会话
+- **影响：** 多个 human 在线时会收到不属于自己的 DM 事件（前端已过滤，但浪费带宽）
+- **建议修复：** 后端按 recipient 的 humanId 精准推送，而非广播
+- **状态：** open
+
+---
+
 ## v0.6 — UX 补全（2026-06-01 kisara 端到端测试反馈）
 
 > 详细文档：`docs/plans/2026-06-01-ux-critical-issues.md`
