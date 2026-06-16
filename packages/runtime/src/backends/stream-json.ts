@@ -92,3 +92,30 @@ export function mapResultSubtype(
       return 'completed';
   }
 }
+
+function translateContentBlock(block: StreamJsonContentBlock): AgentEvent | null {
+  switch (block.type) {
+    case 'text':
+      return typeof block.text === 'string' ? { type: 'text', content: block.text } : null;
+    case 'thinking':
+      return typeof block.thinking === 'string' ? { type: 'thinking', content: block.thinking } : null;
+    case 'tool_use':
+      if (typeof block.id !== 'string' || typeof block.name !== 'string') return null;
+      return {
+        type: 'tool_use',
+        id: block.id,
+        name: block.name,
+        input: (block.input && typeof block.input === 'object' ? block.input : {}) as Record<string, unknown>,
+      };
+    case 'tool_result':
+      if (typeof block.tool_use_id !== 'string') return null;
+      return {
+        type: 'tool_result',
+        toolUseId: block.tool_use_id,
+        content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? ''),
+        isError: typeof block.is_error === 'boolean' ? block.is_error : undefined,
+      };
+    default:
+      return null;
+  }
+}
