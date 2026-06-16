@@ -13,26 +13,39 @@ export interface EventQueue<T> {
 
 export function createEventQueue<T>(): EventQueue<T> {
   const buffer: T[] = [];
+  let wake: (() => void) | null = null;
   let ended = false;
+
+  function signal(): void {
+    const w = wake;
+    wake = null;
+    w?.();
+  }
 
   return {
     push(item: T): void {
       if (ended) return;
       buffer.push(item);
+      signal();
     },
     end(): void {
       ended = true;
+      signal();
     },
     async *drain(): AsyncGenerator<T> {
+      // No `await` between the buffer check and the Promise-executor assignment,
+      // so a push() landing after the checks cannot be missed (JS is single-
+      // threaded; the executor runs synchronously and sets `wake` before the
+      // await suspends).
       while (true) {
         if (buffer.length > 0) {
           yield buffer.shift()!;
           continue;
         }
         if (ended) return;
-        // Yield control to allow more pushes to arrive (temporary busy-wait
-        // placeholder — will be replaced with wake/signal in the next commit).
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
       }
     },
   };
