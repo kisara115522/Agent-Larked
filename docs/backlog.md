@@ -252,24 +252,26 @@
 - `buildMcpServers` 中 raw `process.env` 展开向 MCP 子进程泄漏了 CLAUDECODE/CLAUDE_CODE_* env key（C54 已修）
 - 若未来新增 CLAUDECODE_* 前缀的内部 env key，`isInternalClaudeEnvKey` 会自动过滤
 
-### 🟡 claude-sdk.ts stripEffortEnv 不完整 — 内部 env key 仍然泄漏
+### ✅ claude-sdk.ts stripEffortEnv 不完整（已修）
 - **发现于：** 2026-06-16，Code Reviewer 代码审查
-- **问题：** `stripEffortEnv()` 只移除 `CLAUDE_EFFORT`；`CLAUDECODE`、`CLAUDE_CODE_ENTRYPOINT`、`CLAUDE_CODE_EXECPATH`、`CLAUDE_CODE_SESSION_ID`、`CLAUDE_CODE_SSE_PORT` 仍然传入 SDK 子进程，与 `child-env.ts` 文档的意图不一致
-- **影响：** SDK backend 路径（BACKEND_TYPE=claude-sdk）存在内部 env key 泄漏
-- **建议修复：** 在 claude-sdk.ts 引入 `isInternalClaudeEnvKey`，替换 `stripEffortEnv` 实现
-- **状态：** open
+- **修复于：** 2026-06-16，commit 6a50d74 — 替换为 stripInternalEnv，复用 isInternalClaudeEnvKey
+
+### ✅ ClaudeStdioBackend child.pid 为 undefined 时 pending:undefined key 冲突（已修）
+- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **修复于：** 2026-06-16，commit 6a50d74 — 使用 randomUUID() fallback
 
 ### 🟡 ClaudeStdioBackend abort(sessionId) 在 init 事件到达前是 no-op
-- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **发现于：** 2026-06-16，Code Reviewer 代码审查（两轮独立审查均发现）
 - **问题：** exec() 启动到第一个 init 事件之间，map key 为 `pending:${pid}`；此时调用 `abort(realSessionId)` 静默失效（ctx.signal abort 路径仍然有效）
 - **影响：** 前 ~100ms 内通过 backend.abort(sessionId) 直接中止会失效
-- **建议修复：** 考虑在 init 事件前的 abort 调用中记录 pending key，或在 abort() 中支持扫描 pending 前缀
+- **建议修复：** 在 abort() 中支持扫描 pending 前缀，或在 exec() 入口就接受 session id 预注册
 - **状态：** open
 
-### 🟢 ClaudeStdioBackend child.pid 为 undefined 时 pending:undefined key 冲突
+### 🟡 tool_result.content 为数组时被序列化为 JSON 字符串（stdio+sdk 两条路径均有）
 - **发现于：** 2026-06-16，Code Reviewer 代码审查
-- **问题：** spawn 失败时 `child.pid` 为 `undefined`，多个并发失败的 spawn 会共用 `"pending:undefined"` key，后者覆盖前者
-- **建议修复：** 在 `child.pid === undefined` 时使用 `crypto.randomUUID()` 或单调计数器作为 fallback key
+- **问题：** `translateContentBlock`（claude-sdk.ts:244）和 `stream-json.ts`（:157）中，`tool_result` 的 `content` 字段为 `ContentBlock[]` 时被 `JSON.stringify` 序列化为字符串传给消费方，而不是提取文本内容
+- **影响：** 多模态 tool_result 下游收到 JSON 字符串而非文本，行为不符合预期
+- **建议修复：** 检测 content 为数组时提取第一个 text block 的文本，或将 ToolResultEvent.content 改为 `string | ContentBlock[]`
 - **状态：** open
 
 ### 🟢 claude-sdk.ts SSE transport command: '' placeholder 可能触发 SDK 校验错误
@@ -283,6 +285,18 @@
 - **问题：** 父 signal 上的 `{ once: true }` listener 在正常完成时不会移除，长期存活的父 signal 上会积累 listener
 - **影响：** 低优先级；只在父 signal 生命周期长（如 room-wide signal）时才有影响
 - **建议修复：** 正常完成时主动移除 listener，或改为 scoped AbortController
+- **状态：** open
+
+### 🟢 stderr tail 含 ANSI 转义码影响日志可读性（claude-stdio.ts）
+- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **问题：** claude CLI stderr 可能包含 ANSI 颜色码，直接拼入错误消息在日志中产生乱码
+- **建议修复：** 在 stderrTail 写入错误消息前做简单的 ANSI strip（正则 `/\x1b\[[0-9;]*m/g`）
+- **状态：** open
+
+### 🟢 resolvePermissionMode 将 ask 静默降级为 bypassPermissions（claude-sdk.ts）
+- **发现于：** 2026-06-16，Code Reviewer 代码审查
+- **问题：** `'ask'` 降级到 `'bypassPermissions'` 只打 warn，调用方没有程序性反馈；语义从"限制"降到"最宽"，是安全语义降级
+- **建议修复：** 在接口注释中明确文档化此行为；考虑是否应抛出异常让调用方显式处理
 - **状态：** open
 
 </details>
