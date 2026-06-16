@@ -29,3 +29,23 @@ export function isInternalClaudeEnvKey(key: string): boolean {
   // The user-facing namespace is CLAUDE_CODE_* and is preserved.
   return key.startsWith('CLAUDECODE_');
 }
+
+/**
+ * Build the environment for a spawned claude subprocess: process.env with
+ * internal markers filtered out, then `extra` merged on top. Undefined values
+ * are dropped so the result is a clean Record<string,string>.
+ */
+export function buildChildEnv(extra?: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v === undefined) continue;
+    if (isInternalClaudeEnvKey(k)) continue;
+    out[k] = v;
+  }
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (v !== undefined) out[k] = v;
+    }
+  }
+  return out;
+}
