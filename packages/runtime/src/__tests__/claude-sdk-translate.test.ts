@@ -55,6 +55,67 @@ beforeEach(() => {
   mockMessages.length = 0;
 });
 
+// ─── C54e: Bug #2 — result success + is_error:true → error_during_execution ──
+
+describe('claude-sdk result subtype with is_error (Bug #2)', () => {
+  it('maps subtype:success + is_error:true to error_during_execution', async () => {
+    mockMessages.push(
+      {
+        type: 'system',
+        subtype: 'init',
+        session_id: 'sid-e1',
+        model: 'claude-opus',
+        tools: [],
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        is_error: true,
+        duration_ms: 50,
+        session_id: 'sid-e1',
+      },
+    );
+
+    const backend = new ClaudeSdkBackend();
+    const events = await collectEvents(backend.run(baseCtx()));
+
+    const resultEv = events.find(
+      (e) => (e as { type: string }).type === 'result',
+    ) as { type: string; subtype: string } | undefined;
+
+    expect(resultEv).toBeDefined();
+    expect(resultEv?.subtype).toBe('error_during_execution');
+  });
+
+  it('maps subtype:success + is_error:false to completed', async () => {
+    mockMessages.push(
+      {
+        type: 'system',
+        subtype: 'init',
+        session_id: 'sid-e2',
+        model: 'claude-opus',
+        tools: [],
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        duration_ms: 50,
+        session_id: 'sid-e2',
+      },
+    );
+
+    const backend = new ClaudeSdkBackend();
+    const events = await collectEvents(backend.run(baseCtx()));
+
+    const resultEv = events.find(
+      (e) => (e as { type: string }).type === 'result',
+    ) as { type: string; subtype: string } | undefined;
+
+    expect(resultEv?.subtype).toBe('completed');
+  });
+});
+
 // ─── C54c: Bug #1 — user message tool_result translation ─────────────────────
 
 describe('claude-sdk user message tool_result translation (Bug #1)', () => {
