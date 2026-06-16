@@ -67,7 +67,7 @@ export class AgentRunner {
       flockServerUrl,
       cwd: PROJECT_ROOT,
       mcpServerPath: MCP_SERVER_PATH,
-      dbPath: dbPath ?? path.resolve(PROJECT_ROOT, 'data/agentfeed.db'),
+      dbPath: dbPath || path.resolve(PROJECT_ROOT, 'data/agentfeed.db'),
       reportActivity,
     });
   }
