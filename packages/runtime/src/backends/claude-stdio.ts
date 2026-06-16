@@ -69,6 +69,10 @@ export class ClaudeStdioBackend implements AgentBackend {
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as ChildProcessWithoutNullStreams;
 
+    const queue = createEventQueue<AgentEvent>();
+    const trackingKey = resumeSessionId ?? `pending:${child.pid}`;
+    this.active.set(trackingKey, child);
+
     // Write the initial user message. stdin stays OPEN (control_request needs
     // the same stream; closing early strands the child — multica's hard-won note).
     try {
@@ -77,9 +81,13 @@ export class ClaudeStdioBackend implements AgentBackend {
       // If the pipe is already broken the exit handler will surface the error.
     }
 
-    // Cleanup placeholder — event wiring in next commits.
+    // Placeholder: immediately end the queue so drain() returns.
+    // Replaced in subsequent commits with real stdout parsing + exit wiring.
     mcp.cleanup();
-    child.kill('SIGTERM');
+    this.active.delete(trackingKey);
+    queue.end();
+
+    yield* queue.drain();
   }
 }
 
@@ -88,7 +96,6 @@ export function createClaudeStdioBackend(_config?: BackendConfig): ClaudeStdioBa
 }
 
 // Suppress unused-import warnings for helpers used in later commits.
-void (createEventQueue as unknown);
 void (buildControlAllow as unknown);
 void (translateStreamMessage as unknown);
 void (createInterface as unknown);
