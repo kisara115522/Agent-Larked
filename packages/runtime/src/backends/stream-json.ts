@@ -93,6 +93,49 @@ export function mapResultSubtype(
   }
 }
 
+/**
+ * Translate one parsed stream-json message into zero or more AgentEvents.
+ * Returns [] for messages we ignore (e.g. control_request — handled out-of-band
+ * by the backend writing to stdin, not surfaced as an event).
+ */
+export function translateStreamMessage(msg: StreamJsonMessage): AgentEvent[] {
+  switch (msg.type) {
+    case 'system':
+      if (msg.subtype === 'init') {
+        return [{
+          type: 'init',
+          sessionId: msg.session_id ?? '',
+          model: msg.model ?? '',
+          tools: msg.tools ?? [],
+          mcpServers: msg.mcp_servers?.map((s) => ({ name: s.name, status: s.status })),
+        }];
+      }
+      return [];
+    case 'assistant':
+    case 'user': {
+      const blocks = msg.message?.content;
+      if (!Array.isArray(blocks)) return [];
+      const events: AgentEvent[] = [];
+      for (const b of blocks) {
+        const ev = translateContentBlock(b);
+        if (ev) events.push(ev);
+      }
+      return events;
+    }
+    case 'result':
+      return [{
+        type: 'result',
+        subtype: mapResultSubtype(msg),
+        durationMs: msg.duration_ms ?? 0,
+        costUsd: msg.total_cost_usd,
+        numTurns: msg.num_turns,
+        sessionId: msg.session_id ?? '',
+      }];
+    default:
+      return [];
+  }
+}
+
 export function translateContentBlock(block: StreamJsonContentBlock): AgentEvent | null {
   switch (block.type) {
     case 'text':
