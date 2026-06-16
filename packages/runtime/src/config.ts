@@ -44,12 +44,15 @@ export function loadConfig(): RuntimeConfig {
   const callbackPort = parsePositiveInt(process.env.CALLBACK_PORT, 4000);
   const maxAgents = parsePositiveInt(process.env.MAX_AGENTS, 10);
   const heartbeatIntervalMs = parsePositiveInt(process.env.HEARTBEAT_INTERVAL_MS, 30_000);
-  const dbPath = process.env.DB_PATH ?? '';
   // When launched via `npm -w`, cwd is the package dir; fall back to monorepo root.
   const defaultSecretPath = resolve(process.cwd(), 'data/runtime-callback-secrets.json');
   const rootSecretPath = resolve(process.cwd(), '../../data/runtime-callback-secrets.json');
   const callbackSecretPath = process.env.RUNTIME_CALLBACK_SECRET_PATH
     ?? (existsSync(defaultSecretPath) ? defaultSecretPath : rootSecretPath);
+
+  // DB_PATH: empty string means "use default". ?? won't catch '', so use ||.
+  const defaultDbPath = resolve(process.cwd(), '../../data/agentfeed.db');
+  const dbPath = process.env.DB_PATH || defaultDbPath;
 
   return {
     flockServerUrl,
