@@ -250,6 +250,38 @@
 - **验证**：`npx tsc --noEmit` 0 error；Vite dev server（端口 5175）所有改动模块返回 200；浏览器 DevTools 确认 `--color-bg: #111114`、`--color-accent: #3b82f6`、`--font-sans: 'DM Sans'`。
 - **范围限制**：仅视觉清理，未触碰任何业务逻辑、API 调用、组件 props、状态管理；HSL 渐变头像被 DESIGN.md 明确允许，保留。
 
+## 2026-06-16 stdio backend migration 完成
+
+**ClaudeStdioBackend 已替换 ClaudeSdkBackend 为默认后端（66 个原子提交 C1→C62）**
+
+### 新增模块（packages/runtime/src/backends/）
+- `child-env.ts` — 内部 Claude env key 过滤 + buildChildEnv()（C1-C4）
+- `event-queue.ts` — push→pull 异步队列，桥接 child_process 与 AsyncIterable（C5-C8）
+- `stream-json.ts` — wire 类型 + 输入构建 + 帧解析（C9-C17）
+- `mcp-config.ts` — 写入 --mcp-config 临时 JSON 文件（C18-C20）
+- `claude-args.ts` — 构建 claude CLI argv（C21-C22）
+- `claude-stdio.ts` — ClaudeStdioBackend 完整实现（C23-C38）
+
+### 测试（packages/runtime/src/__tests__/）
+- `child-env.test.ts`、`event-queue.test.ts`、`stream-json.test.ts`、`mcp-config.test.ts`、`claude-args.test.ts` — 纯模块单测（C2-C22）
+- `claude-stdio.test.ts` — 7 个端到端测试（C39-C45，mock child_process.spawn）
+- `claude-sdk-translate.test.ts` — SDK 路径回归测试（C54c/C54e）
+- `agent-runner-process.test.ts` — 9 个端到端测试，已从 SDK mock 迁移到 child_process mock（C55-C59）
+
+### 配置变更
+- `types.ts`: BackendType 新增 `'claude-stdio'`（C46）
+- `index.ts`: 导出 ClaudeStdioBackend（C47）
+- `agent-runner.ts`: 注册 createClaudeStdioBackend，SpawnOptions 包含 'claude-stdio'（C48-C50）
+- `config.ts`, `agent-runner.ts`, `agent-harness.ts`: 默认后端从 'claude-sdk' 切换为 'claude-stdio'（C51-C53）
+- `agent-harness.ts`: buildMcpServers 使用 buildChildEnv 过滤内部 env key（C54）
+
+### SDK bug 修复（claude-sdk.ts）
+- Bug #1：translateMessage 无 'user' case，tool_result 事件死代码（C54b）
+- Bug #2：mapResultSubtype 未检查 is_error，success+is_error:true 被映射为 completed（C54d）
+
+### 测试统计
+126 tests, 12 test files, 全部通过（0 TS 编译错误）
+
 ## 优先级排序
 1. **v0.1.1** — `GET /rooms` + 文件数据库 + 成员列表（1 周）— 修完才能让 agent 互相发现 ✅
 2. **v0.2** — MCP Server（4 周）— **最高优先级**，解决"agent 无法感知新消息"的核心问题 ✅
