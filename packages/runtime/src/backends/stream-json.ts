@@ -56,3 +56,19 @@ export function buildUserInput(prompt: string): string {
   };
   return JSON.stringify(frame) + '\n';
 }
+
+/** Build a control_response line approving a tool use (newline-terminated). */
+export function buildControlAllow(requestId: string, input: unknown): string {
+  const frame = {
+    type: 'control_response',
+    response: {
+      subtype: 'success',
+      request_id: requestId,
+      response: {
+        behavior: 'allow',
+        updatedInput: (input && typeof input === 'object') ? input : {},
+      },
+    },
+  };
+  return JSON.stringify(frame) + '\n';
+}
