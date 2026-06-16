@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildUserInput,
   buildControlAllow,
+  mapResultSubtype,
 } from '../backends/stream-json.js';
 import type { StreamJsonMessage } from '../backends/stream-json.js';
 
@@ -53,5 +54,41 @@ describe('buildControlAllow', () => {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const inner = (parsed.response as Record<string, unknown>).response as Record<string, unknown>;
     expect(inner.updatedInput).toEqual({});
+  });
+});
+
+// ─── mapResultSubtype ─────────────────────────────────────────────────────────
+
+describe('mapResultSubtype', () => {
+  it('success + is_error:false → completed', () => {
+    const msg: StreamJsonMessage = { type: 'result', subtype: 'success', is_error: false };
+    expect(mapResultSubtype(msg)).toBe('completed');
+  });
+
+  it('success + is_error:true → error_during_execution (regression for API 400)', () => {
+    // This is the critical bug: subtype:"success" co-occurring with is_error:true
+    // happens on API 400. Must return error, not completed.
+    const msg: StreamJsonMessage = { type: 'result', subtype: 'success', is_error: true };
+    expect(mapResultSubtype(msg)).toBe('error_during_execution');
+  });
+
+  it('error_max_turns + is_error:false → error_max_turns', () => {
+    const msg: StreamJsonMessage = { type: 'result', subtype: 'error_max_turns', is_error: false };
+    expect(mapResultSubtype(msg)).toBe('error_max_turns');
+  });
+
+  it('error_max_budget_usd + is_error:false → error_max_budget_usd', () => {
+    const msg: StreamJsonMessage = { type: 'result', subtype: 'error_max_budget_usd', is_error: false };
+    expect(mapResultSubtype(msg)).toBe('error_max_budget_usd');
+  });
+
+  it('unknown subtype + is_error:false → completed', () => {
+    const msg: StreamJsonMessage = { type: 'result', subtype: 'something_new', is_error: false };
+    expect(mapResultSubtype(msg)).toBe('completed');
+  });
+
+  it('is_error:true with no subtype → error_during_execution', () => {
+    const msg: StreamJsonMessage = { type: 'result', is_error: true };
+    expect(mapResultSubtype(msg)).toBe('error_during_execution');
   });
 });
