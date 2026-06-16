@@ -47,8 +47,11 @@ export class ClaudeStdioBackend implements AgentBackend {
     return this.exec(ctx, sessionId);
   }
 
-  abort(_sessionId: string): void {
-    // TODO: implemented in subsequent commits
+  abort(sessionId: string): void {
+    const child = this.active.get(sessionId);
+    if (!child) return;
+    this.active.delete(sessionId);
+    this.killChild(child);
   }
 
   private killChild(child: ChildProcessWithoutNullStreams): void {
