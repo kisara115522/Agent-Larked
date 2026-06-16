@@ -146,7 +146,7 @@ function translateMessage(message: SDKMessage): AgentEvent[] {
     case 'result':
       return [{
         type: 'result',
-        subtype: mapResultSubtype(message.subtype),
+        subtype: mapResultSubtype(message.subtype, (message as Record<string, unknown>).is_error),
         durationMs: message.duration_ms,
         costUsd: message.total_cost_usd,
         numTurns: message.num_turns,
@@ -331,7 +331,12 @@ function toAbortController(signal: AbortSignal): AbortController {
  */
 function mapResultSubtype(
   sdkSubtype: string,
+  isError?: unknown,
 ): 'completed' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd' {
+  // is_error:true overrides the subtype — even 'success' means an API-level error
+  if (isError === true) {
+    return 'error_during_execution';
+  }
   switch (sdkSubtype) {
     case 'success':
       return 'completed';
