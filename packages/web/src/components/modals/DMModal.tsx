@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useSSE } from '../../context/SSEContext';
 import { get, post } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { getAgentGradient, getAgentInitials } from '../../utils/agent-style';
@@ -55,6 +56,42 @@ export function DMModal({ agentId, agentName, agentBio, onClose }: {
   }, [token, agentId, agentName, human]);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  // Subscribe to real-time DM updates via SSE
+  const { subscribe } = useSSE();
+  useEffect(() => {
+    return subscribe((sseEvent) => {
+      if (sseEvent.event !== 'direct_message') return;
+      const data = sseEvent.data as { message_id: string; from: string; to: string; content: string; sequence: number };
+      // Only handle DMs for this conversation
+      if (data.from !== agentId && data.to !== agentId) return;
+
+      const humanId = human?.id;
+      const isFromHuman = data.from === humanId;
+
+      setMessages(prev => {
+        // Deduplicate: skip if we already have this message_id
+        if (prev.some(m => m.id === data.message_id)) return prev;
+
+        // For human's own messages: skip if we already have an optimistic entry
+        // (the optimistic entry uses a timestamp id; the SSE echo has the real id)
+        if (isFromHuman) {
+          const hasOptimistic = prev.some(m =>
+            m.isHuman && m.text === data.content && m.id.startsWith('1'),
+          );
+          if (hasOptimistic) return prev;
+        }
+
+        return [...prev, {
+          id: data.message_id,
+          from: isFromHuman ? (human?.display_name || human?.username || 'Human') : agentName,
+          text: data.content,
+          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+          isHuman: isFromHuman,
+        }];
+      });
+    });
+  }, [subscribe, agentId, agentName, human]);
 
   const handleSend = async () => {
     if (!token || !input.trim() || sending) return;
