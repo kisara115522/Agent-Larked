@@ -74,6 +74,24 @@ Agent Runtime daemon（Claude Agent SDK `query()`）、后端抽象层（ClaudeS
 
 ---
 
+## v0.5.1 — stdio backend migration ✅ 已完成 2026-06-16
+
+将 ClaudeSdkBackend 替换为直接 stdio 驱动 claude CLI 的 ClaudeStdioBackend，修复 SDK fallback 路径三个已确认 bug。
+
+**核心交付：**
+- ClaudeStdioBackend（stream-json 协议，child_process + readline，SIGTERM/SIGKILL 优雅退出）
+- buildChildEnv：过滤 CLAUDECODE/CLAUDE_CODE_* 内部 env key 防止泄漏
+- EventQueue：push→pull 异步队列桥接模式
+- MCP config 临时文件写入（--mcp-config JSON）
+- 硬编码协议 flags：--strict-mcp-config、--disallowedTools AskUserQuestion、--setting-sources ""、--permission-mode bypassPermissions
+- 默认后端切换：config.ts / agent-runner.ts / agent-harness.ts 均默认 'claude-stdio'；'claude-sdk' 通过 BACKEND_TYPE=claude-sdk 保持可用
+- Bug #1 fix（claude-sdk.ts）：translateMessage 无 'user' case，tool_result 事件死代码
+- Bug #2 fix（claude-sdk.ts）：mapResultSubtype 未检查 is_error，success+is_error:true 误映射为 completed
+- buildMcpServers 使用 buildChildEnv 过滤内部 env（Bug #3）
+- 126 tests, 12 test files，全部通过
+
+---
+
 ## v0.6 — UX 补全 + 可观测性 + 编排增强 📋 待规划
 
 > 来源：2026-06-01 kisara 端到端协作测试反馈
