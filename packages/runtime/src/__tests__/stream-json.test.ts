@@ -4,6 +4,7 @@ import {
   buildControlAllow,
   mapResultSubtype,
   translateContentBlock,
+  translateStreamMessage,
 } from '../backends/stream-json.js';
 import type { StreamJsonMessage } from '../backends/stream-json.js';
 
@@ -166,6 +167,145 @@ describe('translateContentBlock', () => {
   });
 
   it('unknown block type → null', () => {
-    expect(translateContentBlock({ type: 'image_url', url: 'https://...' })).toBeNull();
+    expect(translateContentBlock({ type: 'image_url' })).toBeNull();
+  });
+});
+
+// ─── Wire fixtures (real lines from claude CLI 2.1.178) ───────────────────────
+
+const INIT_LINE = JSON.stringify({
+  type: 'system',
+  subtype: 'init',
+  cwd: '/workspace',
+  session_id: 'cc0a8157-dead-beef-cafe-000000000001',
+  tools: ['Bash', 'Read', 'Edit'],
+  mcp_servers: [{ name: 'probe', status: 'pending' }],
+  model: 'ppio/pa/claude-opus-4-8[1M]',
+  permissionMode: 'bypassPermissions',
+});
+
+const ASSISTANT_LINE = JSON.stringify({
+  type: 'assistant',
+  message: {
+    model: 'pa/claude-opus-4-8',
+    id: 'msg_test',
+    type: 'message',
+    role: 'assistant',
+    content: [{ type: 'text', text: 'alpha bravo charlie' }],
+    stop_reason: null,
+  },
+  session_id: 'cc0a8157-dead-beef-cafe-000000000001',
+});
+
+const USER_TOOL_RESULT_LINE = JSON.stringify({
+  type: 'user',
+  message: {
+    role: 'user',
+    content: [
+      {
+        type: 'tool_result',
+        tool_use_id: 'toolu_test_123',
+        content: 'file contents here',
+        is_error: false,
+      },
+    ],
+  },
+  session_id: 'cc0a8157-dead-beef-cafe-000000000001',
+});
+
+const RESULT_SUCCESS_LINE = JSON.stringify({
+  type: 'result',
+  subtype: 'success',
+  is_error: false,
+  duration_ms: 4256,
+  num_turns: 1,
+  result: 'alpha bravo charlie',
+  session_id: 'cc0a8157-dead-beef-cafe-000000000001',
+  total_cost_usd: 0.2246,
+});
+
+const RESULT_ERROR_LINE = JSON.stringify({
+  type: 'result',
+  subtype: 'success',
+  is_error: true,
+  duration_ms: 100,
+  result: 'API Error: 400 Param Incorrect',
+  session_id: 'cc0a8157-dead-beef-cafe-000000000001',
+});
+
+// ─── translateStreamMessage ───────────────────────────────────────────────────
+
+describe('translateStreamMessage with real wire fixtures', () => {
+  it('init line → InitEvent with sessionId/model/tools/mcpServers', () => {
+    const msg = JSON.parse(INIT_LINE) as StreamJsonMessage;
+    const events = translateStreamMessage(msg);
+    expect(events).toHaveLength(1);
+    const ev = events[0];
+    expect(ev.type).toBe('init');
+    if (ev.type === 'init') {
+      expect(ev.sessionId).toBe('cc0a8157-dead-beef-cafe-000000000001');
+      expect(ev.model).toBe('ppio/pa/claude-opus-4-8[1M]');
+      expect(ev.tools).toContain('Bash');
+      expect(ev.mcpServers).toEqual([{ name: 'probe', status: 'pending' }]);
+    }
+  });
+
+  it('assistant line → TextEvent with correct content', () => {
+    const msg = JSON.parse(ASSISTANT_LINE) as StreamJsonMessage;
+    const events = translateStreamMessage(msg);
+    expect(events).toHaveLength(1);
+    const ev = events[0];
+    expect(ev.type).toBe('text');
+    if (ev.type === 'text') {
+      expect(ev.content).toBe('alpha bravo charlie');
+    }
+  });
+
+  it('user+tool_result line → ToolResultEvent', () => {
+    const msg = JSON.parse(USER_TOOL_RESULT_LINE) as StreamJsonMessage;
+    const events = translateStreamMessage(msg);
+    expect(events).toHaveLength(1);
+    const ev = events[0];
+    expect(ev.type).toBe('tool_result');
+    if (ev.type === 'tool_result') {
+      expect(ev.toolUseId).toBe('toolu_test_123');
+      expect(ev.content).toBe('file contents here');
+      expect(ev.isError).toBe(false);
+    }
+  });
+
+  it('result success line → ResultEvent completed', () => {
+    const msg = JSON.parse(RESULT_SUCCESS_LINE) as StreamJsonMessage;
+    const events = translateStreamMessage(msg);
+    expect(events).toHaveLength(1);
+    const ev = events[0];
+    expect(ev.type).toBe('result');
+    if (ev.type === 'result') {
+      expect(ev.subtype).toBe('completed');
+      expect(ev.sessionId).toBe('cc0a8157-dead-beef-cafe-000000000001');
+      expect(ev.durationMs).toBe(4256);
+      expect(ev.numTurns).toBe(1);
+    }
+  });
+
+  it('result is_error:true line → ResultEvent error_during_execution', () => {
+    const msg = JSON.parse(RESULT_ERROR_LINE) as StreamJsonMessage;
+    const events = translateStreamMessage(msg);
+    expect(events).toHaveLength(1);
+    const ev = events[0];
+    expect(ev.type).toBe('result');
+    if (ev.type === 'result') {
+      expect(ev.subtype).toBe('error_during_execution');
+    }
+  });
+
+  it('unknown type → empty array', () => {
+    const msg: StreamJsonMessage = { type: 'some_future_type' };
+    expect(translateStreamMessage(msg)).toEqual([]);
+  });
+
+  it('system/non-init subtype → empty array', () => {
+    const msg: StreamJsonMessage = { type: 'system', subtype: 'something_else' };
+    expect(translateStreamMessage(msg)).toEqual([]);
   });
 });
