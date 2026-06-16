@@ -2,8 +2,8 @@
  * Build the claude CLI argv for a stdio-driven agent session.
  *
  * Hardcodes the protocol-critical flags (stream-json in/out, verbose, strict
- * mcp config, bypassPermissions, AskUserQuestion disabled, settings sources
- * cleared). Effort/thinking is intentionally NOT passed — see migration plan §1.2.
+ * mcp config, bypassPermissions, AskUserQuestion disabled, effort=normal).
+ * Effort/thinking beyond normal is intentionally NOT enabled — see migration plan §1.2.
  */
 import type { AgentRunContext } from './types.js';
 
@@ -24,8 +24,9 @@ export function buildClaudeArgs(ctx: AgentRunContext, extra: ClaudeArgsExtra): s
     // AskUserQuestion has no UI in non-interactive mode; calling it strands the
     // agent. Steer clarifications to room messages instead (mirrors multica).
     '--disallowedTools', 'AskUserQuestion',
-    // Block ~/.claude/settings.json (effortLevel:high etc.) from loading.
-    '--setting-sources', '',
+    // Override effortLevel from settings.json without blocking the whole file
+    // (--setting-sources "" also strips auth tokens injected via settings.json env).
+    '--effort', 'normal',
   ];
 
   if (ctx.model) args.push('--model', ctx.model);
