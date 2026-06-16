@@ -3,6 +3,7 @@ import {
   buildUserInput,
   buildControlAllow,
   mapResultSubtype,
+  translateContentBlock,
 } from '../backends/stream-json.js';
 import type { StreamJsonMessage } from '../backends/stream-json.js';
 
@@ -90,5 +91,81 @@ describe('mapResultSubtype', () => {
   it('is_error:true with no subtype → error_during_execution', () => {
     const msg: StreamJsonMessage = { type: 'result', is_error: true };
     expect(mapResultSubtype(msg)).toBe('error_during_execution');
+  });
+});
+
+// ─── translateContentBlock ────────────────────────────────────────────────────
+
+describe('translateContentBlock', () => {
+  it('text block → TextEvent', () => {
+    const ev = translateContentBlock({ type: 'text', text: 'hello' });
+    expect(ev).toEqual({ type: 'text', content: 'hello' });
+  });
+
+  it('text block with missing text → null', () => {
+    expect(translateContentBlock({ type: 'text' })).toBeNull();
+  });
+
+  it('thinking block → ThinkingEvent', () => {
+    const ev = translateContentBlock({ type: 'thinking', thinking: 'I think...' });
+    expect(ev).toEqual({ type: 'thinking', content: 'I think...' });
+  });
+
+  it('thinking block with missing thinking → null', () => {
+    expect(translateContentBlock({ type: 'thinking' })).toBeNull();
+  });
+
+  it('tool_use block → ToolUseEvent', () => {
+    const ev = translateContentBlock({
+      type: 'tool_use',
+      id: 'tu_1',
+      name: 'Read',
+      input: { file_path: '/tmp/x' },
+    });
+    expect(ev).toEqual({
+      type: 'tool_use',
+      id: 'tu_1',
+      name: 'Read',
+      input: { file_path: '/tmp/x' },
+    });
+  });
+
+  it('tool_use block missing id → null', () => {
+    expect(translateContentBlock({ type: 'tool_use', name: 'Read' })).toBeNull();
+  });
+
+  it('tool_result block → ToolResultEvent', () => {
+    const ev = translateContentBlock({
+      type: 'tool_result',
+      tool_use_id: 'tu_1',
+      content: 'file data',
+      is_error: false,
+    });
+    expect(ev).toEqual({
+      type: 'tool_result',
+      toolUseId: 'tu_1',
+      content: 'file data',
+      isError: false,
+    });
+  });
+
+  it('tool_result with object content serializes to JSON string', () => {
+    const ev = translateContentBlock({
+      type: 'tool_result',
+      tool_use_id: 'tu_2',
+      content: { key: 'val' },
+    });
+    expect(ev?.type).toBe('tool_result');
+    if (ev?.type === 'tool_result') {
+      expect(ev.content).toBe(JSON.stringify({ key: 'val' }));
+    }
+  });
+
+  it('tool_result missing tool_use_id → null', () => {
+    expect(translateContentBlock({ type: 'tool_result', content: 'x' })).toBeNull();
+  });
+
+  it('unknown block type → null', () => {
+    expect(translateContentBlock({ type: 'image_url', url: 'https://...' })).toBeNull();
   });
 });

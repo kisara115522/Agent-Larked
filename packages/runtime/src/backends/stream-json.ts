@@ -93,7 +93,7 @@ export function mapResultSubtype(
   }
 }
 
-function translateContentBlock(block: StreamJsonContentBlock): AgentEvent | null {
+export function translateContentBlock(block: StreamJsonContentBlock): AgentEvent | null {
   switch (block.type) {
     case 'text':
       return typeof block.text === 'string' ? { type: 'text', content: block.text } : null;
