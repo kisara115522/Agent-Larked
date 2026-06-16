@@ -34,7 +34,7 @@ export interface AgentSpawnOptions {
   model?: string;
   provider?: string | AgentProviderOptions;
   sessionId?: string;
-  backend?: 'claude-sdk' | 'openai-compat';
+  backend?: 'claude-sdk' | 'claude-stdio' | 'openai-compat';
   backendConfig?: BackendConfig;
   env?: Record<string, string>;
 }
