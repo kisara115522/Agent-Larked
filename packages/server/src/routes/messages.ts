@@ -41,6 +41,8 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
           result.id,
           senderProfile?.name ?? '',
           req.body.content.slice(0, 200),
+          req.agentId!,
+          eventBus,
         );
       }
 

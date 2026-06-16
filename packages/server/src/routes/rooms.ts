@@ -196,9 +196,9 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
           req.body.mentions,
           req.humanId!,
         );
-        wakeMentionedAgents(db, req.body.mentions, roomId, result.id, senderName, excerpt, req.humanId!);
+        wakeMentionedAgents(db, req.body.mentions, roomId, result.id, senderName, excerpt, req.humanId!, eventBus);
       } else {
-        wakeRoomAgents(db, roomId, req.humanId!, senderName, excerpt);
+        wakeRoomAgents(db, roomId, req.humanId!, senderName, excerpt, eventBus);
       }
 
       res.status(201).json(result);
@@ -252,7 +252,7 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
       }
 
       // Fire the actual wake
-      wakeRoomAgents(db, roomId, req.humanId!, senderName, `Broadcast wake from ${senderName}`);
+      wakeRoomAgents(db, roomId, req.humanId!, senderName, `Broadcast wake from ${senderName}`, eventBus);
 
       res.json({ ok: true, agents: results });
     } catch (err) {

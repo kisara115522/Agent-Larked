@@ -470,6 +470,7 @@ export function agentsRouter(db: Database.Database, eventBus?: EventBus): Router
         req.params.id as string,
         sender?.display_name || sender?.name || req.agentId!,
         String(req.body.content ?? '').slice(0, 200),
+        eventBus,
       );
       if (eventBus) {
         eventBus.emitDirectMessage(

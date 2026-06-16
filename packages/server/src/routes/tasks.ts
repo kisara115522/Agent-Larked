@@ -18,7 +18,7 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
 
       // Notify assigned agent
       if (result.assigned_to) {
-        notifyTaskAssignment(db, result.assigned_to, result.id, result.title, result.room_id);
+        notifyTaskAssignment(db, result.assigned_to, result.id, result.title, result.room_id, eventBus);
       }
 
       // Emit SSE event
@@ -105,7 +105,7 @@ export function tasksRouter(db: Database.Database, eventBus: EventBus): Router {
 
       // Notify newly assigned agent
       if (req.body.assigned_to && req.body.assigned_to !== oldTask.assigned_to) {
-        notifyTaskAssignment(db, req.body.assigned_to, result.id, result.title, result.room_id);
+        notifyTaskAssignment(db, req.body.assigned_to, result.id, result.title, result.room_id, eventBus);
       }
 
       // Emit SSE event for status change

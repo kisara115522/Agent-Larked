@@ -4,6 +4,7 @@ import { regenerateToken } from './identity.js';
 import { hashToken } from '../middleware/auth.js';
 import { cleanupStaleRuntimes, selectAvailableRuntime } from './runtime.js';
 import { ensureAgentRoomState } from './room-context.js';
+import type { EventBus } from '../sse/event-bus.js';
 
 export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
@@ -63,6 +64,7 @@ interface PendingRoomWake {
   triggeredById: string;
   triggerType: RoomWakeTriggerType;
   timer: ReturnType<typeof setTimeout>;
+  eventBus?: EventBus;
 }
 
 const pendingRoomWakes = new Map<string, PendingRoomWake>();
@@ -89,6 +91,7 @@ function createWakeSession(
   runtimeId: string,
   roomId: string | undefined,
   prompt: string | undefined,
+  eventBus?: EventBus,
 ): WakeSession | null {
   const runtime = db.prepare(
     'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
@@ -110,6 +113,9 @@ function createWakeSession(
     VALUES (?, ?, ?, ?, ?, ?, 'spawning', ?, ?, ?)
   `).run(randomUUID(), agentId, runtimeId, sessionId ?? null, sessionId ? 'agent-harness' : null, tokenHash, now, now, prompt ?? null);
   db.prepare("UPDATE profiles SET status = 'spawning', updated_at = ? WHERE id = ?").run(now, agentId);
+
+  // Notify connected clients about the status change
+  eventBus?.emitAgentStatus({ agent_id: agentId, status: 'spawning' });
 
   return { runtime, agent, token, sessionId };
 }
@@ -146,6 +152,7 @@ function scheduleRoomWake(
   excerpt: string,
   triggeredById: string,
   messageId?: string,
+  eventBus?: EventBus,
 ): void {
   const profile = db.prepare('SELECT status FROM profiles WHERE id = ?').get(agentId) as { status: string } | undefined;
   if (!profile || profile.status === 'active') return;
@@ -167,6 +174,7 @@ function scheduleRoomWake(
     excerpt,
     triggeredById,
     triggerType,
+    eventBus,
     timer: setTimeout(() => {
       pendingRoomWakes.delete(key);
       dispatchPendingRoomWake(pending).catch((err) => {
@@ -185,7 +193,7 @@ async function dispatchPendingRoomWake(pending: PendingRoomWake): Promise<void> 
     ? `${pending.senderName} mentioned you`
     : `${pending.senderName} sent a broadcast wake`;
   const prompt = roomWakePrompt(pending.db, pending.roomId, pending.roomName, pending.agentId, reason, pending.excerpt);
-  const session = createWakeSession(pending.db, pending.agentId, runtime.id, pending.roomId, prompt);
+  const session = createWakeSession(pending.db, pending.agentId, runtime.id, pending.roomId, prompt, pending.eventBus);
   if (!session) return;
 
   const event: CallbackEvent = {
@@ -384,6 +392,7 @@ export function wakeMentionedAgents(
   senderName: string,
   excerpt: string,
   triggeredById = senderName,
+  eventBus?: EventBus,
 ): void {
   if (mentionedAgentIds.length === 0) return;
 
@@ -392,7 +401,7 @@ export function wakeMentionedAgents(
   const roomName = room?.name ?? roomId;
 
   for (const agentId of mentionedAgentIds) {
-    scheduleRoomWake(db, agentId, roomId, roomName, 'mention', senderName, excerpt, triggeredById, messageId);
+    scheduleRoomWake(db, agentId, roomId, roomName, 'mention', senderName, excerpt, triggeredById, messageId, eventBus);
   }
 }
 
@@ -407,6 +416,7 @@ export function wakeRoomAgents(
   senderId: string,
   senderName: string,
   excerpt: string,
+  eventBus?: EventBus,
 ): void {
   const room = db.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string } | undefined;
   const roomName = room?.name ?? roomId;
@@ -420,7 +430,7 @@ export function wakeRoomAgents(
   `).all(roomId, senderId) as { agent_id: string }[];
 
   for (const { agent_id } of dormantAgents) {
-    scheduleRoomWake(db, agent_id, roomId, roomName, 'broadcast', senderName, excerpt, senderId);
+    scheduleRoomWake(db, agent_id, roomId, roomName, 'broadcast', senderName, excerpt, senderId, undefined, eventBus);
   }
 }
 
@@ -433,6 +443,7 @@ export function wakeDirectMessageAgent(
   agentId: string,
   senderName: string,
   excerpt: string,
+  eventBus?: EventBus,
 ): void {
   const profile = db.prepare('SELECT status FROM profiles WHERE id = ?').get(agentId) as { status: string } | undefined;
   if (!profile || profile.status !== 'dormant') return;
@@ -448,7 +459,7 @@ export function wakeDirectMessageAgent(
   if (!runtime || runtime.status !== 'online') return;
 
   const prompt = `${senderName} sent you a direct message:\n\n"${excerpt}"\n\nUse the Flock direct-message tools to read the conversation and reply directly if useful.`;
-  const session = createWakeSession(db, agentId, runtime.id, undefined, prompt);
+  const session = createWakeSession(db, agentId, runtime.id, undefined, prompt, eventBus);
   if (!session) return;
 
   const event: CallbackEvent = {
@@ -542,6 +553,7 @@ export function notifyTaskAssignment(
   taskId: string,
   taskTitle: string,
   roomId: string,
+  eventBus?: EventBus,
 ): void {
   // Find last spawn for this agent (any status)
   const spawn = db.prepare(
@@ -563,7 +575,7 @@ export function notifyTaskAssignment(
     `Before replying or doing work, call flock_room_sync for this room and inspect unread messages. Last synced sequence: ${ensureAgentRoomState(db, agentId, roomId).last_seen_sequence}. Latest sequence: ${latestRoomSequence(db, roomId)}. Room rules version: ${roomRulesVersion(db, roomId)}.`,
     'Use the Flock task tools to inspect the task, update its status, and post progress in the room if appropriate. If flock_post says the room has unread messages, call flock_room_sync again before posting.',
   ].join('\n\n');
-  const session = createWakeSession(db, agentId, runtime.id, roomId, prompt);
+  const session = createWakeSession(db, agentId, runtime.id, roomId, prompt, eventBus);
   if (!session) return;
 
   const event: RuntimeCallbackEvent = {
