@@ -94,6 +94,14 @@ export class ClaudeStdioBackend implements AgentBackend {
       } catch {
         return; // non-JSON noise (banner etc.)
       }
+      // control_request is answered out-of-band on stdin (auto-approve).
+      if (msg.type === 'control_request' && msg.request_id) {
+        try {
+          child.stdin.write(buildControlAllow(msg.request_id, msg.request?.input));
+        } catch { /* ignore */ }
+        return;
+      }
+
       for (const ev of translateStreamMessage(msg)) {
         // Re-key the active map to the real session id so abort() works.
         if (ev.type === 'init' && ev.sessionId) {
@@ -133,5 +141,4 @@ export function createClaudeStdioBackend(_config?: BackendConfig): ClaudeStdioBa
 }
 
 // Suppress unused-import warnings for helpers used in later commits.
-void (buildControlAllow as unknown);
 void (SIGKILL_GRACE_MS as unknown);
