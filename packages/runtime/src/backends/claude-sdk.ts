@@ -127,8 +127,8 @@ function translateMessage(message: SDKMessage): AgentEvent[] {
       if (message.subtype === 'init') {
         return [{
           type: 'init',
-          sessionId: message.session_id,
-          model: message.model,
+          sessionId: message.session_id ?? '',
+          model: message.model ?? '',
           tools: message.tools ?? [],
           mcpServers: message.mcp_servers?.map(s => ({
             name: s.name,
@@ -151,7 +151,7 @@ function translateMessage(message: SDKMessage): AgentEvent[] {
         durationMs: message.duration_ms,
         costUsd: message.total_cost_usd,
         numTurns: message.num_turns,
-        sessionId: message.session_id,
+        sessionId: message.session_id ?? '',
       }];
 
     default:

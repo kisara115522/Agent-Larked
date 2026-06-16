@@ -7,6 +7,7 @@ import type {
   AgentBackend,
   AgentRunContext,
   AgentEvent,
+  ResultEvent,
   ToolDefinition,
   ToolResult,
   ToolExecutor,
@@ -93,9 +94,9 @@ describe('Backend Types', () => {
     });
 
     it('should accept ResultEvent with all subtypes', () => {
-      const subtypes = ['completed', 'success', 'error_during_execution', 'error_max_turns', 'error_max_budget_usd', 'error_max_structured_output_retries'] as const;
+      const subtypes = ['completed', 'error_during_execution', 'error_max_turns', 'error_max_budget_usd'] as const;
       for (const subtype of subtypes) {
-        const event: AgentEvent = {
+        const event: ResultEvent = {
           type: 'result',
           subtype,
           durationMs: 5000,

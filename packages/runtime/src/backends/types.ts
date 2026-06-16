@@ -263,11 +263,15 @@ export interface ResultEvent {
   /**
    * Result subtype:
    *  - 'completed': agent finished normally
-   *  - 'error_during_execution': error in tool execution
+   *  - 'error_during_execution': error in tool execution or API error (is_error:true)
    *  - 'error_max_turns': hit max turns limit
    *  - 'error_max_budget_usd': hit budget limit
+   *
+   * Note: the raw SDK/wire subtypes 'success' and 'error_max_structured_output_retries'
+   * are mapped to 'completed' and 'error_during_execution' respectively by both backends
+   * and never surface here.
    */
-  subtype: 'completed' | 'success' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd' | 'error_max_structured_output_retries';
+  subtype: 'completed' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd';
   /** Duration in milliseconds */
   durationMs: number;
   /** Total cost in USD (if available) */
