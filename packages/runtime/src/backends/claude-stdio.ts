@@ -95,6 +95,12 @@ export class ClaudeStdioBackend implements AgentBackend {
         return; // non-JSON noise (banner etc.)
       }
       for (const ev of translateStreamMessage(msg)) {
+        // Re-key the active map to the real session id so abort() works.
+        if (ev.type === 'init' && ev.sessionId) {
+          this.active.delete(trackingKey);
+          trackingKey = ev.sessionId;
+          this.active.set(trackingKey, child);
+        }
         if (ev.type === 'result') sawResult = true;
         queue.push(ev);
       }
