@@ -130,8 +130,12 @@ export class ClaudeStdioBackend implements AgentBackend {
       mcp.cleanup();
     };
 
+    child.once('error', (err: Error) => {
+      finish({ type: 'error', message: `spawn claude: ${err.message}`, subtype: 'unknown' });
+    });
+
     void sawResult; void stderrTail;
-    // finish() wired to child error/exit in subsequent commits.
+    // child exit wired in next commit.
     void finish;
 
     yield* queue.drain();
