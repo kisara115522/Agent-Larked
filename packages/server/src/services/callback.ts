@@ -458,7 +458,13 @@ export function wakeDirectMessageAgent(
     return;
   }
 
-  const prompt = `${senderName} sent you a direct message:\n\n"${excerpt}"\n\nUse flock_dm_read to read the full conversation history, then flock_dm_send to reply. After replying, call flock_wait to wait for the next message.`;
+  const prompt = [
+    `${senderName} sent you a direct message:`,
+    `"${excerpt}"`,
+    ``,
+    `IMPORTANT: To reply, you MUST call the flock_dm_send tool. Text you output here is NOT visible to the user — only flock_dm_send delivers DMs.`,
+    `Steps: 1) flock_dm_read to see history  2) flock_dm_send to reply  3) flock_wait for the next message.`,
+  ].join('\n');
   const session = createWakeSession(db, agentId, runtime.id, undefined, prompt, eventBus);
   if (!session) return;
 
