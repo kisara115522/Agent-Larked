@@ -17,6 +17,31 @@
 
 ---
 
+## 2026-06-17 工具边界注入 + 待办队列
+
+### 🟢 hook 每个工具边界 spawn node 进程的开销
+- PostToolUse hook 每次工具调用都 spawn 一个 node 脚本查 DB，高频工具调用有进程开销
+- 后续：hook 脚本极简化 / 加节流(N 秒内最多注入一次)
+- 状态：open
+
+### 🟢 inbox 消息无 TTL / 上限
+- pending_messages 只在注入时置 delivered，不清理。大量消息可能堆积
+- 后续：已 delivered 的定期清理 / 每 agent 上限
+- 状态：open
+
+### 🟢 todo 优先级由模型自评，可能不准
+- priority 是模型自填，无外部校准
+- 后续：可让发送者标记紧急度影响初始 priority
+- 状态：open
+
+### 🟢 注入 digest 的 token 成本
+- 每个工具边界都注入 inbox+todo 摘要，长会话累积 token
+- 已用 delivered 去重消息；todo 持续注入是有意的(回查机制)
+- 后续：todo 数量大时只注入 top-N + 计数
+- 状态：open
+
+---
+
 ## 2026-06-16 DM/消息可见性修复发现
 
 ### 🟡 MCP lifecycle.test.ts 测试与代码不匹配
