@@ -16,7 +16,9 @@
     "./services/profile-utils": "./dist/services/profile-utils.js",
     "./services/task": "./dist/services/task.js",
     "./services/callback": "./dist/services/callback.js",
-    "./services/runtime": "./dist/services/runtime.js"
+    "./services/runtime": "./dist/services/runtime.js",
+    "./services/inbox": "./dist/services/inbox.js",
+    "./services/inbox-digest": "./dist/services/inbox-digest.js"
   },
   "scripts": {
     "build": "tsc",
