@@ -77,3 +77,48 @@ export function markDelivered(db: Database.Database, ids: string[]): void {
   const placeholders = ids.map(() => '?').join(',');
   db.prepare(`UPDATE pending_messages SET delivered = 1 WHERE id IN (${placeholders})`).run(...ids);
 }
+
+/** Add a todo to an agent's private queue. */
+export function addTodo(
+  db: Database.Database,
+  params: { agentId: string; content: string; priority?: number; sourceMessageId?: string | null },
+): AgentTodo {
+  const now = new Date().toISOString();
+  const row: AgentTodo = {
+    id: randomUUID(),
+    agent_id: params.agentId,
+    content: params.content,
+    source_message_id: params.sourceMessageId ?? null,
+    priority: params.priority ?? 0,
+    status: 'open',
+    created_at: now,
+    updated_at: now,
+    completed_at: null,
+  };
+  db.prepare(
+    `INSERT INTO agent_todos (id, agent_id, content, source_message_id, priority, status, created_at, updated_at, completed_at)
+     VALUES (@id, @agent_id, @content, @source_message_id, @priority, @status, @created_at, @updated_at, @completed_at)`,
+  ).run(row);
+  return row;
+}
+
+/** List open todos for an agent, highest priority first then oldest. */
+export function listOpenTodos(db: Database.Database, agentId: string): AgentTodo[] {
+  return db.prepare(
+    `SELECT * FROM agent_todos WHERE agent_id = ? AND status = 'open' ORDER BY priority DESC, created_at ASC`,
+  ).all(agentId) as AgentTodo[];
+}
+
+/** Mark a todo done (or dropped). Returns true if a row was updated. */
+export function setTodoStatus(
+  db: Database.Database,
+  agentId: string,
+  todoId: string,
+  status: 'done' | 'dropped',
+): boolean {
+  const now = new Date().toISOString();
+  const res = db.prepare(
+    `UPDATE agent_todos SET status = ?, updated_at = ?, completed_at = ? WHERE id = ? AND agent_id = ? AND status = 'open'`,
+  ).run(status, now, status === 'done' ? now : null, todoId, agentId);
+  return res.changes > 0;
+}
