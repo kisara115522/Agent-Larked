@@ -19,7 +19,7 @@ export function writeHookSettingsToTemp(hookScriptPath: string): HookSettingsFil
   const settings = {
     hooks: {
       PostToolUse: [
-        { matcher: '*', hooks: [{ type: 'command', command: `node ${hookScriptPath}` }] },
+        { matcher: '*', hooks: [{ type: 'command', command: `node "${hookScriptPath}"` }] },
       ],
     },
   };
