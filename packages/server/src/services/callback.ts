@@ -195,7 +195,18 @@ async function dispatchPendingRoomWake(pending: PendingRoomWake): Promise<void> 
     : `${pending.senderName} sent a broadcast wake`;
   const prompt = roomWakePrompt(pending.db, pending.roomId, pending.roomName, pending.agentId, reason, pending.excerpt);
   const session = createWakeSession(pending.db, pending.agentId, runtime.id, pending.roomId, prompt, pending.eventBus);
-  if (!session) return;
+  if (!session) {
+    // Agent is busy — enqueue to inbox for tool-boundary injection
+    enqueuePendingMessage(pending.db, {
+      agentId: pending.agentId,
+      sourceType: pending.triggerType === 'mention' ? 'mention' : 'system',
+      senderId: pending.triggeredById,
+      senderName: pending.senderName,
+      content: pending.excerpt,
+      refId: pending.messageId ?? null,
+    });
+    return;
+  }
 
   const event: CallbackEvent = {
     type: 'wake',
