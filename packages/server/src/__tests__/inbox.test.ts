@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { enqueuePendingMessage, peekPendingMessages, markDelivered, addTodo, listOpenTodos, setTodoStatus } from '../services/inbox.js';
+import { buildInboxDigest } from '../services/inbox-digest.js';
 
 function createTestDb(): Database.Database {
   const db = new Database(':memory:');
@@ -118,5 +119,51 @@ describe('agent_todos', () => {
     addTodo(db, { agentId: 'agent-2', content: 'for agent 2' });
     expect(listOpenTodos(db, 'agent-1')).toHaveLength(1);
     expect(listOpenTodos(db, 'agent-2')).toHaveLength(1);
+  });
+});
+
+describe('buildInboxDigest', () => {
+  let db: Database.Database;
+
+  beforeEach(() => { db = createTestDb(); });
+  afterEach(() => { db.close(); });
+
+  it('returns null when inbox and todos are empty', () => {
+    expect(buildInboxDigest(db, 'agent-1')).toBeNull();
+  });
+
+  it('includes pending messages and marks them delivered', () => {
+    enqueuePendingMessage(db, { agentId: 'agent-1', sourceType: 'dm', senderName: 'kisara', content: 'hello there' });
+
+    const digest = buildInboxDigest(db, 'agent-1')!;
+    expect(digest).not.toBeNull();
+    expect(digest.new_messages).toHaveLength(1);
+    expect(digest.new_messages[0].from).toBe('kisara');
+    expect(digest.new_messages[0].content).toBe('hello there');
+    expect(digest.new_messages[0].source).toBe('dm');
+
+    // Second call should return null — messages already delivered
+    expect(buildInboxDigest(db, 'agent-1')).toBeNull();
+  });
+
+  it('includes open todos (persist across calls)', () => {
+    addTodo(db, { agentId: 'agent-1', content: 'review PR', priority: 5 });
+
+    const d1 = buildInboxDigest(db, 'agent-1')!;
+    expect(d1.open_todos).toHaveLength(1);
+    expect(d1.open_todos[0].content).toBe('review PR');
+
+    // Todos persist — still there on next call
+    const d2 = buildInboxDigest(db, 'agent-1')!;
+    expect(d2.open_todos).toHaveLength(1);
+  });
+
+  it('includes guidance text mentioning both messages and todos', () => {
+    enqueuePendingMessage(db, { agentId: 'agent-1', sourceType: 'dm', content: 'ping' });
+    addTodo(db, { agentId: 'agent-1', content: 'do stuff' });
+
+    const digest = buildInboxDigest(db, 'agent-1')!;
+    expect(digest.guidance).toContain('1 new message');
+    expect(digest.guidance).toContain('1 open todo');
   });
 });
