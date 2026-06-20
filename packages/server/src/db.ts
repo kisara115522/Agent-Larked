@@ -331,6 +331,20 @@ CREATE TABLE IF NOT EXISTS agent_room_state (
 
 CREATE INDEX IF NOT EXISTS idx_agent_room_state_room ON agent_room_state(room_id);
 
+CREATE TABLE IF NOT EXISTS pending_messages (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL,
+  sender_id TEXT,
+  sender_name TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  ref_id TEXT,
+  delivered INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_msg_agent ON pending_messages(agent_id, delivered);
+
 `;
 
 /**
