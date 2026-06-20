@@ -167,3 +167,27 @@ describe('buildInboxDigest', () => {
     expect(digest.guidance).toContain('1 open todo');
   });
 });
+
+describe('busy agent inbox integration', () => {
+  let db: Database.Database;
+
+  beforeEach(() => { db = createTestDb(); });
+  afterEach(() => { db.close(); });
+
+  it('enqueuePendingMessage works for active agent', () => {
+    db.prepare('UPDATE profiles SET status = ? WHERE id = ?').run('active', 'agent-1');
+
+    enqueuePendingMessage(db, {
+      agentId: 'agent-1',
+      sourceType: 'dm',
+      senderId: 'human-1',
+      senderName: 'kisara',
+      content: 'hey, check this out',
+    });
+
+    const msgs = peekPendingMessages(db, 'agent-1');
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].content).toBe('hey, check this out');
+    expect(msgs[0].source_type).toBe('dm');
+  });
+});
