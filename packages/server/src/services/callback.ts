@@ -4,6 +4,7 @@ import { regenerateToken } from './identity.js';
 import { hashToken } from '../middleware/auth.js';
 import { cleanupStaleRuntimes, selectAvailableRuntime } from './runtime.js';
 import { ensureAgentRoomState } from './room-context.js';
+import { enqueuePendingMessage } from './inbox.js';
 import type { EventBus } from '../sse/event-bus.js';
 
 export interface CallbackEvent {
@@ -444,11 +445,22 @@ export function wakeDirectMessageAgent(
   senderName: string,
   excerpt: string,
   eventBus?: EventBus,
+  senderId?: string,
 ): void {
   const profile = db.prepare('SELECT status FROM profiles WHERE id = ?').get(agentId) as { status: string } | undefined;
   if (!profile) return;
-  // Don't wake agents that are already active or spawning
-  if (profile.status === 'active' || profile.status === 'spawning') return;
+
+  // If agent is busy (active/spawning), enqueue to inbox for tool-boundary injection
+  if (profile.status === 'active' || profile.status === 'spawning') {
+    enqueuePendingMessage(db, {
+      agentId,
+      sourceType: 'dm',
+      senderId: senderId ?? null,
+      senderName,
+      content: excerpt,
+    });
+    return;
+  }
 
   // Use selectRuntimeForWake which falls back to any available runtime
   // when the agent has no prior spawn record (newly created agents).

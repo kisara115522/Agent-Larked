@@ -40,6 +40,7 @@ export function directChatsRouter(db: Database.Database, eventBus: EventBus): Ro
         sender?.display_name || sender?.name || req.agentId!,
         String(req.body.content ?? '').slice(0, 200),
         eventBus,
+        req.agentId,
       );
       eventBus.emitDirectMessage(
         {
