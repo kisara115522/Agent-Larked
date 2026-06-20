@@ -50,6 +50,7 @@ interface InboxDigest {
 function ageString(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const min = Math.floor(ms / 60000);
+  if (min < 0) return 'just now'; // clock skew guard
   if (min < 1) return 'just now';
   if (min < 60) return `${min}m ago`;
   return `${Math.floor(min / 60)}h ago`;
@@ -93,25 +94,29 @@ function buildGuidance(numMsgs: number, numTodos: number): string {
 }
 
 function buildInboxDigest(db: Database.Database, agentId: string): InboxDigest | null {
-  const pending = peekPendingMessages(db, agentId);
-  const todos = listOpenTodos(db, agentId);
+  const run = db.transaction(() => {
+    const pending = peekPendingMessages(db, agentId);
+    const todos = listOpenTodos(db, agentId);
 
-  if (pending.length === 0 && todos.length === 0) return null;
+    if (pending.length === 0 && todos.length === 0) return null;
 
-  const digest: InboxDigest = {
-    new_messages: pending.map((m) => ({
-      from: m.sender_name || m.sender_id || 'unknown',
-      content: m.content.slice(0, 500),
-      age: ageString(m.created_at),
-      source: m.source_type,
-    })),
-    open_todos: todos.map((t) => ({ id: t.id, content: t.content.slice(0, 300), priority: t.priority })),
-    guidance: buildGuidance(pending.length, todos.length),
-  };
+    const digest: InboxDigest = {
+      new_messages: pending.map((m) => ({
+        from: m.sender_name || m.sender_id || 'unknown',
+        content: m.content.slice(0, 500),
+        age: ageString(m.created_at),
+        source: m.source_type,
+      })),
+      open_todos: todos.map((t) => ({ id: t.id, content: t.content.slice(0, 300), priority: t.priority })),
+      guidance: buildGuidance(pending.length, todos.length),
+    };
 
-  if (pending.length > 0) markDelivered(db, pending.map((m) => m.id));
+    if (pending.length > 0) markDelivered(db, pending.map((m) => m.id));
 
-  return digest;
+    return digest;
+  });
+
+  return run();
 }
 
 function emitNoop(): never {
@@ -136,6 +141,7 @@ async function main(): Promise<void> {
   let db: Database.Database | undefined;
   try {
     db = new Database(dbPath!, { readonly: false });
+    db.pragma('busy_timeout = 3000');
     const digest = buildInboxDigest(db, agentId!);
     if (!digest) emitNoop();
     const text =
