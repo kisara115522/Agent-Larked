@@ -172,6 +172,7 @@ export class AgentHarness {
       agentName: request.agentName,
       agentId: request.agentId,
       agentToken: request.agentToken,
+      dbPath: this.config.dbPath,
     };
 
     // Create session state
