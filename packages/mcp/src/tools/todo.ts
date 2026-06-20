@@ -18,7 +18,7 @@ export function registerTodoTools(
         'dropping it or interrupting yourself. The queue is surfaced back to you at every tool boundary.',
       inputSchema: z.object({
         content: z.string().describe('What needs to be done, in your own words.'),
-        priority: z.number().optional().describe('Higher = more urgent. Default 0.'),
+        priority: z.number().int().min(-100).max(100).optional().describe('Higher = more urgent. Default 0.'),
         source_message_id: z.string().optional().describe('If this todo came from an inbox message, its id.'),
       }),
     },
