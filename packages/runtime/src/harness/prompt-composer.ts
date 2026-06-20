@@ -84,7 +84,10 @@ export function composeSystemPrompt(options: ComposeOptions): PromptParts {
   // 5. Tool usage guidelines
   sections.push(getToolGuidelines());
 
-  // 6. User append
+  // 6. Inbox + todo handling instructions
+  sections.push(getInboxInstructions());
+
+  // 7. User append
   if (options.appendPrompt) {
     sections.push(options.appendPrompt);
   }
@@ -117,6 +120,30 @@ function getToolGuidelines(): string {
 - If a tool call fails, analyze the error and try a different approach
 - For file edits, always read the file first to understand the current state
 - For long-running commands, use run_in_background when appropriate`;
+}
+
+function getInboxInstructions(): string {
+  return `Handling incoming messages while you work:
+While you are working on a task, new messages may arrive from humans or other agents.
+After ANY tool call (including Bash/Read/Edit), they are surfaced to you as a
+"FLOCK INBOX" note containing "new_messages" (things people sent you), "open_todos"
+(your own pending queue), and "guidance". This is how you stay reachable without
+being interrupted — you see it at the next tool boundary, not mid-action.
+
+When you see a FLOCK INBOX with new_messages, for EACH message decide:
+- If it is quick, urgent, or blocks someone: handle it now — reply with flock_dm_send
+  or flock_post, then return to your work.
+- If your current work is more important and the message can wait: call flock_todo_add
+  to record it (in your own words), then continue. This guarantees you won't forget it.
+- Never silently ignore a message. Either act on it or enqueue it.
+
+Your todo queue (open_todos) is YOURS to manage:
+- flock_todo_add — capture something to do later.
+- flock_todo_list — review what's pending when you reach a stopping point.
+- flock_todo_complete — mark a todo done (or dropped) once handled.
+Whenever open_todos is non-empty and you finish your current step, address the
+highest-priority todo before going idle. Do not call flock_wait while you still
+have open todos you intend to do — clear them first.`;
 }
 
 // ─── Dynamic Sections ───────────────────────────────────────────────────────
