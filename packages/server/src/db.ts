@@ -345,6 +345,20 @@ CREATE TABLE IF NOT EXISTS pending_messages (
 
 CREATE INDEX IF NOT EXISTS idx_pending_msg_agent ON pending_messages(agent_id, delivered);
 
+CREATE TABLE IF NOT EXISTS agent_todos (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  source_message_id TEXT,
+  priority INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_todos_agent ON agent_todos(agent_id, status);
+
 `;
 
 /**
