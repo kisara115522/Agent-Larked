@@ -338,4 +338,46 @@ describe('ClaudeStdioBackend', () => {
       expect(errEv?.message).toContain('fatal: something went wrong');
     });
   });
+
+  describe('hook settings + env injection', () => {
+    it('spawn argv contains --settings', async () => {
+      const child = makeFakeChild(1008);
+      fakeChildren.push(child);
+
+      const backend = new ClaudeStdioBackend();
+      const runPromise = collectEvents(backend.run(baseCtx({ agentId: 'test-agent', dbPath: '/tmp/test.db' })));
+
+      await Promise.resolve();
+      child.pushLine(INIT_LINE);
+      child.pushLine(RESULT_LINE);
+      child.emit('exit', 0, null);
+
+      await runPromise;
+      expect(spawnArgs.length).toBeGreaterThan(0);
+      const args = spawnArgs[0].args;
+      const idx = args.indexOf('--settings');
+      expect(idx).toBeGreaterThan(-1);
+      // settings path should be a temp file
+      expect(args[idx + 1]).toContain('flock-hooks-');
+    });
+
+    it('spawn env contains FLOCK_AGENT_ID', async () => {
+      const child = makeFakeChild(1009);
+      fakeChildren.push(child);
+
+      const backend = new ClaudeStdioBackend();
+      const runPromise = collectEvents(backend.run(baseCtx({ agentId: 'my-agent', dbPath: '/tmp/test.db' })));
+
+      await Promise.resolve();
+      child.pushLine(INIT_LINE);
+      child.pushLine(RESULT_LINE);
+      child.emit('exit', 0, null);
+
+      await runPromise;
+      expect(spawnArgs.length).toBeGreaterThan(0);
+      const env = spawnArgs[0].opts.env as Record<string, string>;
+      expect(env.FLOCK_AGENT_ID).toBe('my-agent');
+      expect(env.DB_PATH).toBe('/tmp/test.db');
+    });
+  });
 });
