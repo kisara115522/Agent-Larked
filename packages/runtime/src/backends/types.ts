@@ -124,6 +124,9 @@ export interface AgentRunContext {
 
   /** Agent token for authenticating with the platform */
   agentToken?: string;
+
+  /** Path to the SQLite database (for PostToolUse hook) */
+  dbPath?: string;
 }
 
 // ─── Permission ─────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ import type {
 import { buildChildEnv } from './child-env.js';
 import { buildClaudeArgs } from './claude-args.js';
 import { writeMcpConfigToTemp } from './mcp-config.js';
+import { writeHookSettingsToTemp } from './hook-settings.js';
 import { createEventQueue } from './event-queue.js';
 import {
   buildUserInput,
@@ -73,8 +74,23 @@ export class ClaudeStdioBackend implements AgentBackend {
     resumeSessionId: string | undefined,
   ): AsyncGenerator<AgentEvent> {
     const mcp = writeMcpConfigToTemp(ctx.mcpServers);
-    const args = buildClaudeArgs(ctx, { mcpConfigPath: mcp.path, resumeSessionId });
-    const env = buildChildEnv(ctx.env);
+
+    // Wire PostToolUse inbox hook
+    const hookScriptPath = process.env.FLOCK_INBOX_HOOK_PATH
+      ?? new URL('../hooks/inbox-hook.js', import.meta.url).pathname;
+    const hookSettings = writeHookSettingsToTemp(hookScriptPath);
+
+    const args = buildClaudeArgs(ctx, {
+      mcpConfigPath: mcp.path,
+      resumeSessionId,
+      hookSettingsPath: hookSettings.path,
+    });
+
+    // Inject FLOCK_AGENT_ID + DB_PATH for the hook script
+    const hookEnv: Record<string, string> = {};
+    if (ctx.agentId) hookEnv.FLOCK_AGENT_ID = ctx.agentId;
+    if (ctx.dbPath) hookEnv.DB_PATH = ctx.dbPath;
+    const env = buildChildEnv({ ...ctx.env, ...hookEnv });
 
     let child: ChildProcessWithoutNullStreams;
     try {
@@ -85,6 +101,7 @@ export class ClaudeStdioBackend implements AgentBackend {
       }) as ChildProcessWithoutNullStreams;
     } catch (err: unknown) {
       mcp.cleanup();
+      hookSettings.cleanup();
       const msg = err instanceof Error ? err.message : String(err);
       yield { type: 'error', message: `spawn claude: ${msg}`, subtype: 'unknown' } as AgentEvent;
       return;
@@ -161,6 +178,7 @@ export class ClaudeStdioBackend implements AgentBackend {
       queue.end();
       this.active.delete(trackingKey);
       mcp.cleanup();
+      hookSettings.cleanup();
     };
 
     // ctx.signal abort → kill child (covers harness/shutdown abort).
