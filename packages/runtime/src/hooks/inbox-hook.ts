@@ -120,7 +120,7 @@ function buildInboxDigest(db: Database.Database, agentId: string): InboxDigest |
 }
 
 function emitNoop(): never {
-  process.stdout.write('{}');
+  process.stdout.write('{}\n');
   process.exit(0);
 }
 
@@ -150,7 +150,7 @@ async function main(): Promise<void> {
       '\n(See your system instructions on handling _flock_inbox: act now, or flock_todo_add to enqueue. Never silently ignore.)';
     process.stdout.write(JSON.stringify({
       hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text },
-    }));
+    }) + '\n');
     process.exit(0);
   } catch {
     emitNoop();
