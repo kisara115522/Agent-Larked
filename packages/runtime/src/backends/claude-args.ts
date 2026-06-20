@@ -10,6 +10,7 @@ import type { AgentRunContext } from './types.js';
 export interface ClaudeArgsExtra {
   mcpConfigPath: string;
   resumeSessionId?: string;
+  hookSettingsPath?: string;
 }
 
 export function buildClaudeArgs(ctx: AgentRunContext, extra: ClaudeArgsExtra): string[] {
@@ -37,6 +38,7 @@ export function buildClaudeArgs(ctx: AgentRunContext, extra: ClaudeArgsExtra): s
   if (ctx.maxBudgetUsd != null) args.push('--max-budget-usd', String(ctx.maxBudgetUsd));
   if (ctx.systemPrompt) args.push('--append-system-prompt', ctx.systemPrompt);
   if (extra.resumeSessionId) args.push('--resume', extra.resumeSessionId);
+  if (extra.hookSettingsPath) args.push('--settings', extra.hookSettingsPath);
 
   return args;
 }
