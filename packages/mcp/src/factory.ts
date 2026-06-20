@@ -9,6 +9,7 @@ import { registerWaitTool } from './tools/subscribe.js';
 import { registerReactionTools } from './tools/reactions.js';
 import { registerAgentLifecycleTools } from './tools/agent-lifecycle.js';
 import { registerTaskTools } from './tools/task.js';
+import { registerTodoTools } from './tools/todo.js';
 import { installUnreadMentionInjection, startMentionListener } from './mentions.js';
 import { getAgentId } from './db.js';
 
@@ -54,6 +55,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   registerReactionTools(server, db, agentIdProvider);
   registerAgentLifecycleTools(server, db, agentIdProvider);
   registerTaskTools(server, db, agentIdProvider);
+  registerTodoTools(server, db, agentIdProvider);
 
   // Start background mention listener (for long-running processes)
   if (enableMentionListener) {
