@@ -17,6 +17,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import type {
   AgentBackend,
   AgentRunContext,
@@ -83,6 +84,9 @@ export interface SpawnRequest {
   maxBudgetUsd?: number;
   /** Environment variables */
   env?: Record<string, string>;
+  /** Working directory for the agent session. Overrides the global harness cwd
+   *  (per-room/per-agent workspace). Created (mkdir -p) before spawn. */
+  cwd?: string;
   /** MCP server configurations (additional to built-in flock server) */
   extraMcpServers?: MCPServerConfig[];
 }
@@ -150,6 +154,16 @@ export class AgentHarness {
     // Build MCP servers
     const mcpServers = this.buildMcpServers(request);
 
+    // Resolve the working directory: per-session request.cwd overrides the
+    // global harness cwd. claude is spawned with this cwd, so the directory
+    // must exist — create it (mkdir -p) before spawn or the child errors out.
+    const sessionCwd = request.cwd && request.cwd.trim() ? request.cwd : this.config.cwd;
+    try {
+      mkdirSync(sessionCwd, { recursive: true });
+    } catch (err) {
+      console.warn(`[harness] Failed to create session cwd ${sessionCwd}:`, err);
+    }
+
     // Build run context
     const abortController = new AbortController();
     const ctx: AgentRunContext = {
@@ -162,7 +176,7 @@ export class AgentHarness {
       toolExecutor: this.createToolExecutor(request),
       mcpServers,
       systemPrompt,
-      cwd: this.config.cwd,
+      cwd: sessionCwd,
       signal: abortController.signal,
       sessionId: request.sessionId,
       maxTurns: request.maxTurns,
