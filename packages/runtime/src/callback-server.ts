@@ -14,6 +14,8 @@ export interface CallbackEvent {
   trigger_type?: string;
   room_id?: string;
   room_name?: string;
+  room_rules?: string;
+  room_workspace?: string;
   message_id?: string;
   sender_name?: string;
   excerpt?: string;
@@ -70,6 +72,8 @@ export function createCallbackServer(
       trigger_type: req.body.trigger_type,
       room_id: req.body.room_id,
       room_name: req.body.room_name,
+      room_rules: req.body.room_rules,
+      room_workspace: req.body.room_workspace,
       message_id: req.body.message_id,
       sender_name: req.body.sender_name,
       excerpt: req.body.excerpt,
