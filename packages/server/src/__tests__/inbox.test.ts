@@ -193,6 +193,55 @@ describe('buildInboxDigest', () => {
     expect(digest.new_messages[0].room_id).toBe('room-42');
     expect(digest.guidance).toContain('flock_room_sync');
   });
+
+  it('renders room name in from and exposes message_id + dedup hint for room messages', () => {
+    db.prepare('INSERT INTO rooms (id, name, created_at) VALUES (?, ?, ?)').run('room-42', 'design', new Date().toISOString());
+    enqueuePendingMessage(db, {
+      agentId: 'agent-1',
+      sourceType: 'room',
+      senderName: 'kisara',
+      content: 'hey room',
+      roomId: 'room-42',
+      refId: 'msg-abc',
+    });
+
+    const digest = buildInboxDigest(db, 'agent-1')!;
+    // from carries "<sender> in #<roomName>"
+    expect(digest.new_messages[0].from).toBe('kisara in #design');
+    // message_id is exposed (sourced from ref_id) for dedup
+    expect(digest.new_messages[0].message_id).toBe('msg-abc');
+    // dedup hint in guidance references flock_wait + message_id
+    expect(digest.guidance).toContain('message_id');
+    expect(digest.guidance).toContain('flock_wait');
+  });
+
+  it('falls back to room_id in from when the room name is missing', () => {
+    enqueuePendingMessage(db, {
+      agentId: 'agent-1',
+      sourceType: 'room',
+      senderName: 'kisara',
+      content: 'orphan room msg',
+      roomId: 'room-gone',
+      refId: 'msg-xyz',
+    });
+
+    const digest = buildInboxDigest(db, 'agent-1')!;
+    expect(digest.new_messages[0].from).toBe('kisara in #room-gone');
+  });
+
+  it('does not add message_id for non-room (dm) messages', () => {
+    enqueuePendingMessage(db, {
+      agentId: 'agent-1',
+      sourceType: 'dm',
+      senderName: 'kisara',
+      content: 'a dm',
+      refId: 'dm-1',
+    });
+
+    const digest = buildInboxDigest(db, 'agent-1')!;
+    expect(digest.new_messages[0].from).toBe('kisara');
+    expect(digest.new_messages[0].message_id).toBeUndefined();
+  });
 });
 
 describe('busy agent inbox integration', () => {
