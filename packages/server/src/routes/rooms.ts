@@ -4,6 +4,7 @@ import type Database from 'better-sqlite3';
 import { addRoomMember, joinRoom, leaveRoom, listRooms, getRoom, getRoomMembers, requireRoomAccess, updateRoomRules } from '../services/room.js';
 import { getMessages, sendMessage } from '../services/messaging.js';
 import { markRoomPendingForAgents } from '../services/room-context.js';
+import { enqueueRoomMessageForBusyAgents } from '../services/inbox.js';
 import { wakeMentionedAgents, wakeRoomAgents } from '../services/callback.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { humanAuthMiddleware, type HumanAuthenticatedRequest } from '../middleware/human-auth.js';
@@ -184,6 +185,15 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
       const human = db.prepare('SELECT username, display_name FROM humans WHERE id = ?').get(req.humanId!) as { username: string; display_name: string | null } | undefined;
       const senderName = human?.display_name || human?.username || 'Human';
       const excerpt = req.body.content?.slice(0, 200) ?? '';
+      // Inject to inbox of busy (active/spawning) room members — they won't be
+      // woken (wake only targets dormant), so surface at next tool boundary.
+      enqueueRoomMessageForBusyAgents(db, {
+        roomId,
+        senderId: req.humanId!,
+        senderName,
+        excerpt,
+        messageId: result.id,
+      });
       if (Array.isArray(req.body.mentions) && req.body.mentions.length > 0) {
         eventBus.emitMention(
           {
