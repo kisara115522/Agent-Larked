@@ -57,6 +57,12 @@ function ageString(iso: string): string {
   return `${Math.floor(min / 60)}h ago`;
 }
 
+/** Look up a room's display name by id; null if the room no longer exists. */
+function lookupRoomName(db: Database.Database, roomId: string): string | null {
+  const row = db.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string } | undefined;
+  return row?.name ?? null;
+}
+
 function peekPendingMessages(db: Database.Database, agentId: string, limit = 10): PendingMessage[] {
   return db.prepare(
     `SELECT * FROM pending_messages WHERE agent_id = ? AND delivered = 0 ORDER BY created_at ASC LIMIT ?`,
@@ -107,13 +113,23 @@ function buildInboxDigest(db: Database.Database, agentId: string): InboxDigest |
     if (pending.length === 0 && todos.length === 0) return null;
 
     const digest: InboxDigest = {
-      new_messages: pending.map((m) => ({
-        from: m.sender_name || m.sender_id || 'unknown',
-        content: m.content.slice(0, 500),
-        age: ageString(m.created_at),
-        source: m.source_type,
-        ...(m.room_id ? { room_id: m.room_id } : {}),
-      })),
+      new_messages: pending.map((m) => {
+        const sender = m.sender_name || m.sender_id || 'unknown';
+        // Mirror of @flock/server inbox-digest: surface room name in `from`
+        // ("<sender> in #<roomName>") so the model knows the source room.
+        const roomName = m.room_id ? lookupRoomName(db, m.room_id) : null;
+        const from =
+          m.source_type === 'room' && m.room_id
+            ? `${sender} in #${roomName ?? m.room_id}`
+            : sender;
+        return {
+          from,
+          content: m.content.slice(0, 500),
+          age: ageString(m.created_at),
+          source: m.source_type,
+          ...(m.room_id ? { room_id: m.room_id } : {}),
+        };
+      }),
       open_todos: todos.map((t) => ({ id: t.id, content: t.content.slice(0, 300), priority: t.priority })),
       guidance: buildGuidance(pending, todos.length),
     };
