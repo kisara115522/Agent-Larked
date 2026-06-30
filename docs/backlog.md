@@ -17,6 +17,42 @@
 
 ---
 
+## 2026-06-30 per-room cwd + room rules + room-inbox 修正
+
+### 🟡 wake-callback 测试预存在失败(session_id resume)
+- **发现于：** 2026-06-30,cwd/room-rules 实现期间核实
+- **问题：** `wake-callback.test.ts > wakes a mentioned dormant agent...` 断言 `session_id` = 'previous-claude-session',实际 undefined。在 `af7bb53`(本次所有工作之前)就已失败
+- **影响：** 与 cwd/room-rules/room-inbox 改动无关;根因是 `latestClaudeSessionId` 的 resume 过滤(commit 9ef9b42 排除 error spawn)与该测试期望不符
+- **建议修复：** 要么测试 fixture 的 spawn 状态改成可 resume 的,要么确认 resume 过滤是否过严
+- **状态：** open
+
+### 🟢 inbox 注入 ↔ flock_wait 去重(治本,跨进程游标)
+- **发现于：** 2026-06-30,room-inbox 修正
+- **问题：** 忙碌 agent 经 inbox 收到 room 消息后,flock_wait 仍会返回同一条
+- **纠正先前建议：** backlog 早先写"更新 agent_room_state.last_seen_sequence"——**经核实无效**:flock_wait 用的是 MCP 进程内存 Map `roomSequences`(subscribe.ts),不读 DB 的 last_seen_sequence。已用 message_id 去重提示缓解(模型侧)。治本需统一跨进程游标,改造大
+- **状态：** open
+
+### 🟢 同 room 连续消息合并为单条 digest
+- **发现于：** 2026-06-30
+- **问题：** 同 room 多条消息每条一个 digest 条目
+- **建议修复：** 合并为 "#room: N 条新消息, 最新: ..."
+- **状态：** open
+
+### 🟢 rooms.workspace 路径安全校验
+- **发现于：** 2026-06-30,per-room cwd 实现
+- **问题：** rooms.workspace 是用户可填的任意相对路径(绝对路径直接用)。无校验,可能指向敏感目录
+- **影响：** 低(workspace 在 runtime 本机 PROJECT_ROOT 下解析,相对路径受限),但绝对路径无限制
+- **建议修复：** server 侧或 runtime 侧加路径白名单/禁止逃逸 PROJECT_ROOT
+- **状态：** open
+
+### 🟢 workspace 目录不随 room 删除清理
+- **发现于：** 2026-06-30
+- **问题：** data/workspaces/rooms/<id> 在 room 删除时不清理(ON DELETE CASCADE 只删 DB)
+- **建议修复：** room 删除时清 workspace 目录,或加 GC
+- **状态：** open
+
+---
+
 ## 2026-06-30 Room 消息注入 + 待办
 
 ### 🟢 room 消息注入可能与 flock_wait 重复通知
