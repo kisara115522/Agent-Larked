@@ -22,7 +22,7 @@ describe('MCP agent lifecycle', () => {
     setAgentOnline(db);
 
     const row = db.prepare('SELECT status, last_active_at FROM profiles WHERE id = ?').get(agent.id) as { status: string; last_active_at: string };
-    expect(row.status).toBe('online');
+    expect(row.status).toBe('active');
     expect(row.last_active_at).toBeTruthy();
   });
 
@@ -38,7 +38,7 @@ describe('MCP agent lifecycle', () => {
 
     setAgentOffline(db);
     const after = db.prepare('SELECT status, last_active_at FROM profiles WHERE id = ?').get(agent.id) as { status: string; last_active_at: string };
-    expect(after.status).toBe('offline');
+    expect(after.status).toBe('dormant');
     // last_active_at should remain from when it was set online
     expect(after.last_active_at).toBe(before.last_active_at);
   });
