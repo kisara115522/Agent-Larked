@@ -17,6 +17,20 @@
 
 ---
 
+## 2026-06-30 Room 消息注入 + 待办
+
+### 🟢 room 消息注入可能与 flock_wait 重复通知
+- 忙碌 agent 收到 room 消息后，inbox 注入一次（delivered=1）。但如果 agent 之后调 flock_wait，flock_wait 也会返回同一条消息（通过 DB 轮询），agent 可能重复处理
+- 后续：enqueue 前检查 agent_room_state.last_seen_sequence，或在 flock_wait 里跳过已 delivered 的 pending_messages
+- 状态：open
+
+### 🟢 room 消息注入无去重/合并
+- 同一个 room 连续多条消息，每条都单独入 inbox，agent 可能收到多个 digest 条目
+- 后续：同一 room 的多条消息合并成一条 digest（带计数 + 最新 excerpt）
+- 状态：open
+
+---
+
 ## 2026-06-17 工具边界注入 + 待办队列
 
 ### 🟢 hook 每个工具边界 spawn node 进程的开销

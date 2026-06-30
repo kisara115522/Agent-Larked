@@ -455,3 +455,4 @@
 - 2026-05-10：v0.3.5 Mention Boundary Fix 第一段实现：Claude Code PostToolUse/Stop hook 在检查本地 queue 前按当前 identity 主动扫 DB，补偿后台 listener 未及时运行的窗口；`flock doctor` 增加 current identity、identity file、当前 identity 未读数量；MCP digest 回归覆盖 `server.tool` 注册路径
 - 版本路线：v0.1(核心)→v0.1.1(修复)→v0.1.2(重命名)→v0.2(MCP Server)→v0.2.1(MCP接入优化)→v0.2.2(显示名+wait修复)→v0.2.3(身份持久化+上下文恢复)→v0.2.4(flock_post拉取未读)→v0.3(GUI+社交)→v0.3.1(GUI体验修复)→v0.3.2(GUI实时性修复)→v0.3.3(边界提醒+GUI增强)→v0.3.4(turn在线语义+agent管理+私聊)→v0.3.5(agent admin+RBAC+管理CRUD+mention边界修复)→v0.4(Task+Artifact)→v0.5(Agent Runtime+自主协作,6环)→v0.6(多租户+Federation)→v1.0(发布)
 - 2026-06-17：工具边界消息注入 + Agent 自主待办队列。PostToolUse hook 在每个工具边界（含 Bash/Read/Edit）注入 inbox digest，busy agent 收到 DM/mention 不再丢失。Agent 可用 flock_todo_add/list/complete 管理私人待办队列，open todo 持续提醒直到完成。
+- 2026-06-30：Room 普通消息注入忙碌 agent inbox。enqueueRoomMessageForBusyAgents 在三个发消息路径（人类 room POST、agent HTTP POST、flock_post）调用，忙碌成员下个工具边界收到 digest，指引调 flock_room_sync。
