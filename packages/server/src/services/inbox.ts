@@ -85,6 +85,12 @@ export function markDelivered(db: Database.Database, ids: string[]): void {
  * Enqueue a room message into the inbox of every BUSY (active/spawning) member
  * of the room (excluding the sender). Dormant members are skipped — they get
  * woken via the normal wake path. This mirrors the DM busy-agent branch.
+ *
+ * `onlyAgentIds`: when non-empty, restrict injection to the intersection of
+ * busy members and these ids. This keeps inbox injection symmetric with the
+ * dormant wake path — an @mention only injects/wakes the mentioned agents,
+ * while a broadcast (no mention) injects/wakes everyone busy. When omitted
+ * (broadcast), all busy members are injected.
  */
 export function enqueueRoomMessageForBusyAgents(
   db: Database.Database,
@@ -94,14 +100,21 @@ export function enqueueRoomMessageForBusyAgents(
     senderName: string;
     excerpt: string;
     messageId?: string | null;
+    onlyAgentIds?: string[];
   },
 ): void {
-  const busyMembers = db.prepare(`
+  let busyMembers = db.prepare(`
     SELECT rm.agent_id
     FROM room_members rm
     JOIN profiles p ON p.id = rm.agent_id
     WHERE rm.room_id = ? AND rm.agent_id != ? AND p.status IN ('active', 'spawning')
   `).all(params.roomId, params.senderId) as { agent_id: string }[];
+
+  // @mention precision: only the intersection; broadcast: all busy members.
+  if (params.onlyAgentIds && params.onlyAgentIds.length > 0) {
+    const set = new Set(params.onlyAgentIds);
+    busyMembers = busyMembers.filter((m) => set.has(m.agent_id));
+  }
 
   for (const { agent_id } of busyMembers) {
     enqueuePendingMessage(db, {
