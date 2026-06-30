@@ -13,6 +13,8 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type {
   AgentBackend,
   AgentRunContext,
@@ -75,9 +77,10 @@ export class ClaudeStdioBackend implements AgentBackend {
   ): AsyncGenerator<AgentEvent> {
     const mcp = writeMcpConfigToTemp(ctx.mcpServers);
 
-    // Wire PostToolUse inbox hook
+    // Wire PostToolUse inbox hook.
+    // Resolve from package root: packages/runtime/dist/hooks/inbox-hook.js
     const hookScriptPath = process.env.FLOCK_INBOX_HOOK_PATH
-      ?? new URL('../hooks/inbox-hook.js', import.meta.url).pathname;
+      ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../dist/hooks/inbox-hook.js');
     const hookSettings = writeHookSettingsToTemp(hookScriptPath);
 
     const args = buildClaudeArgs(ctx, {
