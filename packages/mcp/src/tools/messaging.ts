@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { wakeMentionedAgents } from '@flock/server/services/callback';
 import { sendMessage, getMessages } from '@flock/server/services/messaging';
 import { hasUnreadRoomMessages, markRoomPendingForAgents, roomSync } from '@flock/server/services/room-context';
+import { enqueueRoomMessageForBusyAgents } from '@flock/server/services/inbox';
 import { emitNewMessage } from './subscribe.js';
 import { getAgentId } from '../db.js';
 
@@ -61,8 +62,17 @@ export function registerMessagingTools(
         });
         markRoomPendingForAgents(db, args.room_id, result.sequence, agentId);
 
+        // Inject to inbox of busy room members (agent flock_post)
+        const senderProfile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(agentId) as { name: string } | undefined;
+        enqueueRoomMessageForBusyAgents(db, {
+          roomId: args.room_id,
+          senderId: agentId,
+          senderName: senderProfile?.name ?? '',
+          excerpt: args.content.slice(0, 200),
+          messageId: result.id,
+        });
+
         if (mentions.length > 0) {
-          const senderProfile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(agentId) as { name: string } | undefined;
           wakeMentionedAgents(
             db,
             mentions,
