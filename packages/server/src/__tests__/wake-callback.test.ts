@@ -63,9 +63,12 @@ describe('automatic wake callbacks', () => {
       await request(app).post(`/rooms/${room.body.id}/join`).set('Authorization', `Bearer ${mentioned.body.token}`).expect(200);
 
       db.prepare("UPDATE profiles SET status = 'dormant' WHERE id = ?").run(mentioned.body.id);
+      // session_source must be 'agent-harness' (what the harness writes today) for
+      // latestClaudeSessionId to consider it resumable; 'claude-cli' is the old
+      // pre-migration source and is intentionally excluded from resume.
       db.prepare(`
         INSERT INTO agent_spawns (id, agent_id, runtime_id, session_id, session_source, status, spawned_at, last_active_at, prompt)
-        VALUES ('mention-wake-previous-spawn', ?, ?, 'previous-claude-session', 'claude-cli', 'stopped', ?, ?, 'previous spawn')
+        VALUES ('mention-wake-previous-spawn', ?, ?, 'previous-claude-session', 'agent-harness', 'stopped', ?, ?, 'previous spawn')
       `).run(mentioned.body.id, runtime.body.id, new Date().toISOString(), new Date().toISOString());
 
       await request(app)
@@ -104,7 +107,7 @@ describe('automatic wake callbacks', () => {
       `).get(mentioned.body.id, runtime.body.id) as { status: string; session_id: string; session_source: string; prompt: string };
       expect(activeSpawn.status).toBe('spawning');
       expect(activeSpawn.session_id).toBe('previous-claude-session');
-      expect(activeSpawn.session_source).toBe('claude-cli');
+      expect(activeSpawn.session_source).toBe('agent-harness');
       expect(activeSpawn.prompt).toContain('mention-wake-room');
 
       await request(app)
