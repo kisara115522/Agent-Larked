@@ -185,16 +185,21 @@ export function roomsRouter(db: Database.Database, eventBus: EventBus): Router {
       const human = db.prepare('SELECT username, display_name FROM humans WHERE id = ?').get(req.humanId!) as { username: string; display_name: string | null } | undefined;
       const senderName = human?.display_name || human?.username || 'Human';
       const excerpt = req.body.content?.slice(0, 200) ?? '';
+      const mentions: string[] = Array.isArray(req.body.mentions) ? req.body.mentions : [];
       // Inject to inbox of busy (active/spawning) room members — they won't be
       // woken (wake only targets dormant), so surface at next tool boundary.
+      // Symmetric with the wake path below: an @mention injects only the
+      // mentioned busy members; a broadcast (no mention) injects all busy.
       enqueueRoomMessageForBusyAgents(db, {
         roomId,
         senderId: req.humanId!,
         senderName,
         excerpt,
         messageId: result.id,
+        sequence: result.sequence,
+        onlyAgentIds: mentions.length > 0 ? mentions : undefined,
       });
-      if (Array.isArray(req.body.mentions) && req.body.mentions.length > 0) {
+      if (mentions.length > 0) {
         eventBus.emitMention(
           {
             message_id: result.id,
