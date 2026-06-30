@@ -19,19 +19,19 @@
 
 ## 2026-06-30 per-room cwd + room rules + room-inbox 修正
 
-### 🟡 mcp lifecycle 测试预存在失败(online/offline vs active/dormant)
+### ✅ mcp lifecycle 测试预存在失败(online/offline vs active/dormant)
 - **发现于：** 2026-06-30,全量测试核实
 - **问题：** `mcp/lifecycle.test.ts` 的 setAgentOnline/setAgentOffline 断言 status='online'/'offline',实际是 'active'/'dormant'。在 `af7bb53`(本次工作之前)就已失败
-- **影响：** 与本次无关;`647f295 fix(mcp): use valid agent status values` 把状态值改成 active/dormant 后,该测试未同步更新
-- **建议修复：** 测试改为断言 active/dormant
-- **状态：** open
+- **根因：** `647f295 fix(mcp): use valid agent status values` 把状态值改成 active/dormant 后,该测试未同步更新
+- **修复：** 测试断言改为 active/dormant。mcp 65/65 绿
+- **状态：** done
 
-### 🟡 wake-callback 测试预存在失败(session_id resume)
+### ✅ wake-callback 测试预存在失败(session_id resume)
 - **发现于：** 2026-06-30,cwd/room-rules 实现期间核实
-- **问题：** `wake-callback.test.ts > wakes a mentioned dormant agent...` 断言 `session_id` = 'previous-claude-session',实际 undefined。在 `af7bb53`(本次所有工作之前)就已失败
-- **影响：** 与 cwd/room-rules/room-inbox 改动无关;根因是 `latestClaudeSessionId` 的 resume 过滤(commit 9ef9b42 排除 error spawn)与该测试期望不符
-- **建议修复：** 要么测试 fixture 的 spawn 状态改成可 resume 的,要么确认 resume 过滤是否过严
-- **状态：** open
+- **问题：** `wake-callback.test.ts > wakes a mentioned dormant agent...` 断言 `session_id` = 'previous-claude-session',实际 undefined。在 `af7bb53` 就已失败
+- **根因:** 测试 fixture 用 `session_source='claude-cli'`(pre-migration 旧值),但 `latestClaudeSessionId` 只 resume `'agent-harness'` 源的 spawn;且后续断言新 spawn 的 source 也是 'claude-cli',而 createWakeSession 实际写 'agent-harness'
+- **修复:** fixture + 断言改为 'agent-harness'(代码实际使用的源)。server 163/163 绿
+- **状态：** done
 
 ### 🟢 inbox 注入 ↔ flock_wait 去重(治本,跨进程游标)
 - **发现于：** 2026-06-30,room-inbox 修正
