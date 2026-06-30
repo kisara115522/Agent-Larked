@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import { sendMessage, getThread } from '../services/messaging.js';
 import { wakeMentionedAgents } from '../services/callback.js';
 import { markRoomPendingForAgents } from '../services/room-context.js';
+import { enqueueRoomMessageForBusyAgents } from '../services/inbox.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middleware/auth.js';
 import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
 import type { EventBus } from '../sse/event-bus.js';
@@ -17,6 +18,16 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
     try {
       const result = sendMessage(db, req.agentId!, req.body);
       markRoomPendingForAgents(db, req.body.room_id, result.sequence, req.agentId!);
+
+      // Inject to inbox of busy room members (agent-to-agent room post)
+      const senderProfile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(req.agentId!) as { name: string } | undefined;
+      enqueueRoomMessageForBusyAgents(db, {
+        roomId: req.body.room_id,
+        senderId: req.agentId!,
+        senderName: senderProfile?.name ?? '',
+        excerpt: req.body.content?.slice(0, 200) ?? '',
+        messageId: result.id,
+      });
 
       // Emit mention events via SSE
       if (req.body.mentions && req.body.mentions.length > 0) {
@@ -33,7 +44,6 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
         );
 
         // Wake dormant mentioned agents via runtime callback
-        const senderProfile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(req.agentId!) as { name: string } | undefined;
         wakeMentionedAgents(
           db,
           req.body.mentions,
