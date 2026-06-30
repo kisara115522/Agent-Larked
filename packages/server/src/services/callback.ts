@@ -18,6 +18,11 @@ export interface CallbackEvent {
   trigger_type?: string;
   room_id?: string;
   room_name?: string;
+  room_rules?: string;
+  /** Raw rooms.workspace value (may be empty). Runtime resolves it to an
+   *  absolute path on its own machine — server must NOT send absolute paths,
+   *  which would be wrong under distributed runtime deployment. */
+  room_workspace?: string;
   message_id?: string;
   sender_name?: string;
   excerpt?: string;
@@ -196,6 +201,10 @@ async function dispatchPendingRoomWake(pending: PendingRoomWake): Promise<void> 
   const prompt = roomWakePrompt(pending.db, pending.roomId, pending.roomName, pending.agentId, reason, pending.excerpt);
   const session = createWakeSession(pending.db, pending.agentId, runtime.id, pending.roomId, prompt, pending.eventBus);
   if (!session) {
+    // NOT dead code: scheduleRoomWake gates on dormant, but this dispatch runs
+    // after the debounce window — by now another trigger may have spawned the
+    // agent (active/spawning), so createWakeSession returns null and we fall
+    // back to inbox injection for delivery at the next tool boundary.
     // Agent is busy — enqueue to inbox for tool-boundary injection
     enqueuePendingMessage(pending.db, {
       agentId: pending.agentId,
@@ -216,6 +225,7 @@ async function dispatchPendingRoomWake(pending: PendingRoomWake): Promise<void> 
     prompt,
     room_id: pending.roomId,
     room_name: pending.roomName,
+    ...resolveRoomMeta(pending.db, pending.roomId),
     message_id: pending.messageId,
     sender_name: pending.senderName,
     excerpt: pending.excerpt,
@@ -266,6 +276,26 @@ function selectRuntimeForWake(db: Database.Database, agentId: string): RuntimeRo
   return db.prepare(
     'SELECT id, callback_url, callback_secret, status FROM agent_runtimes WHERE id = ?',
   ).get(fallbackRuntimeId) as RuntimeRow | undefined ?? null;
+}
+
+/**
+ * Read a room's rules + workspace for inclusion in a spawn/wake callback.
+ * Returns undefined fields when absent/empty. Workspace is the RAW stored value
+ * (possibly empty) — the runtime resolves it to an absolute path on its own
+ * machine; the server never sends absolute paths (distributed-runtime safe).
+ */
+function resolveRoomMeta(
+  db: Database.Database,
+  roomId: string | undefined,
+): { room_rules?: string; room_workspace?: string } {
+  if (!roomId) return {};
+  const row = db.prepare('SELECT rules, workspace FROM rooms WHERE id = ?')
+    .get(roomId) as { rules: string | null; workspace: string | null } | undefined;
+  if (!row) return {};
+  return {
+    room_rules: row.rules && row.rules.trim() ? row.rules : undefined,
+    room_workspace: row.workspace && row.workspace.trim() ? row.workspace : undefined,
+  };
 }
 
 function agentCallbackFields(
@@ -537,6 +567,7 @@ export function notifyRuntimeSpawn(
     prompt: prompt ?? undefined,
     room_id: roomId,
     room_name: roomName,
+    ...resolveRoomMeta(db, roomId),
   };
 
   sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
@@ -615,6 +646,7 @@ export function notifyTaskAssignment(
     prompt,
     room_id: roomId,
     room_name: roomName,
+    ...resolveRoomMeta(db, roomId),
   };
 
   sendCallbackWithRetry(runtime, agentId, event).catch((err) => {
