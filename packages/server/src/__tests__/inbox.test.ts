@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { enqueuePendingMessage, peekPendingMessages, markDelivered, addTodo, listOpenTodos, setTodoStatus } from '../services/inbox.js';
+import { enqueuePendingMessage, peekPendingMessages, markDelivered, addTodo, listOpenTodos, setTodoStatus, enqueueRoomMessageForBusyAgents } from '../services/inbox.js';
 import { buildInboxDigest } from '../services/inbox-digest.js';
 
 function createTestDb(): Database.Database {
@@ -15,10 +15,17 @@ function createTestDb(): Database.Database {
       sender_name TEXT NOT NULL DEFAULT '',
       content TEXT NOT NULL,
       ref_id TEXT,
+      room_id TEXT,
       delivered INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
     CREATE INDEX idx_pending_msg_agent ON pending_messages(agent_id, delivered);
+    CREATE TABLE room_members (
+      room_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      joined_at TEXT NOT NULL,
+      PRIMARY KEY (room_id, agent_id)
+    );
     CREATE TABLE agent_todos (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -189,5 +196,68 @@ describe('busy agent inbox integration', () => {
     expect(msgs).toHaveLength(1);
     expect(msgs[0].content).toBe('hey, check this out');
     expect(msgs[0].source_type).toBe('dm');
+  });
+});
+
+describe('enqueueRoomMessageForBusyAgents', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = createTestDb();
+    // agent-1 dormant, agent-2 active, add agent-3 spawning
+    db.prepare('INSERT INTO profiles (id, name, status) VALUES (?, ?, ?)').run('agent-3', 'Spawn', 'spawning');
+    db.prepare('UPDATE profiles SET status = ? WHERE id = ?').run('active', 'agent-2');
+    // room-1 has all three agents as members
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO room_members (room_id, agent_id, joined_at) VALUES (?, ?, ?)').run('room-1', 'agent-1', now);
+    db.prepare('INSERT INTO room_members (room_id, agent_id, joined_at) VALUES (?, ?, ?)').run('room-1', 'agent-2', now);
+    db.prepare('INSERT INTO room_members (room_id, agent_id, joined_at) VALUES (?, ?, ?)').run('room-1', 'agent-3', now);
+  });
+  afterEach(() => { db.close(); });
+
+  it('enqueues only for active/spawning members, not dormant or sender', () => {
+    enqueueRoomMessageForBusyAgents(db, {
+      roomId: 'room-1',
+      senderId: 'agent-1',
+      senderName: 'TestAgent',
+      excerpt: 'hello room',
+      messageId: 'msg-1',
+    });
+
+    // agent-2 (active) and agent-3 (spawning) should have inbox entries
+    expect(peekPendingMessages(db, 'agent-2')).toHaveLength(1);
+    expect(peekPendingMessages(db, 'agent-3')).toHaveLength(1);
+    // agent-1 is dormant AND the sender — no entry
+    expect(peekPendingMessages(db, 'agent-1')).toHaveLength(0);
+  });
+
+  it('sets source_type=room and room_id on enqueued messages', () => {
+    enqueueRoomMessageForBusyAgents(db, {
+      roomId: 'room-1',
+      senderId: 'agent-1',
+      senderName: 'TestAgent',
+      excerpt: 'room msg',
+    });
+
+    const msgs = peekPendingMessages(db, 'agent-2');
+    expect(msgs[0].source_type).toBe('room');
+    expect(msgs[0].room_id).toBe('room-1');
+    expect(msgs[0].content).toBe('room msg');
+    expect(msgs[0].sender_name).toBe('TestAgent');
+  });
+
+  it('excludes the sender even if sender is active', () => {
+    db.prepare('UPDATE profiles SET status = ? WHERE id = ?').run('active', 'agent-1');
+
+    enqueueRoomMessageForBusyAgents(db, {
+      roomId: 'room-1',
+      senderId: 'agent-1',
+      senderName: 'TestAgent',
+      excerpt: 'self msg',
+    });
+
+    // agent-1 is sender — excluded; agent-2 and agent-3 still get it
+    expect(peekPendingMessages(db, 'agent-1')).toHaveLength(0);
+    expect(peekPendingMessages(db, 'agent-2')).toHaveLength(1);
   });
 });
