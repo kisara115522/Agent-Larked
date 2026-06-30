@@ -339,6 +339,7 @@ CREATE TABLE IF NOT EXISTS pending_messages (
   sender_name TEXT NOT NULL DEFAULT '',
   content TEXT NOT NULL,
   ref_id TEXT,
+  room_id TEXT,
   delivered INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
@@ -522,6 +523,8 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateRemoveHumanFkConstraints(db);
   backfillHumanProfiles(db);
   migrateColumn(db, 'wake_events', 'status', "TEXT NOT NULL DEFAULT 'queued'");
+  // v0.6: room_id on pending_messages for room-message inbox injection
+  migrateColumn(db, 'pending_messages', 'room_id', 'TEXT');
 
   // v0.3.5 stores admin privileges on agent profiles, so remove the legacy separate human admin model.
   db.exec(`
