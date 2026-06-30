@@ -25,6 +25,7 @@ interface PendingMessage {
   sender_name: string;
   content: string;
   ref_id: string | null;
+  room_id: string | null;
   delivered: number;
   created_at: string;
 }
@@ -42,7 +43,7 @@ interface AgentTodo {
 }
 
 interface InboxDigest {
-  new_messages: Array<{ from: string; content: string; age: string; source: string }>;
+  new_messages: Array<{ from: string; content: string; age: string; source: string; room_id?: string | null }>;
   open_todos: Array<{ id: string; content: string; priority: number }>;
   guidance: string;
 }
@@ -74,14 +75,19 @@ function listOpenTodos(db: Database.Database, agentId: string): AgentTodo[] {
   ).all(agentId) as AgentTodo[];
 }
 
-function buildGuidance(numMsgs: number, numTodos: number): string {
+function buildGuidance(pending: Array<{ source_type: string }>, numTodos: number): string {
   const parts: string[] = [];
+  const numMsgs = pending.length;
   if (numMsgs > 0) {
+    const hasRoom = pending.some((m) => m.source_type === 'room');
+    const roomHint = hasRoom
+      ? ` For room messages (source=room), call flock_room_sync with the room_id to read full context before replying via flock_post.`
+      : '';
     parts.push(
       `You have ${numMsgs} new message(s) that arrived while you were working. ` +
       `For EACH: decide now — (a) handle it immediately if it's quick or urgent (reply via flock_dm_send / flock_post), ` +
       `or (b) if your current work is more important, capture it with flock_todo_add so you don't forget, then continue. ` +
-      `Do NOT silently ignore it — either act or enqueue.`,
+      `Do NOT silently ignore it — either act or enqueue.${roomHint}`,
     );
   }
   if (numTodos > 0) {
@@ -106,9 +112,10 @@ function buildInboxDigest(db: Database.Database, agentId: string): InboxDigest |
         content: m.content.slice(0, 500),
         age: ageString(m.created_at),
         source: m.source_type,
+        ...(m.room_id ? { room_id: m.room_id } : {}),
       })),
       open_todos: todos.map((t) => ({ id: t.id, content: t.content.slice(0, 300), priority: t.priority })),
-      guidance: buildGuidance(pending.length, todos.length),
+      guidance: buildGuidance(pending, todos.length),
     };
 
     if (pending.length > 0) markDelivered(db, pending.map((m) => m.id));
