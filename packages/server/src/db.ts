@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   rules TEXT DEFAULT '',
   rules_version INTEGER DEFAULT 0,
   rules_updated_at TEXT,
+  workspace TEXT DEFAULT '',
   visibility TEXT DEFAULT 'public',
   created_by TEXT,
   created_at TEXT NOT NULL
@@ -496,6 +497,7 @@ export function createDatabase(path: string = ':memory:'): Database.Database {
   migrateColumn(db, 'rooms', 'rules', "TEXT DEFAULT ''");
   migrateColumn(db, 'rooms', 'rules_version', 'INTEGER DEFAULT 0');
   migrateColumn(db, 'rooms', 'rules_updated_at', 'TEXT');
+  migrateColumn(db, 'rooms', 'workspace', "TEXT DEFAULT ''");
   migrateColumn(db, 'messages', 'broadcast', 'INTEGER DEFAULT 0');
   migrateColumn(db, 'profiles', 'last_active_at', 'TEXT');
   migrateColumn(db, 'direct_messages', 'read_at', 'TEXT DEFAULT NULL');
