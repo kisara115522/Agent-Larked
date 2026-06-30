@@ -12,6 +12,12 @@ export interface InboxDigest {
   guidance: string;
 }
 
+/** Look up a room's display name by id; null if the room no longer exists. */
+function lookupRoomName(db: Database.Database, roomId: string): string | null {
+  const row = db.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string } | undefined;
+  return row?.name ?? null;
+}
+
 export function ageString(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const min = Math.floor(ms / 60000);
@@ -39,13 +45,25 @@ export function buildInboxDigest(db: Database.Database, agentId: string): InboxD
     if (pending.length === 0 && todos.length === 0) return null;
 
     const digest: InboxDigest = {
-      new_messages: pending.map((m) => ({
-        from: m.sender_name || m.sender_id || 'unknown',
-        content: m.content.slice(0, 500),
-        age: ageString(m.created_at),
-        source: m.source_type,
-        ...(m.room_id ? { room_id: m.room_id } : {}),
-      })),
+      new_messages: pending.map((m) => {
+        const sender = m.sender_name || m.sender_id || 'unknown';
+        // For room messages, surface the room name in `from` ("<sender> in
+        // #<roomName>") so the model knows WHERE the message came from without
+        // parsing the room_id JSON field. Falls back to the raw id if the room
+        // was deleted / name missing.
+        const roomName = m.room_id ? lookupRoomName(db, m.room_id) : null;
+        const from =
+          m.source_type === 'room' && m.room_id
+            ? `${sender} in #${roomName ?? m.room_id}`
+            : sender;
+        return {
+          from,
+          content: m.content.slice(0, 500),
+          age: ageString(m.created_at),
+          source: m.source_type,
+          ...(m.room_id ? { room_id: m.room_id } : {}),
+        };
+      }),
       open_todos: todos.map((t) => ({ id: t.id, content: t.content.slice(0, 300), priority: t.priority })),
       guidance: buildGuidance(pending, todos.length),
     };

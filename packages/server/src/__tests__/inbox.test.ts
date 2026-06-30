@@ -38,6 +38,11 @@ function createTestDb(): Database.Database {
       completed_at TEXT
     );
     CREATE INDEX idx_agent_todos_agent ON agent_todos(agent_id, status);
+    CREATE TABLE rooms (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL
+    );
   `);
   db.prepare('INSERT INTO profiles (id, name) VALUES (?, ?)').run('agent-1', 'TestAgent');
   db.prepare('INSERT INTO profiles (id, name) VALUES (?, ?)').run('agent-2', 'OtherAgent');
