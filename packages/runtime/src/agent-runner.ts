@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AgentHarness, type SpawnRequest } from './harness/index.js';
+import { AgentHarness, type SpawnRequest, type RoomContext } from './harness/index.js';
 import type { BackendConfig } from './backends/types.js';
 import { defaultBackendRegistry } from './harness/backend-registry.js';
 import { createClaudeSdkBackend } from './backends/claude-sdk.js';
@@ -37,6 +37,11 @@ export interface AgentSpawnOptions {
   backend?: 'claude-sdk' | 'claude-stdio' | 'openai-compat';
   backendConfig?: BackendConfig;
   env?: Record<string, string>;
+  /** Room context for prompt composition (room rules etc.) */
+  room?: RoomContext;
+  /** Raw rooms.workspace value from the server (may be empty/undefined).
+   *  Resolved to an absolute path on THIS runtime via resolveWorkspace(). */
+  roomWorkspace?: string;
 }
 
 export type ActivityReporter = (
@@ -128,6 +133,8 @@ export class AgentRunner {
       model: options?.model,
       sessionId: options?.sessionId,
       env: mergedEnv,
+      room: options?.room,
+      cwd: resolveWorkspace(agentId, options?.room?.roomId, options?.roomWorkspace),
     };
 
     console.log(`[runner] Spawning agent ${agentId} via harness (backend=${backendConfig.type})`);
@@ -189,6 +196,30 @@ export class AgentRunner {
     await this.harness.shutdown();
     this.agentInstances.clear();
   }
+}
+
+/**
+ * Resolve the agent's working directory on THIS runtime machine.
+ * Precedence: explicit room workspace (custom path from rooms.workspace) →
+ * per-room default → per-agent default (no room, e.g. DM). All defaults are
+ * rooted at this runtime's PROJECT_ROOT so paths are valid locally even when
+ * the server lives on another host. Relative custom paths resolve under
+ * PROJECT_ROOT; absolute custom paths are used as-is.
+ */
+function resolveWorkspace(
+  agentId: string,
+  roomId: string | undefined,
+  roomWorkspace: string | undefined,
+): string {
+  if (roomWorkspace && roomWorkspace.trim()) {
+    return path.isAbsolute(roomWorkspace)
+      ? roomWorkspace
+      : path.resolve(PROJECT_ROOT, roomWorkspace);
+  }
+  if (roomId) {
+    return path.resolve(PROJECT_ROOT, 'data/workspaces/rooms', roomId);
+  }
+  return path.resolve(PROJECT_ROOT, 'data/workspaces/agents', agentId);
 }
 
 function resolveProviderEnv(
