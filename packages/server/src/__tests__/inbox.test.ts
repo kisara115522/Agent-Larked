@@ -275,4 +275,64 @@ describe('enqueueRoomMessageForBusyAgents', () => {
     expect(peekPendingMessages(db, 'agent-1')).toHaveLength(0);
     expect(peekPendingMessages(db, 'agent-2')).toHaveLength(1);
   });
+
+  it('@mention (onlyAgentIds) injects only the mentioned busy member, not other busy members', () => {
+    // agent-2 (active) and agent-3 (spawning) are both busy; @mention only agent-2
+    enqueueRoomMessageForBusyAgents(db, {
+      roomId: 'room-1',
+      senderId: 'agent-1',
+      senderName: 'TestAgent',
+      excerpt: '@agent-2 ping',
+      messageId: 'msg-mention',
+      onlyAgentIds: ['agent-2'],
+    });
+
+    expect(peekPendingMessages(db, 'agent-2')).toHaveLength(1);
+    // agent-3 is busy but not mentioned — must NOT be injected
+    expect(peekPendingMessages(db, 'agent-3')).toHaveLength(0);
+  });
+
+  it('broadcast (no onlyAgentIds) injects all busy members', () => {
+    enqueueRoomMessageForBusyAgents(db, {
+      roomId: 'room-1',
+      senderId: 'agent-1',
+      senderName: 'TestAgent',
+      excerpt: 'hello everyone',
+      messageId: 'msg-broadcast',
+    });
+
+    // Both busy members get it; the dormant sender does not.
+    expect(peekPendingMessages(db, 'agent-2')).toHaveLength(1);
+    expect(peekPendingMessages(db, 'agent-3')).toHaveLength(1);
+  });
+
+  it('empty onlyAgentIds is treated as broadcast (injects all busy members)', () => {
+    enqueueRoomMessageForBusyAgents(db, {
+      roomId: 'room-1',
+      senderId: 'agent-1',
+      senderName: 'TestAgent',
+      excerpt: 'still a broadcast',
+      onlyAgentIds: [],
+    });
+
+    expect(peekPendingMessages(db, 'agent-2')).toHaveLength(1);
+    expect(peekPendingMessages(db, 'agent-3')).toHaveLength(1);
+  });
+
+  it('@mention of a dormant agent injects nobody (mentioned agent is not busy)', () => {
+    // agent-1 is dormant (and is the sender here we use agent-2 as sender so
+    // agent-1 is a candidate); mention agent-1 who is dormant -> no busy match.
+    db.prepare('UPDATE profiles SET status = ? WHERE id = ?').run('active', 'agent-2');
+    enqueueRoomMessageForBusyAgents(db, {
+      roomId: 'room-1',
+      senderId: 'agent-2',
+      senderName: 'OtherAgent',
+      excerpt: '@agent-1 hi',
+      onlyAgentIds: ['agent-1'],
+    });
+
+    // agent-1 is dormant -> not in busy set -> intersection empty -> nobody injected
+    expect(peekPendingMessages(db, 'agent-1')).toHaveLength(0);
+    expect(peekPendingMessages(db, 'agent-3')).toHaveLength(0);
+  });
 });
