@@ -19,6 +19,13 @@
 
 ## 2026-06-30 per-room cwd + room rules + room-inbox 修正
 
+### 🟡 mcp lifecycle 测试预存在失败(online/offline vs active/dormant)
+- **发现于：** 2026-06-30,全量测试核实
+- **问题：** `mcp/lifecycle.test.ts` 的 setAgentOnline/setAgentOffline 断言 status='online'/'offline',实际是 'active'/'dormant'。在 `af7bb53`(本次工作之前)就已失败
+- **影响：** 与本次无关;`647f295 fix(mcp): use valid agent status values` 把状态值改成 active/dormant 后,该测试未同步更新
+- **建议修复：** 测试改为断言 active/dormant
+- **状态：** open
+
 ### 🟡 wake-callback 测试预存在失败(session_id resume)
 - **发现于：** 2026-06-30,cwd/room-rules 实现期间核实
 - **问题：** `wake-callback.test.ts > wakes a mentioned dormant agent...` 断言 `session_id` = 'previous-claude-session',实际 undefined。在 `af7bb53`(本次所有工作之前)就已失败
