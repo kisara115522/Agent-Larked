@@ -100,6 +100,12 @@ export function enqueueRoomMessageForBusyAgents(
     senderName: string;
     excerpt: string;
     messageId?: string | null;
+    // Forward-compat passthrough for the room sequence. Dedup with flock_wait
+    // is done via message_id (stored in ref_id), NOT sequence — flock_wait's
+    // baseline lives in MCP process memory, not the DB, so a persisted sequence
+    // here would not align with it. Accepted for callers/future cross-process
+    // cursor work (backlog); not persisted today.
+    sequence?: number | null;
     onlyAgentIds?: string[];
   },
 ): void {
