@@ -19,14 +19,19 @@ export function messagesRouter(db: Database.Database, eventBus: EventBus): Route
       const result = sendMessage(db, req.agentId!, req.body);
       markRoomPendingForAgents(db, req.body.room_id, result.sequence, req.agentId!);
 
-      // Inject to inbox of busy room members (agent-to-agent room post)
+      // Inject to inbox of busy room members (agent-to-agent room post).
+      // Symmetry with the dormant wake path: an @mention only injects the
+      // mentioned busy members; a broadcast (no mention) injects all busy.
       const senderProfile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(req.agentId!) as { name: string } | undefined;
+      const mentions: string[] = Array.isArray(req.body.mentions) ? req.body.mentions : [];
       enqueueRoomMessageForBusyAgents(db, {
         roomId: req.body.room_id,
         senderId: req.agentId!,
         senderName: senderProfile?.name ?? '',
         excerpt: req.body.content?.slice(0, 200) ?? '',
         messageId: result.id,
+        sequence: result.sequence,
+        onlyAgentIds: mentions.length > 0 ? mentions : undefined,
       });
 
       // Emit mention events via SSE
