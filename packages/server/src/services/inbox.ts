@@ -81,6 +81,41 @@ export function markDelivered(db: Database.Database, ids: string[]): void {
   db.prepare(`UPDATE pending_messages SET delivered = 1 WHERE id IN (${placeholders})`).run(...ids);
 }
 
+/**
+ * Enqueue a room message into the inbox of every BUSY (active/spawning) member
+ * of the room (excluding the sender). Dormant members are skipped — they get
+ * woken via the normal wake path. This mirrors the DM busy-agent branch.
+ */
+export function enqueueRoomMessageForBusyAgents(
+  db: Database.Database,
+  params: {
+    roomId: string;
+    senderId: string;
+    senderName: string;
+    excerpt: string;
+    messageId?: string | null;
+  },
+): void {
+  const busyMembers = db.prepare(`
+    SELECT rm.agent_id
+    FROM room_members rm
+    JOIN profiles p ON p.id = rm.agent_id
+    WHERE rm.room_id = ? AND rm.agent_id != ? AND p.status IN ('active', 'spawning')
+  `).all(params.roomId, params.senderId) as { agent_id: string }[];
+
+  for (const { agent_id } of busyMembers) {
+    enqueuePendingMessage(db, {
+      agentId: agent_id,
+      sourceType: 'room',
+      senderId: params.senderId,
+      senderName: params.senderName,
+      content: params.excerpt,
+      refId: params.messageId ?? null,
+      roomId: params.roomId,
+    });
+  }
+}
+
 /** Add a todo to an agent's private queue. */
 export function addTodo(
   db: Database.Database,
