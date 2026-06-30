@@ -12,11 +12,12 @@ import type Database from 'better-sqlite3';
 export interface PendingMessage {
   id: string;
   agent_id: string;
-  source_type: 'dm' | 'mention' | 'system';
+  source_type: 'dm' | 'mention' | 'system' | 'room';
   sender_id: string | null;
   sender_name: string;
   content: string;
   ref_id: string | null;
+  room_id: string | null;
   delivered: number;
   created_at: string;
 }
@@ -38,11 +39,12 @@ export function enqueuePendingMessage(
   db: Database.Database,
   params: {
     agentId: string;
-    sourceType: 'dm' | 'mention' | 'system';
+    sourceType: 'dm' | 'mention' | 'system' | 'room';
     senderId?: string | null;
     senderName?: string;
     content: string;
     refId?: string | null;
+    roomId?: string | null;
   },
 ): PendingMessage {
   const now = new Date().toISOString();
@@ -54,12 +56,13 @@ export function enqueuePendingMessage(
     sender_name: params.senderName ?? '',
     content: params.content,
     ref_id: params.refId ?? null,
+    room_id: params.roomId ?? null,
     delivered: 0,
     created_at: now,
   };
   db.prepare(
-    `INSERT INTO pending_messages (id, agent_id, source_type, sender_id, sender_name, content, ref_id, delivered, created_at)
-     VALUES (@id, @agent_id, @source_type, @sender_id, @sender_name, @content, @ref_id, @delivered, @created_at)`,
+    `INSERT INTO pending_messages (id, agent_id, source_type, sender_id, sender_name, content, ref_id, room_id, delivered, created_at)
+     VALUES (@id, @agent_id, @source_type, @sender_id, @sender_name, @content, @ref_id, @room_id, @delivered, @created_at)`,
   ).run(row);
   return row;
 }
