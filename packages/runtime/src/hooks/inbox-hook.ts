@@ -43,7 +43,7 @@ interface AgentTodo {
 }
 
 interface InboxDigest {
-  new_messages: Array<{ from: string; content: string; age: string; source: string; room_id?: string | null }>;
+  new_messages: Array<{ from: string; content: string; age: string; source: string; room_id?: string | null; message_id?: string | null }>;
   open_todos: Array<{ id: string; content: string; priority: number }>;
   guidance: string;
 }
@@ -87,7 +87,8 @@ function buildGuidance(pending: Array<{ source_type: string }>, numTodos: number
   if (numMsgs > 0) {
     const hasRoom = pending.some((m) => m.source_type === 'room');
     const roomHint = hasRoom
-      ? ` For room messages (source=room), call flock_room_sync with the room_id to read full context before replying via flock_post.`
+      ? ` For room messages (source=room), call flock_room_sync with the room_id to read full context before replying via flock_post.` +
+        ` Each room message carries a message_id — the same message may also surface when you call flock_wait; same message_id means the same message, so handle it once and don't double-reply.`
       : '';
     parts.push(
       `You have ${numMsgs} new message(s) that arrived while you were working. ` +
@@ -128,6 +129,9 @@ function buildInboxDigest(db: Database.Database, agentId: string): InboxDigest |
           age: ageString(m.created_at),
           source: m.source_type,
           ...(m.room_id ? { room_id: m.room_id } : {}),
+          // Mirror of @flock/server inbox-digest: expose message_id for dedup
+          // against flock_wait, which may later return the same message.
+          ...(m.source_type === 'room' && m.ref_id ? { message_id: m.ref_id } : {}),
         };
       }),
       open_todos: todos.map((t) => ({ id: t.id, content: t.content.slice(0, 300), priority: t.priority })),
