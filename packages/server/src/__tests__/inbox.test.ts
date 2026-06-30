@@ -173,6 +173,21 @@ describe('buildInboxDigest', () => {
     expect(digest.guidance).toContain('1 new message');
     expect(digest.guidance).toContain('1 open todo');
   });
+
+  it('includes room_id and flock_room_sync hint for room-source messages', () => {
+    enqueuePendingMessage(db, {
+      agentId: 'agent-1',
+      sourceType: 'room',
+      senderName: 'kisara',
+      content: 'hey room',
+      roomId: 'room-42',
+    });
+
+    const digest = buildInboxDigest(db, 'agent-1')!;
+    expect(digest.new_messages[0].source).toBe('room');
+    expect(digest.new_messages[0].room_id).toBe('room-42');
+    expect(digest.guidance).toContain('flock_room_sync');
+  });
 });
 
 describe('busy agent inbox integration', () => {
