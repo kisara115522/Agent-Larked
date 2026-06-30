@@ -191,6 +191,8 @@ export class FlockAgentRuntime {
       model: event.agent_model,
       provider: normalizeProvider(event.agent_provider),
       backendConfig: this.config.defaultBackend,
+      room: buildRoomContext(event),
+      roomWorkspace: event.room_workspace,
     });
   }
 
@@ -216,6 +218,8 @@ export class FlockAgentRuntime {
       model: event.agent_model,
       provider: normalizeProvider(event.agent_provider),
       backendConfig: this.config.defaultBackend,
+      room: buildRoomContext(event),
+      roomWorkspace: event.room_workspace,
     });
   }
 
@@ -293,6 +297,15 @@ function persistCallbackSecret(path: string | undefined, callbackUrl: string, se
   data[callbackUrl] = secret;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+}
+
+function buildRoomContext(event: CallbackEvent): AgentSpawnOptions['room'] {
+  if (!event.room_id) return undefined;
+  return {
+    roomId: event.room_id,
+    roomName: event.room_name ?? event.room_id,
+    roomRules: event.room_rules,
+  };
 }
 
 function normalizeProvider(provider: unknown): AgentSpawnOptions['provider'] {
