@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type Database from 'better-sqlite3';
 import { flexAuthMiddleware, type FlexAuthenticatedRequest } from '../middleware/flex-auth.js';
-import { ErrorCode } from '@flock/shared';
+import { ErrorCode, type GlobalConfigType } from '@flock/shared';
 import { ServerError } from '../middleware/error.js';
 
 export function configsRouter(db: Database.Database): Router {
@@ -113,6 +113,52 @@ export function configsRouter(db: Database.Database): Router {
         VALUES (?, ?, ?, 0, ?, ?)
         ON CONFLICT(agent_id, config_type) DO UPDATE SET config_value = ?, updated_at = ?
       `).run(agentId, config_type, JSON.stringify(config_value), now, now, JSON.stringify(config_value), now);
+
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PATCH /configs/global — update global config (human-only)
+  //
+  // Global configs (skills, mcp) affect ALL agents. Only human sessions may
+  // write. Agents cannot self-elevate to overwrite global defaults.
+  //
+  // TODO(security): once profiles.is_admin lands, restrict to admins.
+  router.patch('/configs/global', flexAuth, (req: FlexAuthenticatedRequest, res, next) => {
+    try {
+      // Reject agent tokens outright: only humans may edit global defaults.
+      // flexAuth sets humanId for humans; agent-only requests leave it unset.
+      if (!req.humanId) {
+        res.status(403).json({
+          error: { code: ErrorCode.FORBIDDEN, message: 'Only humans may edit global configs' },
+        });
+        return;
+      }
+
+      const { config_type, config_value } = req.body as {
+        config_type?: GlobalConfigType;
+        config_value?: unknown;
+      };
+
+      if (!config_type) {
+        res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'config_type is required' } });
+        return;
+      }
+      if (config_type !== 'skills' && config_type !== 'mcp') {
+        res.status(400).json({
+          error: { code: 'VALIDATION_ERROR', message: `config_type must be 'skills' or 'mcp', got '${config_type}'` },
+        });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO global_configs (config_type, config_value, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(config_type) DO UPDATE SET config_value = ?, updated_at = ?
+      `).run(config_type, JSON.stringify(config_value), now, now, JSON.stringify(config_value), now);
 
       res.json({ ok: true });
     } catch (err) {
