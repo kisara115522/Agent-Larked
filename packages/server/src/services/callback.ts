@@ -38,9 +38,20 @@ interface RuntimeRow {
   status: string;
 }
 
+/** Shape stored in agent_configs('mcp') / global_configs('mcp'). Mirrors the
+ *  runtime's MCPServerConfig wire contract; kept local to avoid a shared-package
+ *  cross-import from server. The runtime side validates the transport. */
+export interface McpServerWire {
+  name: string;
+  transport:
+    | { type: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
+    | { type: 'sse'; url: string; headers?: Record<string, string> };
+}
+
 interface AgentRuntimeConfig {
   model?: string;
   provider?: unknown;
+  mcpServers?: McpServerWire[];
 }
 
 interface AgentCallbackFields {
@@ -48,6 +59,7 @@ interface AgentCallbackFields {
   agent_name?: string;
   agent_model?: string;
   agent_provider?: unknown;
+  agent_mcp_servers?: McpServerWire[];
 }
 
 interface WakeSession {
@@ -576,11 +588,20 @@ export function notifyRuntimeSpawn(
 }
 
 function getAgentRuntimeConfig(db: Database.Database, agentId: string): AgentRuntimeConfig {
+  // Per-agent MCP is security-sensitive (command = runtime host RCE), so it
+  // is gated behind FLOCK_PER_AGENT_MCP=1. Model/provider are always read.
+  const perAgentMcpEnabled = process.env.FLOCK_PER_AGENT_MCP === '1';
+
   const rows = db.prepare(`
     SELECT config_type, config_value
     FROM agent_configs
-    WHERE agent_id = ? AND config_type IN ('model', 'provider')
+    WHERE agent_id = ? AND config_type IN ('model', 'provider', 'mcp')
   `).all(agentId) as Array<{ config_type: string; config_value: string }>;
+
+  const globalRows = perAgentMcpEnabled
+    ? db.prepare(`SELECT config_type, config_value FROM global_configs WHERE config_type = 'mcp'`)
+        .all() as Array<{ config_type: string; config_value: string }>
+    : [];
 
   const config: AgentRuntimeConfig = {};
   for (const row of rows) {
@@ -592,7 +613,61 @@ function getAgentRuntimeConfig(db: Database.Database, agentId: string): AgentRun
       config.provider = value;
     }
   }
+
+  if (perAgentMcpEnabled) {
+    // Merge: global base ← agent override. Both stored as {"mcpServers":{name:{...}}}.
+    // Agent's same-name entry overrides global. Key is the server name.
+    const merged: Record<string, McpServerWire['transport']> = {};
+    for (const row of globalRows) {
+      collectMcpServers(row.config_value, merged);
+    }
+    for (const row of rows) {
+      if (row.config_type === 'mcp') collectMcpServers(row.config_value, merged);
+    }
+    const list = Object.entries(merged).map(([name, transport]) => ({ name, transport }));
+    if (list.length > 0) config.mcpServers = list;
+  }
+
   return config;
+}
+
+/** Test-only alias so unit tests can exercise the merge without spinning up a
+ *  full callback dispatch. */
+export const getAgentRuntimeConfigForTests = getAgentRuntimeConfig;
+
+/** Parse a stored mcp config (JSON `{mcpServers:{name:{...}}}`), validate the
+ *  transport, and merge into `out` (last write wins per name). Silently drops
+ *  invalid entries — server must never crash a spawn on a malformed config. */
+function collectMcpServers(raw: string, out: Record<string, McpServerWire['transport']>): void {
+  const parsed = parseConfigValue(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+  const servers = (parsed as { mcpServers?: unknown }).mcpServers;
+  if (!servers || typeof servers !== 'object' || Array.isArray(servers)) return;
+  for (const [name, entry] of Object.entries(servers as Record<string, unknown>)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    if (e.type === 'stdio' && typeof e.command === 'string' && e.command.trim()) {
+      out[name] = {
+        type: 'stdio',
+        command: e.command,
+        ...(Array.isArray(e.args) ? { args: e.args.filter((a): a is string => typeof a === 'string') } : {}),
+        ...(e.env && typeof e.env === 'object' && !Array.isArray(e.env)
+          ? { env: Object.fromEntries(Object.entries(e.env as Record<string, unknown>)
+              .filter((kv): kv is [string, string] => typeof kv[1] === 'string')) }
+          : {}),
+      };
+    } else if (e.type === 'sse' && typeof e.url === 'string' && e.url.trim()) {
+      out[name] = {
+        type: 'sse',
+        url: e.url,
+        ...(e.headers && typeof e.headers === 'object' && !Array.isArray(e.headers)
+          ? { headers: Object.fromEntries(Object.entries(e.headers as Record<string, unknown>)
+              .filter((kv): kv is [string, string] => typeof kv[1] === 'string')) }
+          : {}),
+      };
+    }
+    // Unknown transport → dropped silently.
+  }
 }
 
 function parseConfigValue(raw: string): unknown {
