@@ -15,6 +15,7 @@ export interface CallbackEvent {
   agent_model?: string;
   agent_provider?: unknown;
   agent_mcp_servers?: McpServerWire[];
+  agent_skills?: SkillDefinition[];
   prompt?: string;
   trigger_type?: string;
   room_id?: string;
@@ -336,6 +337,7 @@ function agentCallbackFields(
     agent_model: config.model ?? profile?.model ?? undefined,
     agent_provider: config.provider,
     agent_mcp_servers: config.mcpServers,
+    agent_skills: config.skills,
   };
 }
 

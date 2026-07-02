@@ -2,6 +2,7 @@ import express from 'express';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { RuntimeConfig } from './config.js';
 import type { MCPServerConfig } from './backends/types.js';
+import type { SkillDefinition } from './types.js';
 
 export interface CallbackEvent {
   type: 'spawn' | 'stop' | 'wake';
@@ -12,6 +13,7 @@ export interface CallbackEvent {
   agent_model?: string;
   agent_provider?: unknown;
   agent_mcp_servers?: MCPServerConfig[];
+  agent_skills?: SkillDefinition[];
   prompt?: string;
   trigger_type?: string;
   room_id?: string;
@@ -71,6 +73,7 @@ export function createCallbackServer(
       agent_model: req.body.agent_model,
       agent_provider: req.body.agent_provider,
       agent_mcp_servers: req.body.agent_mcp_servers,
+      agent_skills: req.body.agent_skills,
       prompt: req.body.prompt,
       trigger_type: req.body.trigger_type,
       room_id: req.body.room_id,
