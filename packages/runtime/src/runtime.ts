@@ -193,6 +193,7 @@ export class FlockAgentRuntime {
       backendConfig: this.config.defaultBackend,
       room: buildRoomContext(event),
       roomWorkspace: event.room_workspace,
+      extraMcpServers: event.agent_mcp_servers,
     });
   }
 
@@ -220,6 +221,7 @@ export class FlockAgentRuntime {
       backendConfig: this.config.defaultBackend,
       room: buildRoomContext(event),
       roomWorkspace: event.room_workspace,
+      extraMcpServers: event.agent_mcp_servers,
     });
   }
 
