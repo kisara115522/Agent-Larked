@@ -59,6 +59,9 @@ export function AgentPage() {
   const [mcpValue, setMcpValue] = useState('');
   const [mcpEditorOpen, setMcpEditorOpen] = useState(false);
   const [savingMcp, setSavingMcp] = useState(false);
+  const [skillsValue, setSkillsValue] = useState('');
+  const [skillsEditorOpen, setSkillsEditorOpen] = useState(false);
+  const [savingSkills, setSavingSkills] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -95,6 +98,8 @@ export function AgentPage() {
       }
       const mcpConfig = configRes.agent_configs.find(c => c.config_type === 'mcp')?.config_value;
       setMcpValue(mcpConfig ? JSON.stringify(mcpConfig, null, 2) : '');
+      const skillsConfig = configRes.agent_configs.find(c => c.config_type === 'skills')?.config_value;
+      setSkillsValue(Array.isArray(skillsConfig) ? JSON.stringify(skillsConfig, null, 2) : '');
       // Convert activity logs to workflow events
       const converted: WorkflowEvent[] = activityRes.logs.slice(0, 20).map(ev => ({
         id: ev.id,
@@ -213,6 +218,23 @@ export function AgentPage() {
       toast(`保存失败: ${e instanceof Error ? e.message : '未知错误'}`);
     } finally {
       setSavingMcp(false);
+    }
+  };
+
+  const handleSaveSkills = async () => {
+    if (!token || !id) return;
+    setSavingSkills(true);
+    try {
+      const parsed = skillsValue.trim() ? JSON.parse(skillsValue) : [];
+      if (!Array.isArray(parsed)) throw new Error('Skills must be a JSON array');
+      await patch('/configs', token, { agent_id: id, config_type: 'skills', config_value: parsed });
+      toast('Skills 已保存', 'success');
+      setSkillsEditorOpen(false);
+      loadAgent();
+    } catch (e) {
+      toast(`保存失败: ${e instanceof Error ? e.message : '未知错误'}`);
+    } finally {
+      setSavingSkills(false);
     }
   };
 
@@ -351,7 +373,15 @@ export function AgentPage() {
               <div className="p-3 grid grid-cols-2 gap-2.5">
               <ConfigCard marker="S" title="Soul" desc="人格描述、行为准则" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
               <ConfigCard marker="A" title="Agent.md" desc="能力定义、工作方式" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
-              <ConfigCard marker="K" title="Skills" desc="继承全局配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
+              <button type="button" onClick={() => setSkillsEditorOpen(true)} className="text-left">
+                <ConfigCard
+                  marker="K"
+                  title="Skills"
+                  desc="继承全局配置"
+                  badge={skillsValue.trim() ? '已配置' : '未配置'}
+                  badgeClass={skillsValue.trim() ? 'bg-accent-muted text-accent' : 'bg-surface-elevated text-text-muted border border-border'}
+                />
+              </button>
               <button type="button" onClick={() => setMcpEditorOpen(true)} className="text-left">
                 <ConfigCard
                   marker="M"
@@ -378,6 +408,26 @@ export function AgentPage() {
                     <button onClick={() => setMcpEditorOpen(false)} className="px-3 py-1.5 rounded-full text-xs bg-surface-elevated">取消</button>
                     <button onClick={handleSaveMcp} disabled={savingMcp} className="px-3 py-1.5 rounded-full text-xs bg-accent text-white disabled:opacity-40">
                       {savingMcp ? '保存中...' : '保存'}
+                    </button>
+                  </div>
+                </div>
+              </Panel>
+            )}
+
+            {skillsEditorOpen && (
+              <Panel title="Skills JSON 编辑">
+                <div className="p-4 space-y-3">
+                  <p className="text-[11px] text-text-muted">格式：JSON 数组 <code className="font-mono">{`[{"name":"code-review","description":"...","body":"..."}]`}</code>。name 仅允许 <code>[a-zA-Z0-9_-]+</code>。需 server 启用 <code>FLOCK_PER_AGENT_SKILLS=1</code> 才会生效。</p>
+                  <textarea
+                    value={skillsValue}
+                    onChange={e => setSkillsValue(e.target.value)}
+                    placeholder='[{"name":"code-review","description":"Review code","body":"Steps..."}]'
+                    className="input min-h-[220px] font-mono text-[11px] resize-y w-full"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setSkillsEditorOpen(false)} className="px-3 py-1.5 rounded-full text-xs bg-surface-elevated">取消</button>
+                    <button onClick={handleSaveSkills} disabled={savingSkills} className="px-3 py-1.5 rounded-full text-xs bg-accent text-white disabled:opacity-40">
+                      {savingSkills ? '保存中...' : '保存'}
                     </button>
                   </div>
                 </div>
