@@ -56,6 +56,9 @@ export function AgentPage() {
   const [modelValue, setModelValue] = useState('');
   const [providerValue, setProviderValue] = useState('');
   const [providerEnvValue, setProviderEnvValue] = useState('');
+  const [mcpValue, setMcpValue] = useState('');
+  const [mcpEditorOpen, setMcpEditorOpen] = useState(false);
+  const [savingMcp, setSavingMcp] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -90,6 +93,8 @@ export function AgentPage() {
         setProviderValue('');
         setProviderEnvValue('');
       }
+      const mcpConfig = configRes.agent_configs.find(c => c.config_type === 'mcp')?.config_value;
+      setMcpValue(mcpConfig ? JSON.stringify(mcpConfig, null, 2) : '');
       // Convert activity logs to workflow events
       const converted: WorkflowEvent[] = activityRes.logs.slice(0, 20).map(ev => ({
         id: ev.id,
@@ -189,6 +194,25 @@ export function AgentPage() {
       toast(`保存失败: ${e instanceof Error ? e.message : '未知错误'}`);
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  const handleSaveMcp = async () => {
+    if (!token || !id) return;
+    setSavingMcp(true);
+    try {
+      const parsed = mcpValue.trim() ? JSON.parse(mcpValue) : { mcpServers: {} };
+      if (!parsed.mcpServers || typeof parsed.mcpServers !== 'object') {
+        throw new Error('JSON must be {"mcpServers": {...}}');
+      }
+      await patch('/configs', token, { agent_id: id, config_type: 'mcp', config_value: parsed });
+      toast('MCP 配置已保存', 'success');
+      setMcpEditorOpen(false);
+      loadAgent();
+    } catch (e) {
+      toast(`保存失败: ${e instanceof Error ? e.message : '未知错误'}`);
+    } finally {
+      setSavingMcp(false);
     }
   };
 
@@ -328,9 +352,37 @@ export function AgentPage() {
               <ConfigCard marker="S" title="Soul" desc="人格描述、行为准则" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
               <ConfigCard marker="A" title="Agent.md" desc="能力定义、工作方式" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
               <ConfigCard marker="K" title="Skills" desc="继承全局配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
-              <ConfigCard marker="M" title="MCP Tools" desc="工具接入配置" badge="—" badgeClass="bg-surface-elevated text-text-muted border border-border" />
+              <button type="button" onClick={() => setMcpEditorOpen(true)} className="text-left">
+                <ConfigCard
+                  marker="M"
+                  title="MCP Tools"
+                  desc="工具接入配置"
+                  badge={mcpValue.trim() ? '已配置' : '未配置'}
+                  badgeClass={mcpValue.trim() ? 'bg-accent-muted text-accent' : 'bg-surface-elevated text-text-muted border border-border'}
+                />
+              </button>
             </div>
             </Panel>
+
+            {mcpEditorOpen && (
+              <Panel title="MCP JSON 编辑">
+                <div className="p-4 space-y-3">
+                  <p className="text-[11px] text-text-muted">格式：<code className="font-mono">{`{"mcpServers":{"echo":{"type":"stdio","command":"echo","args":["hi"]}}}`}</code>。需 server 启用 <code>FLOCK_PER_AGENT_MCP=1</code> 才会生效。</p>
+                  <textarea
+                    value={mcpValue}
+                    onChange={e => setMcpValue(e.target.value)}
+                    placeholder='{"mcpServers":{"echo":{"type":"stdio","command":"echo","args":["hi"]}}}'
+                    className="input min-h-[220px] font-mono text-[11px] resize-y w-full"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setMcpEditorOpen(false)} className="px-3 py-1.5 rounded-full text-xs bg-surface-elevated">取消</button>
+                    <button onClick={handleSaveMcp} disabled={savingMcp} className="px-3 py-1.5 rounded-full text-xs bg-accent text-white disabled:opacity-40">
+                      {savingMcp ? '保存中...' : '保存'}
+                    </button>
+                  </div>
+                </div>
+              </Panel>
+            )}
           </aside>
         </div>
       </PageShell>
