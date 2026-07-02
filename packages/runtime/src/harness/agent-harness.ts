@@ -17,7 +17,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import type { SkillDefinition } from '../types.js';
 import type {
   AgentBackend,
@@ -166,6 +167,12 @@ export class AgentHarness {
     } catch (err) {
       console.warn(`[harness] Failed to create session cwd ${sessionCwd}:`, err);
     }
+
+    // Materialize per-agent skills into sessionCwd/.claude/skills/. Clears the
+    // directory first (multica execenv:311 pattern) so stale skills from prior
+    // sessions don't leak into this one — sessionCwd is per-room and shared
+    // across same-room siblings, so without clearing they would pile up.
+    materializeSkills(sessionCwd, request.skills);
 
     // Build run context
     const abortController = new AbortController();
@@ -427,5 +434,57 @@ export class AgentHarness {
         `Register tools via BackendRegistry or use ClaudeSdkBackend (which uses MCP).`,
       );
     };
+  }
+}
+
+/**
+ * Write skills into <sessionCwd>/.claude/skills/<name>/SKILL.md. Clears the
+ * entire .claude/skills/ directory first so stale skills from previous
+ * sessions don't linger. No-op when `skills` is empty/undefined — leaves
+ * existing .claude/skills/ untouched (avoids clobbering unrelated content).
+ *
+ * KNOWN LIMITATION (W4): sessionCwd is per-room, so two agents in the same
+ * room will overwrite each other's skills (last spawn wins). Once S0
+ * verification confirms per-agent subdirectories are discoverable, migrate to
+ * <sessionCwd>/.claude/skills/<agentId>/<name>/SKILL.md.
+ *
+ * Path-traversal defense in depth: name is re-checked against [a-zA-Z0-9_-]+
+ * here even though the server already sanitizes it, AND the resolved path is
+ * verified to stay inside skillsDir (rejects anything escaping via relative
+ * path tricks). The rmSync targets skillsDir specifically, never sessionCwd,
+ * so a misconfigured workspace can't widen the deletion.
+ */
+function materializeSkills(sessionCwd: string, skills: SkillDefinition[] | undefined): void {
+  if (!skills || skills.length === 0) return;
+
+  const skillsDir = join(sessionCwd, '.claude', 'skills');
+  try {
+    rmSync(skillsDir, { recursive: true, force: true });
+  } catch (err) {
+    console.warn(`[harness] Failed to clear ${skillsDir}:`, err);
+  }
+
+  for (const skill of skills) {
+    // Belt-and-braces: server already sanitizes, but this is the filesystem
+    // write so we defend here too.
+    if (!/^[a-zA-Z0-9_-]+$/.test(skill.name)) {
+      console.warn(`[harness] Skipping skill with invalid name: ${JSON.stringify(skill.name)}`);
+      continue;
+    }
+    const dir = join(skillsDir, skill.name);
+    // Reject any path that escapes skillsDir (defense against future name
+    // rule changes or symlink tricks). relative() returns '' or a clean path
+    // for in-bounds dirs; anything starting with '..' is out of bounds.
+    if (relative(skillsDir, dir).startsWith('..')) {
+      console.warn(`[harness] Skipping skill that escapes skills dir: ${skill.name}`);
+      continue;
+    }
+    try {
+      mkdirSync(dir, { recursive: true });
+      const frontmatter = `---\nname: ${skill.name}\ndescription: ${skill.description}\n---\n\n`;
+      writeFileSync(join(dir, 'SKILL.md'), frontmatter + skill.body);
+    } catch (err) {
+      console.warn(`[harness] Failed to write skill ${skill.name} to ${dir}:`, err);
+    }
   }
 }
