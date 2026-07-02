@@ -49,10 +49,20 @@ export interface McpServerWire {
     | { type: 'sse'; url: string; headers?: Record<string, string> };
 }
 
+/** A per-agent skill, materialized into <sessionCwd>/.claude/skills/<name>/
+ *  by the runtime harness. Name is sanitized to [a-zA-Z0-9_-]+ on both sides
+ *  (used as a filesystem path). */
+export interface SkillDefinition {
+  name: string;
+  description: string;
+  body: string;
+}
+
 interface AgentRuntimeConfig {
   model?: string;
   provider?: unknown;
   mcpServers?: McpServerWire[];
+  skills?: SkillDefinition[];
 }
 
 interface AgentCallbackFields {
@@ -61,6 +71,7 @@ interface AgentCallbackFields {
   agent_model?: string;
   agent_provider?: unknown;
   agent_mcp_servers?: McpServerWire[];
+  agent_skills?: SkillDefinition[];
 }
 
 interface WakeSession {
@@ -593,15 +604,16 @@ function getAgentRuntimeConfig(db: Database.Database, agentId: string): AgentRun
   // Per-agent MCP is security-sensitive (command = runtime host RCE), so it
   // is gated behind FLOCK_PER_AGENT_MCP=1. Model/provider are always read.
   const perAgentMcpEnabled = process.env.FLOCK_PER_AGENT_MCP === '1';
+  const perAgentSkillsEnabled = process.env.FLOCK_PER_AGENT_SKILLS === '1';
 
   const rows = db.prepare(`
     SELECT config_type, config_value
     FROM agent_configs
-    WHERE agent_id = ? AND config_type IN ('model', 'provider', 'mcp')
+    WHERE agent_id = ? AND config_type IN ('model', 'provider', 'mcp', 'skills')
   `).all(agentId) as Array<{ config_type: string; config_value: string }>;
 
-  const globalRows = perAgentMcpEnabled
-    ? db.prepare(`SELECT config_type, config_value FROM global_configs WHERE config_type = 'mcp'`)
+  const globalRows = (perAgentMcpEnabled || perAgentSkillsEnabled)
+    ? db.prepare(`SELECT config_type, config_value FROM global_configs WHERE config_type IN ('mcp', 'skills')`)
         .all() as Array<{ config_type: string; config_value: string }>
     : [];
 
@@ -621,13 +633,25 @@ function getAgentRuntimeConfig(db: Database.Database, agentId: string): AgentRun
     // Agent's same-name entry overrides global. Key is the server name.
     const merged: Record<string, McpServerWire['transport']> = {};
     for (const row of globalRows) {
-      collectMcpServers(row.config_value, merged);
+      if (row.config_type === 'mcp') collectMcpServers(row.config_value, merged);
     }
     for (const row of rows) {
       if (row.config_type === 'mcp') collectMcpServers(row.config_value, merged);
     }
     const list = Object.entries(merged).map(([name, transport]) => ({ name, transport }));
     if (list.length > 0) config.mcpServers = list;
+  }
+
+  if (perAgentSkillsEnabled) {
+    // Skills merged by name: agent overrides global.
+    const merged = new Map<string, SkillDefinition>();
+    for (const row of globalRows) {
+      if (row.config_type === 'skills') collectSkills(row.config_value, merged);
+    }
+    for (const row of rows) {
+      if (row.config_type === 'skills') collectSkills(row.config_value, merged);
+    }
+    if (merged.size > 0) config.skills = Array.from(merged.values());
   }
 
   return config;
@@ -670,6 +694,27 @@ function collectMcpServers(raw: string, out: Record<string, McpServerWire['trans
       };
     }
     // Unknown transport → dropped silently.
+  }
+}
+
+/** Parse a stored skills config (JSON array of {name,description,body}) and
+ *  merge into `out` by name (last write wins). Name is sanitized to
+ *  [a-zA-Z0-9_-]+ — it becomes a filesystem directory on the runtime host, so
+ *  path-traversal chars must be rejected here (belt) and again in the harness
+ *  (braces). Invalid entries are dropped silently. */
+function collectSkills(raw: string, out: Map<string, SkillDefinition>): void {
+  const parsed = parseConfigValue(raw);
+  if (!Array.isArray(parsed)) return;
+  for (const entry of parsed) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.name !== 'string' || !e.name.trim()) continue;
+    if (!/^[a-zA-Z0-9_-]+$/.test(e.name)) continue;
+    out.set(e.name, {
+      name: e.name,
+      description: typeof e.description === 'string' ? e.description : '',
+      body: typeof e.body === 'string' ? e.body : '',
+    });
   }
 }
 
