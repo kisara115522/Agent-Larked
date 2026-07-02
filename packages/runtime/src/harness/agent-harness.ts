@@ -18,6 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
+import type { SkillDefinition } from '../types.js';
 import type {
   AgentBackend,
   AgentRunContext,
@@ -89,6 +90,8 @@ export interface SpawnRequest {
   cwd?: string;
   /** MCP server configurations (additional to built-in flock server) */
   extraMcpServers?: MCPServerConfig[];
+  /** Skills to materialize into sessionCwd/.claude/skills/ before spawn. */
+  skills?: SkillDefinition[];
 }
 
 export interface HarnessSession {

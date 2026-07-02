@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentHarness, type SpawnRequest, type RoomContext } from './harness/index.js';
 import type { BackendConfig, MCPServerConfig } from './backends/types.js';
+import type { SkillDefinition } from './types.js';
 import { defaultBackendRegistry } from './harness/backend-registry.js';
 import { createClaudeSdkBackend } from './backends/claude-sdk.js';
 import { createClaudeStdioBackend } from './backends/claude-stdio.js';
@@ -45,6 +46,9 @@ export interface AgentSpawnOptions {
   /** Extra MCP servers (beyond the built-in flock). Already flock-filtered
    *  and transport-validated by the server. */
   extraMcpServers?: MCPServerConfig[];
+  /** Per-agent skills to materialize into sessionCwd/.claude/skills/ before
+   *  spawn. Names already sanitized by the server. */
+  skills?: SkillDefinition[];
 }
 
 export type ActivityReporter = (
@@ -139,6 +143,7 @@ export class AgentRunner {
       room: options?.room,
       cwd: resolveWorkspace(agentId, options?.room?.roomId, options?.roomWorkspace),
       extraMcpServers: options?.extraMcpServers,
+      skills: options?.skills,
     };
 
     console.log(`[runner] Spawning agent ${agentId} via harness (backend=${backendConfig.type})`);
