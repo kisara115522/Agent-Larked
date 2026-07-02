@@ -194,6 +194,7 @@ export class FlockAgentRuntime {
       room: buildRoomContext(event),
       roomWorkspace: event.room_workspace,
       extraMcpServers: event.agent_mcp_servers,
+      skills: event.agent_skills,
     });
   }
 
@@ -222,6 +223,7 @@ export class FlockAgentRuntime {
       room: buildRoomContext(event),
       roomWorkspace: event.room_workspace,
       extraMcpServers: event.agent_mcp_servers,
+      skills: event.agent_skills,
     });
   }
 
