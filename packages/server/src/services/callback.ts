@@ -644,6 +644,7 @@ function collectMcpServers(raw: string, out: Record<string, McpServerWire['trans
   const servers = (parsed as { mcpServers?: unknown }).mcpServers;
   if (!servers || typeof servers !== 'object' || Array.isArray(servers)) return;
   for (const [name, entry] of Object.entries(servers as Record<string, unknown>)) {
+    if (name === 'flock') continue; // reserved: built-in flock server name (W1)
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
     if (e.type === 'stdio' && typeof e.command === 'string' && e.command.trim()) {
