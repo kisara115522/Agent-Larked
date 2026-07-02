@@ -14,6 +14,7 @@ export interface CallbackEvent {
   session_id?: string;
   agent_model?: string;
   agent_provider?: unknown;
+  agent_mcp_servers?: McpServerWire[];
   prompt?: string;
   trigger_type?: string;
   room_id?: string;
