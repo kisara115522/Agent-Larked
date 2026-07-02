@@ -412,3 +412,56 @@
 - **状态：** open
 
 </details>
+
+---
+
+## 2026-07-02 — Per-agent MCP + Skills 后续
+
+### 🔴 项目无 admin 强制,文档与代码不一致(预存问题,本次确认)
+- **发现于：** 2026-07-02,per-agent skills/mcp 计划(计划 E1 核实)
+- **问题：** `docs/progress.md` 与 `db.ts:531` 注释声称 v0.3.5 已实现 admin RBAC(`profiles.is_admin = 1`),但实际 `profiles` schema(db.ts:8-22)**无 `is_admin` 列**,`bootstrapDefaultAgent` 不写该列,路由/middleware 无任何 admin 强制。`test-helpers.ts:17` 的 `WHERE is_admin = 1` 查询是死代码(无测试 import),运行即抛 "no such column"。admin 概念仅存于文档叙述。
+- **影响：** 任何声称 admin-only 的接口实际无鉴权。本次 M0 `PATCH /configs/global` 退化为 human-only(任何 human 可改全局)。
+- **建议修复:** `profiles` 表加 `is_admin INTEGER DEFAULT 0` 列(v0.5+ 迁移),`bootstrapDefaultAgent` 给 kisara 置 1,middleware 加 admin 校验,`PATCH /configs/global` 改 admin-only;或用 env `FLOCK_GLOBAL_CONFIG_ALLOWED_USERNAMES` 白名单。同步修正 test-helpers.ts 死代码。
+- **状态:** open
+
+### 🟡 per-agent MCP RCE 面 + 越权面
+- **发现于:** 2026-07-02,per-agent mcp 实现(M2)
+- **问题:** (1) per-agent MCP command = runtime 主机 RCE,门控 `FLOCK_PER_AGENT_MCP` 默认关闭已加,但未做 command/args 白名单、env secrets 明文存储。(2) **越权面独立存在:** `configs.ts` PATCH `/configs` 的 `resolveConfigAgentId`(configs.ts:126-142)允许任意 human 给任意 agent 写 config(agent_configs),本次未修。
+- **建议修复:** command/args 白名单;env secrets 加密存储;`resolveConfigAgentId` 对 human 写他人 agent config 加权限校验。
+- **状态:** open
+
+### 🟢 skills 物化 per-room 串味(W4)
+- **发现于:** 2026-07-02,S5 物化实现
+- **问题:** `sessionCwd` 是 per-room 共享,同 room 多 agent 的 skills 互相覆盖(最后 spawn 者生效)。当前 S5 清空目录后写,缓解了"旧 skill 残留"但没解决"同 room 多 agent 共存"。
+- **建议修复:** S0 实测若证实 `<sessionCwd>/.claude/skills/<agentId>/<name>/` 子目录可被 claude 发现,迁移到 per-agent 子目录。否则明确文档"per-room 共享 skills"。
+- **状态:** open
+
+### 🟢 per-agent soul / agent_md 未接
+- **发现于:** 2026-07-02,Phase B 边界
+- **问题:** 本次只做 mcp + skills。`AgentConfigType` union 含 `soul`/`agent_md` 但未接入运行链路。
+- **建议修复:** `composeSystemPrompt` 注入 soul/agent_md 段。
+- **状态:** open
+
+### 🟢 MCP 工具允许/禁止列表
+- **发现于:** 2026-07-02,Phase A 边界
+- **问题:** 当前所有 extra MCP server 的工具都暴露给 agent,无 per-agent 粒度裁剪。
+- **建议修复:** per-agent allowedTools/deniedTools,claude-args 动态 `--disallowedTools`。
+- **状态:** open
+
+### 🟢 features flag endpoint(UI 无法感知 server flag)
+- **发现于:** 2026-07-02,M9b/S7
+- **问题:** UI 的 MCP/Skills 编辑卡片始终可编辑,但 server 仅在 `FLOCK_PER_AGENT_MCP=1`/`FLOCK_PER_AGENT_SKILLS=1` 时才透传/物化。flag 关闭时用户保存的配置不生效,UI 无提示。
+- **建议修复:** `GET /configs/features` 返回 `{per_agent_mcp: bool, per_agent_skills: bool}`,前端据此禁用/隐藏卡片或显示"需 server 启用"badge。
+- **状态:** open
+
+### 🟢 Phase C — skills prompt 注入退路(未实现)
+- **发现于:** 2026-07-02,计划 Phase C
+- **问题:** 若 S0 实测发现 claude 不发现 `<sessionCwd>/.claude/skills/`(stdio 或 SDK 路径),则 S5 文件物化失效,需退路:在 `composeSystemPrompt` 注入 skills 段(Available skills + name + description + body)。
+- **当前状态:** 未实现(S0 未跑)。S5 文件物化是主路径;若 S0 证伪再启 Phase C。注意:两者**不可同时启用**,否则 skills 双重注入。
+- **状态:** open(条件性)
+
+### 🟡 S0 / M10 / S8 手动端到端验证待跑
+- **发现于:** 2026-07-02,计划验收
+- **问题:** 计划的 S0(双 backend skills 发现实测)、M10(per-agent mcp 端到端)、S8(skills 端到端)是手动步骤不提交,本次未执行。代码链路完整且单测覆盖,但真实 claude CLI/SDK 行为未验证。
+- **建议:** 启 server+runtime 导出 `FLOCK_PER_AGENT_MCP=1`/`FLOCK_PER_AGENT_SKILLS=1`,UI 配一个 echo MCP server + 一个 test-skill,触发 spawn,观察 `/tmp/flock-mcp-*/mcp-config.json` 含 flock+echo、`/mcp` 可见 echo 工具、claude 发现 SKILL.md。
+- **状态:** open

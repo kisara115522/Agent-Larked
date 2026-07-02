@@ -117,6 +117,8 @@ Agent Runtime daemon（Claude Agent SDK `query()`）、后端抽象层（ClaudeS
 | 广播唤醒不可靠 | 只叫醒一个人 | 排查 wake 逻辑、@everyone |
 | Agent 配置不可用 | 无法配置人格/工具/模型 | AgentPage 配置标签页 |
 
+> 2026-07-02 部分交付：per-agent MCP + Skills 配置已接入 AgentPage（JSON 编辑器 + `PATCH /configs`），运行链路打通（`FLOCK_PER_AGENT_MCP`/`FLOCK_PER_AGENT_SKILLS` 门控，默认关）。soul/agent_md 仍未接。详见 `docs/progress.md` 2026-07-02 条目与 `docs/plans/2026-06-30-per-agent-skills-mcp-diffs.md`。
+
 ### Phase 3：增强体验
 
 - 工作流摘要页面（聚合 agent 工作总结，非原始元数据）

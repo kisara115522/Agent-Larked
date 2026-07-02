@@ -458,3 +458,23 @@
 - 2026-06-30：Room 普通消息注入忙碌 agent inbox。enqueueRoomMessageForBusyAgents 在三个发消息路径（人类 room POST、agent HTTP POST、flock_post）调用，忙碌成员下个工具边界收到 digest，指引调 flock_room_sync。
 - 2026-06-30：per-room 工作目录 + room rules 接入主链路 + 提示词加厚。(1) cwd：rooms.workspace 列 + CallbackEvent 透传 room_workspace，runtime 侧 resolveWorkspace 解析为本机绝对路径（自定义 workspace > 每 room 默认 data/workspaces/rooms/<id> > 每 agent 默认 data/workspaces/agents/<id>），harness spawn 前 mkdir -p。(2) room rules：server 经 resolveRoomMeta 读 rooms.rules → CallbackEvent.room_rules → runtime buildRoomContext → harness composeRoomSection 渲染，补上"存了但 spawn 时不读"的断点。(3) prompt：getBaseInstructions 重构为结构化段落（角色/协作/工作），折叠 tool guidelines。
 - 2026-06-30：room-inbox 接入修正（@对称性 + digest 可读性 + 去重提示）。@mention 只注入被 @ 的忙碌成员（广播仍注入全部）；digest 的 room 消息显示为 "<sender> in #<room>" + room_id；room 条目带 message_id + flock_wait 去重提示（dedup 按 message_id，非 last_seen_sequence——后者是 MCP 内存游标不生效）；dispatchPendingRoomWake 的 inbox 兜底加注释说明是竞态兜底（非死代码）。
+- 2026-07-02：Per-agent MCP + Skills（Phase A + B）。按 `docs/plans/2026-06-30-per-agent-skills-mcp-diffs.md` 实现 19 个原子 commit。
+  - **Phase A — Per-agent MCP:**
+    - `PATCH /configs/global`（human-only，C1 补齐）：global_configs 表此前无写入路由；新增路由 upsert skills/mcp 全局配置，agent token 禁写（403）。项目实际无 admin 强制（`profiles.is_admin` 列从未添加，详见 backlog），暂用 human-only。
+    - `AgentConfigType` union 补 `model`/`provider`（M1，union drift 修复）。
+    - `getAgentRuntimeConfig` 读 `agent_configs('mcp')` + `global_configs('mcp')`，按 server name 合并（agent 覆盖 global），`FLOCK_PER_AGENT_MCP=1` 门控（W3，默认关——per-agent MCP command = runtime 主机 RCE 面）。
+    - 保留名 `flock` 过滤（W1）：buildMcpServers 总会 prepend 内置 flock，用户配的同名条目 server 侧丢弃。
+    - `agentCallbackFields` 输出 `agent_mcp_servers` → 4 处 CallbackEvent 自动带（dispatchPendingRoomWake/wakeDirectMessageAgent/notifyRuntimeSpawn/notifyTaskAssignment）。
+    - `callback-server.ts` 显式拷贝 `agent_mcp_servers`（C2：body 逐字段拷贝，新字段不加显式拷贝就到不了 runtime）。
+    - Runtime 透传 `extraMcpServers` 到 `SpawnRequest`（已有 slot，agent-harness.ts:91；buildMcpServers 已 append）。
+    - UI：MCP Tools 卡片接入 JSON 编辑器（`{"mcpServers":{...}}`）。
+    - 测试：server mcp merge + flock 过滤 + flag 关闭 + 非法 transport（4）；runtime callback body 拷贝 + harness buildMcpServers 顺序（2）。
+  - **Phase B — Per-agent Skills:**
+    - `getAgentRuntimeConfig` 读 `agent_configs('skills')` + `global_configs('skills')`，按 name 合并，`FLOCK_PER_AGENT_SKILLS=1` 门控；collectSkills 名称正则白名单 `[a-zA-Z0-9_-]+`（路径穿越防护第一层）。
+    - `agent_skills` 透传链路同 mcp（server CallbackEvent + agentCallbackFields + runtime CallbackEvent + body 拷贝）；新增 `runtime/src/types.ts` 共享 `SkillDefinition` 避免 harness↔callback-server 循环依赖。
+    - Harness `spawn()` 物化到 `sessionCwd/.claude/skills/<name>/SKILL.md`（含 frontmatter），先 `rmSync(skillsDir)` 清空（multica execenv:311 模式，防 per-room cwd 旧 skill 堆积）。
+    - 路径穿越纵深防御（S5 最高风险）：harness 侧再次正则 + `path.relative(skillsDir, dir).startsWith('..')` 拒绝；`rmSync` 仅针对 skillsDir，绝不删 sessionCwd。
+    - UI：Skills 卡片接入 JSON 数组编辑器。
+    - 测试：harness 物化 SKILL.md + 清空旧 skill + 空数组不动 + 路径穿越拒绝（4）。
+  - **未做（条件性/手动）：** S0 双 backend 实测、M10/S8 端到端验证为手动步骤不提交；Phase C（prompt 注入 skills）是 S0 不通过时的退路，未实现——见 backlog。
+  - **回归：** server 171 tests / runtime 141 tests 全绿；全 workspace typecheck 通过。
