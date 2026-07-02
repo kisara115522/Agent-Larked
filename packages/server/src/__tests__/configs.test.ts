@@ -112,4 +112,60 @@ describe('Configs & Token Budgets API', () => {
       .send({ agent_id: other.body.id, config_type: 'provider', config_value: 'default' })
       .expect(403);
   });
+
+  it('lets a human write global mcp config', async () => {
+    const mcp = {
+      mcpServers: {
+        echo: { type: 'stdio', command: 'echo', args: ['hi'] },
+      },
+    };
+
+    await request(app)
+      .patch('/configs/global')
+      .set('Authorization', `Bearer ${humanToken}`)
+      .send({ config_type: 'mcp', config_value: mcp })
+      .expect(200);
+
+    const res = await request(app)
+      .get('/configs')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    expect(res.body.global_configs).toContainEqual({
+      config_type: 'mcp',
+      config_value: mcp,
+    });
+  });
+
+  it('rejects agent tokens writing global config', async () => {
+    await request(app)
+      .patch('/configs/global')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({ config_type: 'mcp', config_value: { mcpServers: {} } })
+      .expect(403);
+  });
+
+  it('rejects invalid config_type on global patch', async () => {
+    await request(app)
+      .patch('/configs/global')
+      .set('Authorization', `Bearer ${humanToken}`)
+      .send({ config_type: 'model', config_value: 'x' })
+      .expect(400);
+  });
+
+  it('upserts global config (last write wins per type)', async () => {
+    await request(app)
+      .patch('/configs/global')
+      .set('Authorization', `Bearer ${humanToken}`)
+      .send({ config_type: 'skills', config_value: [{ name: 'a', description: '', body: '' }] })
+      .expect(200);
+    await request(app)
+      .patch('/configs/global')
+      .set('Authorization', `Bearer ${humanToken}`)
+      .send({ config_type: 'skills', config_value: [{ name: 'b', description: '', body: '' }] })
+      .expect(200);
+    const res = await request(app).get('/configs').set('Authorization', `Bearer ${humanToken}`).expect(200);
+    const skills = res.body.global_configs.find((c: { config_type: string }) => c.config_type === 'skills');
+    expect(skills.config_value).toEqual([{ name: 'b', description: '', body: '' }]);
+  });
 });
