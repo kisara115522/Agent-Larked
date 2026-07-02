@@ -323,6 +323,7 @@ function agentCallbackFields(
     agent_name: profile?.name,
     agent_model: config.model ?? profile?.model ?? undefined,
     agent_provider: config.provider,
+    agent_mcp_servers: config.mcpServers,
   };
 }
 
