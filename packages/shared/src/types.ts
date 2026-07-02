@@ -432,7 +432,7 @@ export interface UpdateTokenBudgetRequest {
 
 // --- Agent Config ---
 
-export type AgentConfigType = 'soul' | 'agent_md' | 'skills' | 'mcp';
+export type AgentConfigType = 'soul' | 'agent_md' | 'skills' | 'mcp' | 'model' | 'provider';
 
 export interface AgentConfig {
   config_type: AgentConfigType;
